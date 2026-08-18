@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
@@ -164,18 +164,133 @@ export function AdminComplaintsPage() {
   );
 }
 
+const LOCATION_TYPES = ['COUNTRY', 'STATE', 'DISTRICT', 'CITY', 'AREA'] as const;
+const PARENT_TYPES: Record<string, string[]> = {
+  COUNTRY: [],
+  STATE: ['COUNTRY'],
+  DISTRICT: ['STATE'],
+  CITY: ['STATE', 'DISTRICT'],
+  AREA: ['CITY', 'DISTRICT'],
+};
+
+const emptyLocation = { name: '', type: 'STATE' as typeof LOCATION_TYPES[number], parentId: '', pinCode: '' };
+
 export function AdminLocationsPage() {
-  const { data, isLoading } = useList('/admin/locations');
+  const qc = useQueryClient();
+  const [typeFilter, setTypeFilter] = useState('');
+  const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [form, setForm] = useState(emptyLocation);
+  const endpoint = `/admin/locations${typeFilter ? `?type=${typeFilter}` : ''}`;
+  const { data, isLoading } = useList(endpoint);
+  const { data: allLocations } = useList('/admin/locations');
+  const refetch = () => qc.invalidateQueries({ queryKey: [endpoint] });
+
+  const parentOptions = ((allLocations?.data as { id: string; name: string; type: string }[]) || [])
+    .filter((l) => PARENT_TYPES[form.type]?.includes(l.type));
+
+  const save = async () => {
+    const payload = {
+      name: form.name,
+      type: form.type,
+      parentId: form.type === 'COUNTRY' ? undefined : form.parentId || undefined,
+      pinCode: form.pinCode || undefined,
+    };
+    if (editing?.id) await api.patch(`/admin/locations/${editing.id}`, payload);
+    else await api.post('/admin/locations', payload);
+    setEditing(null);
+    setForm(emptyLocation);
+    qc.invalidateQueries({ queryKey: ['/admin/locations'] });
+    refetch();
+  };
+
+  const openEdit = (row: Record<string, unknown>) => {
+    setEditing(row);
+    setForm({
+      name: String(row.name || ''),
+      type: (row.type as typeof LOCATION_TYPES[number]) || 'STATE',
+      parentId: String((row.parent as { id?: string })?.id || row.parentId || ''),
+      pinCode: String(row.pinCode || ''),
+    });
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Location Management" subtitle="Countries, states, cities, districts, areas" />
+      <PageHeader
+        title="Location Management"
+        subtitle="Manage countries, states, cities, districts, and areas"
+        actions={<button className="btn-primary text-sm" onClick={() => { setEditing({}); setForm({ ...emptyLocation, type: 'COUNTRY' }); }}>+ Add Location</button>}
+      />
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button className={`px-3 py-1 rounded-lg text-sm ${!typeFilter ? 'bg-primary-50 text-primary-700' : 'bg-gray-100'}`} onClick={() => setTypeFilter('')}>All</button>
+        {LOCATION_TYPES.map((t) => (
+          <button key={t} className={`px-3 py-1 rounded-lg text-sm ${typeFilter === t ? 'bg-primary-50 text-primary-700' : 'bg-gray-100'}`} onClick={() => setTypeFilter(t)}>{t}</button>
+        ))}
+      </div>
+
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'name', label: 'Name' },
-          { key: 'type', label: 'Type' },
+          { key: 'type', label: 'Type', render: (r) => <StatusBadge status={r.type as string} /> },
           { key: 'parent', label: 'Parent', render: (r) => String((r.parent as { name?: string })?.name || '-') },
-          { key: 'pinCode', label: 'PIN Code' },
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+          { key: 'pinCode', label: 'PIN Code', render: (r) => String(r.pinCode || '-') },
+          { key: 'children', label: 'Children', render: (r) => String((r._count as { children?: number })?.children ?? 0) },
+          { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'CANCELLED'} /> },
+          { key: 'actions', label: 'Actions', render: (r) => (
+            <div className="flex flex-wrap gap-2">
+              <ActionBtn onClick={() => openEdit(r)}>Edit</ActionBtn>
+              {r.isActive
+                ? <ActionBtn variant="danger" onClick={() => api.patch(`/admin/locations/${r.id}/deactivate`).then(refetch)}>Deactivate</ActionBtn>
+                : <ActionBtn variant="success" onClick={() => api.patch(`/admin/locations/${r.id}/activate`).then(refetch)}>Activate</ActionBtn>}
+              <ActionBtn variant="danger" onClick={() => { if (confirm('Delete this location?')) api.delete(`/admin/locations/${r.id}`).then(refetch); }}>Delete</ActionBtn>
+            </div>
+          )},
+        ]} rows={(data?.data as Record<string, unknown>[]) || []} emptyMessage="No locations found" />
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 className="font-semibold mb-4">{editing.id ? 'Edit Location' : 'Add Location'}</h3>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="text-xs text-gray-500">Name</label>
+                <input className="input w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Type</label>
+                <select className="input w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type, parentId: '' })}>
+                  {LOCATION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              {form.type !== 'COUNTRY' && (
+                <div>
+                  <label className="text-xs text-gray-500">Parent ({PARENT_TYPES[form.type]?.join(' / ')})</label>
+                  <select className="input w-full" value={form.parentId} onChange={(e) => setForm({ ...form, parentId: e.target.value })}>
+                    <option value="">Select parent</option>
+                    {parentOptions.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
+                  </select>
+                </div>
+              )}
+              {(form.type === 'CITY' || form.type === 'AREA') && (
+                <div>
+                  <label className="text-xs text-gray-500">PIN Code</label>
+                  <input className="input w-full" value={form.pinCode} onChange={(e) => setForm({ ...form, pinCode: e.target.value })} />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button className="btn-secondary text-sm" onClick={() => setEditing(null)}>Cancel</button>
+              <button
+                className="btn-primary text-sm"
+                disabled={!form.name || (form.type !== 'COUNTRY' && !form.parentId)}
+                onClick={save}
+              >
+                {editing.id ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

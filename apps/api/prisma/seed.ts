@@ -323,10 +323,19 @@ async function main() {
   }
 
   // Locations
-  const india = await prisma.location.create({ data: { name: 'India', type: 'COUNTRY' } });
-  const mh = await prisma.location.create({ data: { name: 'Maharashtra', type: 'STATE', parentId: india.id } });
-  await prisma.location.create({ data: { name: 'Mumbai', type: 'CITY', parentId: mh.id, pinCode: '400001' } });
-  await prisma.location.create({ data: { name: 'Pune', type: 'CITY', parentId: mh.id, pinCode: '411001' } });
+  const upsertLocation = async (data: { name: string; type: 'COUNTRY' | 'STATE' | 'CITY' | 'DISTRICT' | 'AREA'; parentId?: string; pinCode?: string }) => {
+    const existing = await prisma.location.findFirst({
+      where: { name: data.name, type: data.type, parentId: data.parentId ?? null },
+    });
+    if (existing) return existing;
+    return prisma.location.create({ data });
+  };
+  const india = await upsertLocation({ name: 'India', type: 'COUNTRY' });
+  const mh = await upsertLocation({ name: 'Maharashtra', type: 'STATE', parentId: india.id });
+  await upsertLocation({ name: 'Mumbai', type: 'CITY', parentId: mh.id, pinCode: '400001' });
+  await upsertLocation({ name: 'Pune', type: 'CITY', parentId: mh.id, pinCode: '411001' });
+  await upsertLocation({ name: 'Delhi', type: 'STATE', parentId: india.id });
+  await upsertLocation({ name: 'New Delhi', type: 'CITY', parentId: india.id, pinCode: '110001' });
 
   // Platform Settings
   const settings = [

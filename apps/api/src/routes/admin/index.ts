@@ -10,11 +10,13 @@ import { validateBody } from '../../middleware/validate';
 import { logAudit } from '../../lib/audit';
 import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
+import locationRoutes from './locations';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
 router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
+router.use('/locations', locationRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -556,25 +558,6 @@ router.post('/specializations', validateBody(z.object({
   try {
     const item = await prisma.specialization.create({ data: { ...req.body, services: req.body.services || [] } });
     sendSuccess(res, item, 'Created', 201);
-  } catch (err) { next(err); }
-});
-
-router.get('/locations', async (req, res, next) => {
-  try {
-    const type = req.query.type as string | undefined;
-    const where = type ? { type: type as never } : {};
-    const locations = await prisma.location.findMany({ where, orderBy: { name: 'asc' }, include: { parent: { select: { name: true } } } });
-    sendSuccess(res, locations);
-  } catch (err) { next(err); }
-});
-
-router.post('/locations', validateBody(z.object({
-  name: z.string(), type: z.enum(['COUNTRY', 'STATE', 'CITY', 'DISTRICT', 'AREA']),
-  parentId: z.string().optional(), pinCode: z.string().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const loc = await prisma.location.create({ data: req.body });
-    sendSuccess(res, loc, 'Created', 201);
   } catch (err) { next(err); }
 });
 
