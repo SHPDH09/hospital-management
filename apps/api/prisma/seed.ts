@@ -370,14 +370,18 @@ async function main() {
   const delhi = await upsertLocation({ name: 'Delhi', type: 'STATE', parentId: india.id });
   await upsertLocation({ name: 'New Delhi', type: 'CITY', parentId: delhi.id, pinCode: '110001' });
 
-  // Platform Settings
-  const settings = [
+  // Platform Settings (27 categories)
+  const { seedPlatformSettings } = await import('./settings-seed');
+  await seedPlatformSettings(prisma);
+
+  // Legacy individual settings (kept for backward compatibility)
+  const legacySettings = [
     { key: 'platformName', value: 'Healthcare Platform', category: 'general' },
     { key: 'currency', value: 'INR', category: 'general' },
     { key: 'supportEmail', value: 'support@healthcare.platform', category: 'contact' },
     { key: 'supportPhone', value: '+91-1800-000-000', category: 'contact' },
   ];
-  for (const s of settings) {
+  for (const s of legacySettings) {
     await prisma.platformSetting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
   }
 

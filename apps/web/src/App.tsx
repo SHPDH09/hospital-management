@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -23,7 +23,7 @@ import {
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -92,8 +92,8 @@ export default function App() {
             <Route path="/admin/master-data/*" element={<Admin><AdminMasterDataPage /></Admin>} />
             <Route path="/admin/communications/*" element={<Admin><AdminCommunicationsPage /></Admin>} />
             <Route path="/admin/cms/*" element={<Admin><AdminCmsPage /></Admin>} />
-            <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />
-            <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
+            <Route path="/admin/settings/*" element={<Admin><AdminSettingsPage /></Admin>} />
+            <Route path="/admin/emergency" element={<Admin><Navigate to="/admin/settings/emergency" replace /></Admin>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

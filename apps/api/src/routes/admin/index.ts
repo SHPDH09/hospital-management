@@ -14,6 +14,8 @@ import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
 import communicationRoutes from './communications';
 import cmsRoutes from './cms';
+import settingsRoutes from './settings';
+import { mergeWithDefaults, maskSecrets, settingsKey } from '../../lib/settings';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -23,6 +25,7 @@ router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
 router.use('/communications', communicationRoutes);
 router.use('/cms', cmsRoutes);
+router.use('/settings', settingsRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -549,47 +552,54 @@ router.delete('/security/sessions/:userId', async (req: AuthRequest, res, next) 
   } catch (err) { next(err); }
 });
 
-// ─── Settings & Emergency ────────────────────────────────────────────────────
+// ─── Emergency (legacy endpoints → settings.emergency) ───────────────────────
 
-router.get('/settings', async (_req, res, next) => {
-  try {
-    const settings = await prisma.platformSetting.findMany({ orderBy: { category: 'asc' } });
-    sendSuccess(res, settings);
-  } catch (err) { next(err); }
-});
-
-router.put('/settings', validateBody(z.object({ key: z.string(), value: z.unknown(), category: z.string().optional() })), async (req: AuthRequest, res, next) => {
-  try {
-    const { key, value, category } = req.body;
-    const setting = await prisma.platformSetting.upsert({
-      where: { key },
-      update: { value: value as Prisma.InputJsonValue, category },
-      create: { key, value: value as Prisma.InputJsonValue, category: category || 'general' },
-    });
-    await logAudit(req, 'UPDATE', 'PlatformSetting', key);
-    sendSuccess(res, setting);
-  } catch (err) { next(err); }
-});
+async function getEmergencySettings() {
+  const row = await prisma.platformSetting.findUnique({ where: { key: settingsKey('emergency') } });
+  return mergeWithDefaults('emergency', row?.value as Record<string, unknown> | null);
+}
 
 router.get('/emergency', async (_req, res, next) => {
   try {
-    const settings = await prisma.platformSetting.findMany({ where: { category: 'emergency' } });
-    const flags = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+    const e = await getEmergencySettings();
+    const flags = {
+      maintenanceMode: e.maintenanceMode,
+      registrationDisabled: e.disableRegistration,
+      paymentDisabled: e.disablePayments,
+      advertisementsDisabled: e.disableAdvertisements,
+      appointmentBookingDisabled: e.disableAppointmentBooking,
+      communicationDisabled: e.disableCommunication,
+      readOnlyMode: e.readOnlyMode,
+    };
     sendSuccess(res, flags);
   } catch (err) { next(err); }
 });
 
 router.put('/emergency', async (req: AuthRequest, res, next) => {
   try {
-    for (const [key, value] of Object.entries(req.body)) {
-      await prisma.platformSetting.upsert({
-        where: { key },
-        update: { value: value as Prisma.InputJsonValue },
-        create: { key, value: value as Prisma.InputJsonValue, category: 'emergency' },
-      });
+    const body = req.body as Record<string, boolean>;
+    const existing = await getEmergencySettings();
+    const map: Record<string, string> = {
+      maintenanceMode: 'maintenanceMode',
+      registrationDisabled: 'disableRegistration',
+      paymentDisabled: 'disablePayments',
+      advertisementsDisabled: 'disableAdvertisements',
+      appointmentBookingDisabled: 'disableAppointmentBooking',
+      communicationDisabled: 'disableCommunication',
+      readOnlyMode: 'readOnlyMode',
+    };
+    const patch: Record<string, unknown> = {};
+    for (const [legacyKey, settingKey] of Object.entries(map)) {
+      if (body[legacyKey] !== undefined) patch[settingKey] = body[legacyKey];
     }
-    await logAudit(req, 'EMERGENCY_UPDATE', 'Platform', undefined, req.body as Prisma.InputJsonValue);
-    sendSuccess(res, req.body, 'Emergency settings updated');
+    const updated = { ...existing, ...patch };
+    await prisma.platformSetting.upsert({
+      where: { key: settingsKey('emergency') },
+      update: { value: updated as Prisma.InputJsonValue },
+      create: { key: settingsKey('emergency'), value: updated as Prisma.InputJsonValue, category: 'settings' },
+    });
+    await logAudit(req, 'EMERGENCY_UPDATE', 'PlatformSetting', 'emergency', patch as Prisma.InputJsonValue);
+    sendSuccess(res, maskSecrets('emergency', updated), 'Emergency settings updated');
   } catch (err) { next(err); }
 });
 

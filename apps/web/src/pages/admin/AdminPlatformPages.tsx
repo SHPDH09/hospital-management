@@ -296,30 +296,6 @@ export function AdminLocationsPage() {
   );
 }
 
-export function AdminSettingsPage() {
-  const { data, isLoading } = useList('/admin/settings');
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Global Settings" subtitle="Platform name, contact, currency, integrations" />
-      {isLoading ? <LoadingState /> : (
-        <div className="space-y-4">
-          {(data?.data as { key: string; value: unknown; category: string }[])?.length === 0 ? (
-            <div className="card p-8 text-center text-gray-500">
-              <p>No settings configured yet.</p>
-              <p className="text-sm mt-2">Settings like platform name, logo, SMTP, payment gateway can be added here.</p>
-            </div>
-          ) : (
-            <AdminTable columns={[
-              { key: 'key', label: 'Setting' },
-              { key: 'category', label: 'Category' },
-              { key: 'value', label: 'Value', render: (r) => <span className="text-xs font-mono">{JSON.stringify(r.value)}</span> },
-            ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-          )}
-        </div>
-      )}
-    </DashboardLayout>
-  );
-}
 
 export function AdminEmergencyPage() {
   const { data, refetch } = useList('/admin/emergency');

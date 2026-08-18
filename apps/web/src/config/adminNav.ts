@@ -71,8 +71,8 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/master-data', icon: Database, label: 'Master Data' },
       { to: '/admin/communications', icon: Mail, label: 'Communications' },
       { to: '/admin/cms', icon: Globe, label: 'CMS' },
-      { to: '/admin/settings', icon: Settings, label: 'Settings' },
-      { to: '/admin/emergency', icon: AlertTriangle, label: 'Emergency Control' },
+      { to: '/admin/settings', icon: Settings, label: 'Global Settings' },
+      { to: '/admin/settings/emergency', icon: AlertTriangle, label: 'Emergency Control' },
     ],
   },
 ];

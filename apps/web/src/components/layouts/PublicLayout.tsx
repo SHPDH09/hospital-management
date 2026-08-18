@@ -1,13 +1,30 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Heart, Menu, X } from 'lucide-react';
+import { Heart, Menu, X, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPortalPath } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
+
+type PlatformStatus = {
+  maintenanceMode?: boolean;
+  maintenanceMessage?: string;
+  emergencyAnnouncement?: string | null;
+  platformName?: string;
+};
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
+
+  const { data: statusRes } = useQuery({
+    queryKey: ['platform-status'],
+    queryFn: () => api.get<PlatformStatus>('/public/platform-status'),
+    staleTime: 60000,
+  });
+  const status = statusRes?.data;
+  const platformName = status?.platformName || 'HealthCare';
 
   const navLinks = [
     { to: '/find/hospitals', label: 'Hospitals' },
@@ -18,11 +35,16 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {status?.emergencyAnnouncement && (
+        <div className="bg-amber-500 text-white text-sm text-center py-2 px-4">
+          {status.emergencyAnnouncement}
+        </div>
+      )}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2 text-primary-700">
             <Heart className="h-7 w-7 fill-primary-600 text-primary-600" />
-            <span className="text-lg font-bold">HealthCare</span>
+            <span className="text-lg font-bold">{platformName}</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-6">
@@ -90,7 +112,19 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         )}
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">
+        {status?.maintenanceMode ? (
+          <div className="mx-auto max-w-lg px-4 py-24 text-center">
+            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Scheduled Maintenance</h1>
+            <p className="text-gray-600">
+              {status.maintenanceMessage || 'We are currently performing scheduled maintenance.'}
+            </p>
+          </div>
+        ) : (
+          children
+        )}
+      </main>
 
       <footer className="border-t border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
