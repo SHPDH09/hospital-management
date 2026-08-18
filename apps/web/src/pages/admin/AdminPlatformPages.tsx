@@ -81,7 +81,18 @@ export function AdminRolesPage() {
 
 export function AdminSecurityPage() {
   const { data: logins } = useList('/admin/security/login-history');
-  const { data: sessions } = useList('/admin/security/sessions');
+  const { data: sessions, refetch } = useList('/admin/security/sessions');
+
+  const forceLogout = async (userId: string) => {
+    if (!userId) return;
+    if (!confirm('Force logout this user from all devices?')) return;
+    const result = await api.delete(`/admin/security/sessions/${userId}`);
+    if (result.success) {
+      await refetch();
+    } else {
+      alert(result.error || 'Failed to force logout user');
+    }
+  };
 
   return (
     <DashboardLayout portal="admin">
@@ -97,13 +108,15 @@ export function AdminSecurityPage() {
 
       <h2 className="font-semibold mb-3 mt-8">Active Sessions</h2>
       <AdminTable columns={[
-        { key: 'user', label: 'User', render: (r) => String((r.user as { email?: string })?.email) },
-        { key: 'role', label: 'Role', render: (r) => String((r.user as { role?: string })?.role) },
+        { key: 'user', label: 'User', render: (r) => String((r.user as { email?: string })?.email || '-') },
+        { key: 'role', label: 'Role', render: (r) => String((r.user as { role?: string })?.role || '-') },
+        { key: 'sessionCount', label: 'Devices', render: (r) => String(r.sessionCount || 1) },
+        { key: 'createdAt', label: 'Last Active', render: (r) => formatDate(r.createdAt as string) },
         { key: 'expiresAt', label: 'Expires', render: (r) => formatDate(r.expiresAt as string) },
         { key: 'actions', label: 'Actions', render: (r) => (
-          <ActionBtn variant="danger" onClick={() => api.delete(`/admin/security/sessions/${r.userId}`)}>Force Logout</ActionBtn>
+          <ActionBtn variant="danger" onClick={() => forceLogout(r.userId as string)}>Force Logout</ActionBtn>
         )},
-      ]} rows={(sessions?.data as Record<string, unknown>[]) || []} />
+      ]} rows={(sessions?.data as Record<string, unknown>[]) || []} emptyMessage="No active sessions" />
     </DashboardLayout>
   );
 }

@@ -496,15 +496,38 @@ router.get('/security/login-history', async (req, res, next) => {
 
 router.get('/security/sessions', async (_req, res, next) => {
   try {
-    const sessions = await prisma.refreshToken.findMany({
+    const tokens = await prisma.refreshToken.findMany({
       where: { expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
-      take: 100,
     });
-    const enriched = await Promise.all(sessions.map(async (s) => {
-      const user = await prisma.user.findUnique({ where: { id: s.userId }, select: { email: true, role: true } });
-      return { ...s, user };
-    }));
+
+    const byUser = new Map<string, { userId: string; expiresAt: Date; createdAt: Date; sessionCount: number }>();
+    for (const token of tokens) {
+      const existing = byUser.get(token.userId);
+      if (!existing) {
+        byUser.set(token.userId, {
+          userId: token.userId,
+          expiresAt: token.expiresAt,
+          createdAt: token.createdAt,
+          sessionCount: 1,
+        });
+      } else {
+        existing.sessionCount += 1;
+        if (token.expiresAt > existing.expiresAt) existing.expiresAt = token.expiresAt;
+        if (token.createdAt > existing.createdAt) existing.createdAt = token.createdAt;
+      }
+    }
+
+    const enriched = await Promise.all(
+      Array.from(byUser.values()).map(async (session) => {
+        const user = await prisma.user.findUnique({
+          where: { id: session.userId },
+          select: { email: true, role: true },
+        });
+        return { ...session, user };
+      })
+    );
+
     sendSuccess(res, enriched);
   } catch (err) { next(err); }
 });
