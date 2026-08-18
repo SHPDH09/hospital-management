@@ -16,6 +16,7 @@
     "db:migrate": "npm run db:migrate --workspace=apps/api",
     "db:seed": "npm run db:seed --workspace=apps/api",
     "db:setup": "npm run db:generate --workspace=apps/api && npm run db:push --workspace=apps/api && npm run db:seed --workspace=apps/api",
+    "db:sync": "npm run db:sync --workspace=apps/api",
     "db:test": "npm run db:generate --workspace=apps/api && node scripts/test-db-connection.mjs",
     "setup:prod": "bash scripts/setup-production.sh",
     "admin:create": "npm run admin:create --workspace=apps/api"
