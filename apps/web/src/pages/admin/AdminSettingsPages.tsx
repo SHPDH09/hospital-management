@@ -66,7 +66,6 @@ const subNavGroups = [
       { to: '/admin/settings/storage', label: 'File & Storage' },
       { to: '/admin/settings/analytics', label: 'Analytics' },
       { to: '/admin/settings/api-integration', label: 'API & Integrations' },
-      { to: '/admin/settings/emergency', label: 'Emergency' },
       { to: '/admin/settings/legal', label: 'Legal & Compliance' },
       { to: '/admin/settings/audit', label: 'Audit Logs' },
     ],
@@ -520,21 +519,6 @@ function NotificationsPage() {
   );
 }
 
-function EmergencyPage() {
-  const fields: FieldDef[] = [
-    { key: 'maintenanceMode', label: 'Maintenance Mode', type: 'toggle', hint: 'Disable public website access' },
-    { key: 'disableRegistration', label: 'Disable Registration', type: 'toggle' },
-    { key: 'disableAppointmentBooking', label: 'Disable Appointment Booking', type: 'toggle' },
-    { key: 'disablePayments', label: 'Disable Payments', type: 'toggle' },
-    { key: 'disableAdvertisements', label: 'Disable Advertisements', type: 'toggle' },
-    { key: 'disableCommunication', label: 'Disable Communication', type: 'toggle' },
-    { key: 'readOnlyMode', label: 'Read-only Mode', type: 'toggle' },
-    { key: 'emergencyAnnouncementActive', label: 'Show Emergency Announcement', type: 'toggle' },
-    { key: 'emergencyAnnouncement', label: 'Emergency Announcement', type: 'textarea' },
-  ];
-  return <CategoryForm category="emergency" title="Emergency / System Control" fields={fields} />;
-}
-
 function AuditLogsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['settings-logs'],
@@ -897,7 +881,6 @@ export function AdminSettingsPage() {
       <Route path="analytics" element={<StandardCategoryPage category="analytics" />} />
       <Route path="localization" element={<StandardCategoryPage category="localization" />} />
       <Route path="api-integration" element={<StandardCategoryPage category="api-integration" />} />
-      <Route path="emergency" element={<EmergencyPage />} />
       <Route path="legal" element={<StandardCategoryPage category="legal" />} />
       <Route path="audit" element={<AuditLogsPage />} />
       <Route path="*" element={<Navigate to="/admin/settings" replace />} />

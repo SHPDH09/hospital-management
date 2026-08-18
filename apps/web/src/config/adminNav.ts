@@ -72,7 +72,7 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/communications', icon: Mail, label: 'Communications' },
       { to: '/admin/cms', icon: Globe, label: 'CMS' },
       { to: '/admin/settings', icon: Settings, label: 'Global Settings' },
-      { to: '/admin/settings/emergency', icon: AlertTriangle, label: 'Emergency Control' },
+      { to: '/admin/emergency', icon: AlertTriangle, label: 'Emergency Control' },
     ],
   },
 ];

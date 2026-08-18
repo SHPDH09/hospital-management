@@ -5,12 +5,15 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPortalPath } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 type PlatformStatus = {
   maintenanceMode?: boolean;
   maintenanceMessage?: string;
   emergencyAnnouncement?: string | null;
+  emergencyAnnouncements?: { title: string; message: string; severity: string }[];
   platformName?: string;
+  systemStatus?: string;
 };
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -35,11 +38,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {status?.emergencyAnnouncement && (
-        <div className="bg-amber-500 text-white text-sm text-center py-2 px-4">
-          {status.emergencyAnnouncement}
+      {(status?.emergencyAnnouncements?.length ? status.emergencyAnnouncements : status?.emergencyAnnouncement ? [{ title: 'Notice', message: status.emergencyAnnouncement, severity: 'WARNING' }] : []).map((a, i) => (
+        <div key={i} className={cn('text-white text-sm text-center py-2 px-4',
+          a.severity === 'CRITICAL' ? 'bg-red-600' : a.severity === 'INFO' ? 'bg-blue-600' : 'bg-amber-500')}>
+          {a.title ? <strong>{a.title}: </strong> : '⚠️ '}{a.message}
         </div>
-      )}
+      ))}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2 text-primary-700">

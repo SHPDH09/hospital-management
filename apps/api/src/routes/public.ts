@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { prisma, readDb } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
-import { SettingCategory, mergeWithDefaults, settingsKey } from '../lib/settings';
+import { getEmergencyState, computeSystemStatus, getActiveControls } from '../lib/emergency';
+import { mergeWithDefaults, settingsKey } from '../lib/settings';
+import { SettingCategory } from '../lib/settings';
 
 const router = Router();
 
@@ -15,39 +17,58 @@ router.get('/platform-status', async (_req, res, next) => {
     const [website, mobile, emergency, platform, branding] = await Promise.all([
       getSettingCategory('website'),
       getSettingCategory('mobile'),
-      getSettingCategory('emergency'),
+      getEmergencyState(),
       getSettingCategory('platform'),
       getSettingCategory('branding'),
     ]);
 
-    const maintenanceMode = Boolean(website.maintenanceMode) || Boolean(emergency.maintenanceMode);
+    const synced = emergency;
+    const status = computeSystemStatus(synced);
+    const modules = (synced.modules || {}) as Record<string, boolean>;
+    const maintenanceMode = Boolean(synced.maintenanceMode) && String(synced.maintenanceType) === 'full';
+
+    const announcements = await prisma.emergencyAnnouncement.findMany({
+      where: {
+        isActive: true,
+        startsAt: { lte: new Date() },
+        OR: [{ endsAt: null }, { endsAt: { gte: new Date() } }],
+        displayLocations: { has: 'website' },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    });
 
     sendSuccess(res, {
+      systemStatus: status,
       platformName: platform.platformName,
       tagline: platform.tagline,
       logo: branding.primaryLogo || platform.logo,
       favicon: branding.favicon || platform.favicon,
       maintenanceMode,
-      maintenanceMessage: website.maintenanceMessage || 'We are currently performing scheduled maintenance.',
-      websiteStatus: website.websiteStatus,
-      registrationEnabled: website.registrationEnabled && !emergency.disableRegistration,
-      patientRegistration: website.patientRegistration,
-      hospitalRegistration: website.hospitalRegistration,
-      clinicRegistration: website.clinicRegistration,
-      doctorRegistration: website.doctorRegistration,
-      searchEnabled: website.searchEnabled,
-      appointmentBookingEnabled: website.appointmentBookingEnabled && !emergency.disableAppointmentBooking,
-      paymentsEnabled: !emergency.disablePayments,
-      advertisementsEnabled: !emergency.disableAdvertisements,
-      communicationEnabled: !emergency.disableCommunication,
-      readOnlyMode: emergency.readOnlyMode,
-      emergencyAnnouncement: emergency.emergencyAnnouncementActive ? emergency.emergencyAnnouncement : null,
+      maintenanceMessage: synced.maintenanceMessage || website.maintenanceMessage || 'We are currently performing scheduled maintenance.',
+      maintenanceType: synced.maintenanceType,
+      readOnlyMode: synced.readOnlyMode,
+      emergencyModeActive: synced.emergencyModeActive,
+      activeControls: getActiveControls(synced),
+      registrationEnabled: website.registrationEnabled && modules.patientRegistration !== false && !(synced.security as Record<string, unknown>)?.disableNewRegistrations,
+      patientRegistration: website.patientRegistration && modules.patientRegistration !== false,
+      hospitalRegistration: website.hospitalRegistration && modules.hospitalRegistration !== false,
+      clinicRegistration: website.clinicRegistration && modules.clinicRegistration !== false,
+      doctorRegistration: website.doctorRegistration && modules.doctorRegistration !== false,
+      searchEnabled: website.searchEnabled && modules.publicSearch !== false,
+      appointmentBookingEnabled: website.appointmentBookingEnabled && modules.appointmentBooking !== false,
+      paymentsEnabled: modules.onlinePayment !== false,
+      advertisementsEnabled: modules.advertisement !== false,
+      communicationEnabled: modules.messaging !== false,
+      fileUploadEnabled: modules.fileUpload !== false,
+      emergencyAnnouncements: announcements,
+      emergencyAnnouncement: announcements[0]?.message || (synced.emergencyAnnouncementActive ? synced.emergencyAnnouncement : null),
       mobile: {
         appName: mobile.appName,
         minimumSupportedVersion: mobile.minimumSupportedVersion,
         latestVersion: mobile.latestVersion,
         forceUpdate: mobile.forceUpdate,
-        maintenanceMode: mobile.maintenanceMode,
+        maintenanceMode: mobile.maintenanceMode || maintenanceMode,
         maintenanceMessage: mobile.maintenanceMessage,
         androidAppLink: mobile.androidAppLink,
         iosAppLink: mobile.iosAppLink,
