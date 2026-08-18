@@ -287,6 +287,8 @@ model Doctor {
   photoUrl           String?
   languages          String[]
   isActive           Boolean  @default(true)
+  verificationStatus VerificationStatus @default(PENDING)
+  accountActivated   Boolean  @default(false)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
   createdAt          DateTime @default(now())
