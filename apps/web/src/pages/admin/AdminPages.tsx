@@ -1,5 +1,24 @@
 export { AdminDashboard } from './AdminDashboard';
 export {
+  DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
+} from './AdminDoctorManagementPages';
+export {
+  PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
+} from './AdminPatientManagementPages';
+export {
+  AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
+} from './AdminAppointmentManagementPages';
+export {
+  PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
+} from './AdminPaymentManagementPages';
+export {
+  LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
+} from './AdminLeadManagementPages';
+export {
+  ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
+} from './AdminReviewManagementPages';
+export { AdminConfigurationPage } from './AdminConfigurationPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';

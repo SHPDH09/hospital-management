@@ -12,6 +12,14 @@ import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
 import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
+import doctorManagementRoutes from './doctors';
+import patientManagementRoutes from './patients';
+import appointmentManagementRoutes from './appointments';
+import paymentManagementRoutes from './payments';
+import leadManagementRoutes from './leads';
+import reviewManagementRoutes from './reviews';
+import uploadRoutes from './uploads';
+import settingsConfigRoutes from './settings-config';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -19,6 +27,14 @@ router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
+router.use('/doctors', doctorManagementRoutes);
+router.use('/patients', patientManagementRoutes);
+router.use('/appointments', appointmentManagementRoutes);
+router.use('/payments', paymentManagementRoutes);
+router.use('/leads', leadManagementRoutes);
+router.use('/reviews', reviewManagementRoutes);
+router.use('/uploads', uploadRoutes);
+router.use('/settings-config', settingsConfigRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -193,120 +209,6 @@ router.post('/organizations/:id/impersonate', async (req: AuthRequest, res, next
   } catch (err) { next(err); }
 });
 
-// ─── Doctors ─────────────────────────────────────────────────────────────────
-
-router.get('/doctors', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const search = req.query.search as string | undefined;
-    const where = search ? { fullName: { contains: search, mode: 'insensitive' as const } } : {};
-    const [doctors, total] = await Promise.all([
-      prisma.doctor.findMany({
-        where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { organization: { select: { name: true, type: true } }, user: { select: { email: true, isActive: true } }, _count: { select: { appointments: true, reviews: true } } },
-      }),
-      prisma.doctor.count({ where }),
-    ]);
-    sendPaginated(res, doctors, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/doctors/:id/status', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const { isActive } = req.body;
-    const doctor = await prisma.doctor.update({ where: { id }, data: { isActive } });
-    await logAudit(req, 'STATUS_CHANGE', 'Doctor', id, { isActive });
-    sendSuccess(res, doctor);
-  } catch (err) { next(err); }
-});
-
-// ─── Patients ────────────────────────────────────────────────────────────────
-
-router.get('/patients', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const search = req.query.search as string | undefined;
-    const where = search ? { fullName: { contains: search, mode: 'insensitive' as const } } : {};
-    const [patients, total] = await Promise.all([
-      prisma.patient.findMany({
-        where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { user: { select: { email: true, isActive: true, lastLoginAt: true } }, _count: { select: { appointments: true } } },
-      }),
-      prisma.patient.count({ where }),
-    ]);
-    sendPaginated(res, patients, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/patients/:id/status', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const patient = await prisma.patient.findUnique({ where: { id } });
-    if (!patient) throw new AppError('Patient not found', 404);
-    await prisma.user.update({ where: { id: patient.userId }, data: { isActive: req.body.isActive } });
-    await logAudit(req, 'STATUS_CHANGE', 'Patient', id, req.body);
-    sendSuccess(res, { id, isActive: req.body.isActive });
-  } catch (err) { next(err); }
-});
-
-// ─── Appointments ──────────────────────────────────────────────────────────────
-
-router.get('/appointments', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [appointments, total] = await Promise.all([
-      prisma.appointment.findMany({
-        where, skip, take: limit, orderBy: { appointmentDate: 'desc' },
-        include: {
-          patient: { select: { fullName: true } },
-          doctor: { select: { fullName: true } },
-          organization: { select: { name: true, type: true } },
-        },
-      }),
-      prisma.appointment.count({ where }),
-    ]);
-    sendPaginated(res, appointments, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/appointments/:id/status', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const apt = await prisma.appointment.update({ where: { id }, data: { status: req.body.status } });
-    await logAudit(req, 'STATUS_CHANGE', 'Appointment', id, { status: req.body.status });
-    sendSuccess(res, apt);
-  } catch (err) { next(err); }
-});
-
-// ─── Payments ────────────────────────────────────────────────────────────────
-
-router.get('/payments', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { bill: { include: { patient: { select: { fullName: true } }, organization: { select: { name: true } } } } },
-      }),
-      prisma.payment.count({ where }),
-    ]);
-    sendPaginated(res, payments, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
 // ─── Advertisements ──────────────────────────────────────────────────────────
 
 router.get('/advertisements', async (req, res, next) => {
@@ -331,59 +233,6 @@ router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) =
     const ad = await prisma.advertisement.update({ where: { id }, data: { status } });
     await logAudit(req, 'STATUS_CHANGE', 'Advertisement', id, { status });
     sendSuccess(res, ad);
-  } catch (err) { next(err); }
-});
-
-// ─── Leads ───────────────────────────────────────────────────────────────────
-
-router.get('/leads', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [leads, total] = await Promise.all([
-      prisma.lead.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { organization: { select: { name: true } } } }),
-      prisma.lead.count({ where }),
-    ]);
-    sendPaginated(res, leads, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/leads/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const lead = await prisma.lead.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Lead', id, req.body);
-    sendSuccess(res, lead);
-  } catch (err) { next(err); }
-});
-
-// ─── Reviews ─────────────────────────────────────────────────────────────────
-
-router.get('/reviews', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [reviews, total] = await Promise.all([
-      prisma.review.findMany({
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { patient: { select: { fullName: true } }, organization: { select: { name: true } }, doctor: { select: { fullName: true } } },
-      }),
-      prisma.review.count(),
-    ]);
-    sendPaginated(res, reviews, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const review = await prisma.review.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Review', id, req.body);
-    sendSuccess(res, review);
   } catch (err) { next(err); }
 });
 

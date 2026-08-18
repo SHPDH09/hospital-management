@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -18,12 +18,19 @@ import {
   CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage,
 } from '@/pages/crm/CrmPages';
 import {
-  AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
-  AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
-  AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
+  AdminDashboard, AdminHospitalsPage, AdminClinicsPage,
+  AdminSubscriptionsPage, AdminAdvertisementsPage,
+  AdminCouponsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCommunicationsPage, AdminCmsPage, AdminEmergencyPage,
+  DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
+  PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
+  AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
+  PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
+  LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
+  ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
+  AdminConfigurationPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -74,15 +81,42 @@ export default function App() {
             <Route path="/admin/hospitals" element={<Admin><AdminHospitalsPage /></Admin>} />
             <Route path="/admin/clinics" element={<Admin><AdminClinicsPage /></Admin>} />
             <Route path="/admin/organizations" element={<Admin><AdminHospitalsPage /></Admin>} />
-            <Route path="/admin/doctors" element={<Admin><AdminDoctorsPage /></Admin>} />
-            <Route path="/admin/patients" element={<Admin><AdminPatientsPage /></Admin>} />
-            <Route path="/admin/appointments" element={<Admin><AdminAppointmentsPage /></Admin>} />
-            <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
+            <Route path="/admin/doctor-management" element={<Admin><DoctorManagementDashboardPage /></Admin>} />
+            <Route path="/admin/doctor-management/doctors" element={<Admin><DoctorManagementListPage /></Admin>} />
+            <Route path="/admin/doctor-management/doctors/:id" element={<Admin><DoctorManagementDetailPage /></Admin>} />
+            <Route path="/admin/doctors" element={<Navigate to="/admin/doctor-management/doctors" replace />} />
+            <Route path="/admin/patient-management" element={<Admin><PatientManagementDashboardPage /></Admin>} />
+            <Route path="/admin/patient-management/patients" element={<Admin><PatientManagementListPage /></Admin>} />
+            <Route path="/admin/patient-management/patients/:id" element={<Admin><PatientManagementDetailPage /></Admin>} />
+            <Route path="/admin/patient-management/duplicates" element={<Admin><PatientDuplicatesPage /></Admin>} />
+            <Route path="/admin/patients" element={<Navigate to="/admin/patient-management/patients" replace />} />
+            <Route path="/admin/appointment-management" element={<Admin><AppointmentManagementDashboardPage /></Admin>} />
+            <Route path="/admin/appointment-management/appointments" element={<Admin><AppointmentManagementListPage /></Admin>} />
+            <Route path="/admin/appointment-management/appointments/:id" element={<Admin><AppointmentManagementDetailPage /></Admin>} />
+            <Route path="/admin/appointment-management/today" element={<Admin><AppointmentManagementListPage todayOnly /></Admin>} />
+            <Route path="/admin/appointments" element={<Navigate to="/admin/appointment-management/appointments" replace />} />
+            <Route path="/admin/payment-management" element={<Admin><PaymentManagementDashboardPage /></Admin>} />
+            <Route path="/admin/payment-management/payments" element={<Admin><PaymentManagementListPage /></Admin>} />
+            <Route path="/admin/payment-management/payments/:id" element={<Admin><PaymentManagementDetailPage /></Admin>} />
+            <Route path="/admin/payment-management/exceptions" element={<Admin><PaymentExceptionsPage /></Admin>} />
+            <Route path="/admin/payments" element={<Navigate to="/admin/payment-management/payments" replace />} />
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
-            <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
-            <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />
+            <Route path="/admin/lead-management" element={<Admin><LeadManagementDashboardPage /></Admin>} />
+            <Route path="/admin/lead-management/leads" element={<Admin><LeadManagementListPage /></Admin>} />
+            <Route path="/admin/lead-management/leads/:id" element={<Admin><LeadManagementDetailPage /></Admin>} />
+            <Route path="/admin/lead-management/follow-ups" element={<Admin><LeadFollowUpsPage /></Admin>} />
+            <Route path="/admin/lead-management/unassigned" element={<Admin><LeadManagementListPage unassignedOnly title="Unassigned Leads" /></Admin>} />
+            <Route path="/admin/lead-management/hot" element={<Admin><LeadManagementListPage presetTemperature="HOT" title="Hot Leads" /></Admin>} />
+            <Route path="/admin/leads" element={<Navigate to="/admin/lead-management/leads" replace />} />
+            <Route path="/admin/review-management" element={<Admin><ReviewManagementDashboardPage /></Admin>} />
+            <Route path="/admin/review-management/reviews" element={<Admin><ReviewManagementListPage /></Admin>} />
+            <Route path="/admin/review-management/reviews/:id" element={<Admin><ReviewManagementDetailPage /></Admin>} />
+            <Route path="/admin/review-management/pending" element={<Admin><ReviewManagementListPage presetStatus="PENDING" title="Pending Moderation" /></Admin>} />
+            <Route path="/admin/review-management/reported" element={<Admin><ReviewManagementListPage reportedOnly title="Reported Reviews" /></Admin>} />
+            <Route path="/admin/review-management/fraud" element={<Admin><ReviewFraudFlagsPage /></Admin>} />
+            <Route path="/admin/reviews" element={<Navigate to="/admin/review-management/reviews" replace />} />
             <Route path="/admin/staff" element={<Admin><AdminStaffPage /></Admin>} />
             <Route path="/admin/roles" element={<Admin><AdminRolesPage /></Admin>} />
             <Route path="/admin/security" element={<Admin><AdminSecurityPage /></Admin>} />
@@ -92,7 +126,7 @@ export default function App() {
             <Route path="/admin/master-data/*" element={<Admin><AdminMasterDataPage /></Admin>} />
             <Route path="/admin/communications" element={<Admin><AdminCommunicationsPage /></Admin>} />
             <Route path="/admin/cms" element={<Admin><AdminCmsPage /></Admin>} />
-            <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />
+            <Route path="/admin/settings/*" element={<Admin><AdminConfigurationPage /></Admin>} />
             <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
           </Routes>
         </BrowserRouter>

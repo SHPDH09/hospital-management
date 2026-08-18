@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
+import { ImageUpload } from '@/components/admin/ImageUpload';
 
 const subNav = [
   { to: '/admin/master-data', label: 'Overview', end: true },
@@ -47,7 +48,7 @@ function MasterDataLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-type FieldDef = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'textarea'; options?: { value: string; label: string }[]; col?: string };
+type FieldDef = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'textarea' | 'image'; options?: { value: string; label: string }[]; col?: string; uploadFolder?: 'logos' | 'favicons' | 'images' | 'covers' | 'photos' };
 
 type SectionConfig = {
   endpoint: string;
@@ -172,6 +173,13 @@ function MasterDataSection({ config }: { config: SectionConfig }) {
                     </select>
                   ) : f.type === 'textarea' ? (
                     <textarea className="input w-full" rows={3} value={String(form[f.key] || '')} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
+                  ) : f.type === 'image' ? (
+                    <ImageUpload
+                      label=""
+                      value={String(form[f.key] || '')}
+                      onChange={(url) => setForm({ ...form, [f.key]: url })}
+                      folder={f.uploadFolder || 'logos'}
+                    />
                   ) : (
                     <input type={f.type || 'text'} className="input w-full" value={form[f.key] ?? ''} onChange={(e) => setForm({ ...form, [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })} />
                   )}
@@ -343,7 +351,7 @@ export function AdminMasterDataPage() {
         <MasterDataSection config={{
           endpoint: 'insurance-providers', title: 'Insurance Providers', subtitle: 'Insurance companies hospitals can accept',
           columns: [{ key: 'name', label: 'Provider' }, { key: 'contact', label: 'Contact' }, { key: 'website', label: 'Website' }],
-          fields: [{ key: 'name', label: 'Provider Name', col: 'full' }, { key: 'contact', label: 'Contact' }, { key: 'website', label: 'Website' }, { key: 'logoUrl', label: 'Logo URL', col: 'full' }],
+          fields: [{ key: 'name', label: 'Provider Name', col: 'full' }, { key: 'contact', label: 'Contact' }, { key: 'website', label: 'Website' }, { key: 'logoUrl', label: 'Upload Logo', type: 'image', uploadFolder: 'logos', col: 'full' }],
           emptyForm: { name: '', contact: '', website: '', logoUrl: '' },
         }} />
       } />
