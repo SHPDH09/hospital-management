@@ -20,7 +20,7 @@ import {
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage,
   AdminSubscriptionsPage, AdminAdvertisementsPage,
-  AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
+  AdminCouponsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
@@ -28,6 +28,7 @@ import {
   PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
   AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
   PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
+  LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -100,7 +101,13 @@ export default function App() {
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
-            <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
+            <Route path="/admin/lead-management" element={<Admin><LeadManagementDashboardPage /></Admin>} />
+            <Route path="/admin/lead-management/leads" element={<Admin><LeadManagementListPage /></Admin>} />
+            <Route path="/admin/lead-management/leads/:id" element={<Admin><LeadManagementDetailPage /></Admin>} />
+            <Route path="/admin/lead-management/follow-ups" element={<Admin><LeadFollowUpsPage /></Admin>} />
+            <Route path="/admin/lead-management/unassigned" element={<Admin><LeadManagementListPage unassignedOnly title="Unassigned Leads" /></Admin>} />
+            <Route path="/admin/lead-management/hot" element={<Admin><LeadManagementListPage presetTemperature="HOT" title="Hot Leads" /></Admin>} />
+            <Route path="/admin/leads" element={<Navigate to="/admin/lead-management/leads" replace />} />
             <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />
             <Route path="/admin/staff" element={<Admin><AdminStaffPage /></Admin>} />
             <Route path="/admin/roles" element={<Admin><AdminRolesPage /></Admin>} />

@@ -28,7 +28,7 @@ async function main() {
   ));
 
   // Super Admin (demo)
-  await prisma.user.upsert({
+  const superAdmin = await prisma.user.upsert({
     where: { email: 'admin@healthcare.platform' },
     update: {},
     create: {
@@ -351,7 +351,7 @@ async function main() {
   }
 
   // Sample Advertisement
-  await prisma.advertisement.create({
+  const ad = await prisma.advertisement.create({
     data: {
       organizationId: organization.id,
       title: 'Free Health Checkup Camp',
@@ -360,6 +360,108 @@ async function main() {
       targetUrl: '/organizations/city-general-hospital',
       startDate: new Date(),
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const demoDoctorForLeads = await prisma.doctor.findFirst({ where: { organizationId: organization.id } });
+  const tomorrowFollowUp = new Date();
+  tomorrowFollowUp.setDate(tomorrowFollowUp.getDate() + 1);
+  tomorrowFollowUp.setHours(11, 0, 0, 0);
+
+  const lead1 = await prisma.lead.upsert({
+    where: { leadNumber: 'LD-00001' },
+    update: {},
+    create: {
+      leadNumber: 'LD-00001',
+      organizationId: organization.id,
+      type: 'PATIENT',
+      name: 'Rahul Kumar',
+      email: 'rahul.kumar@example.com',
+      phone: '+91-9876543201',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      source: 'REFERRAL',
+      campaign: 'Patna Healthcare Campaign',
+      referralName: 'Sita Devi',
+      referralType: 'AASHA',
+      specialty: 'Cardiology',
+      service: 'Consultation',
+      status: 'FOLLOW_UP',
+      priority: 'HIGH',
+      temperature: 'HOT',
+      score: 75,
+      assignedToId: superAdmin.id,
+      assignedAt: new Date(),
+      interestedDoctorId: demoDoctorForLeads?.id,
+      phoneVerified: true,
+      nextFollowUpAt: tomorrowFollowUp,
+      lastContactAt: new Date(),
+      tags: ['VIP', 'Referral', 'AASHA'],
+      notes: 'Patient wants cardiologist appointment after 6 PM.',
+    },
+  });
+
+  await prisma.lead.upsert({
+    where: { leadNumber: 'LD-00002' },
+    update: {},
+    create: {
+      leadNumber: 'LD-00002',
+      organizationId: organization.id,
+      type: 'PATIENT',
+      name: 'Amit Sharma',
+      phone: '+91-9876543202',
+      city: 'Pune',
+      state: 'Maharashtra',
+      source: 'ADVERTISEMENT',
+      campaign: 'Diabetes Checkup',
+      advertisementId: ad.id,
+      status: 'NEW',
+      priority: 'MEDIUM',
+      temperature: 'WARM',
+      score: 35,
+      tags: ['Follow-up'],
+    },
+  });
+
+  await prisma.lead.upsert({
+    where: { leadNumber: 'LD-00003' },
+    update: {},
+    create: {
+      leadNumber: 'LD-00003',
+      type: 'HOSPITAL',
+      name: 'Metro Care Hospital',
+      email: 'contact@metrocare.com',
+      phone: '+91-9876543203',
+      city: 'Delhi',
+      state: 'Delhi',
+      source: 'WEBSITE',
+      status: 'CONTACTED',
+      priority: 'HIGH',
+      temperature: 'WARM',
+      score: 40,
+      assignedToId: superAdmin.id,
+      assignedAt: new Date(),
+      lastContactAt: new Date(),
+    },
+  });
+
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead1.id,
+      userId: superAdmin.id,
+      action: 'LEAD_CREATED',
+      newStatus: 'NEW',
+      notes: 'Lead captured via referral form',
+    },
+  });
+
+  await prisma.leadFollowUp.create({
+    data: {
+      leadId: lead1.id,
+      assignedToId: superAdmin.id,
+      scheduledAt: tomorrowFollowUp,
+      reason: 'Appointment Confirmation',
+      status: 'PENDING',
     },
   });
 

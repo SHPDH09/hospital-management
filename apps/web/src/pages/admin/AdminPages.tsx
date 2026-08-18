@@ -12,6 +12,9 @@ export {
   PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
 } from './AdminPaymentManagementPages';
 export {
+  LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
+} from './AdminLeadManagementPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';

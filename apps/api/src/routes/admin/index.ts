@@ -16,6 +16,7 @@ import doctorManagementRoutes from './doctors';
 import patientManagementRoutes from './patients';
 import appointmentManagementRoutes from './appointments';
 import paymentManagementRoutes from './payments';
+import leadManagementRoutes from './leads';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -27,6 +28,7 @@ router.use('/doctors', doctorManagementRoutes);
 router.use('/patients', patientManagementRoutes);
 router.use('/appointments', appointmentManagementRoutes);
 router.use('/payments', paymentManagementRoutes);
+router.use('/leads', leadManagementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -228,33 +230,7 @@ router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) =
   } catch (err) { next(err); }
 });
 
-// ─── Leads ───────────────────────────────────────────────────────────────────
-
-router.get('/leads', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [leads, total] = await Promise.all([
-      prisma.lead.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { organization: { select: { name: true } } } }),
-      prisma.lead.count({ where }),
-    ]);
-    sendPaginated(res, leads, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/leads/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const lead = await prisma.lead.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Lead', id, req.body);
-    sendSuccess(res, lead);
-  } catch (err) { next(err); }
-});
-
-// ─── Reviews ─────────────────────────────────────────────────────────────────
+// ─── Advertisements ──────────────────────────────────────────────────────────
 
 router.get('/reviews', async (req, res, next) => {
   try {

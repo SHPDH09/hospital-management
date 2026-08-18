@@ -62,9 +62,18 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Lead Management',
+    items: [
+      { to: '/admin/lead-management', icon: Target, label: 'LM Dashboard' },
+      { to: '/admin/lead-management/leads', icon: Target, label: 'All Leads' },
+      { to: '/admin/lead-management/follow-ups', icon: Calendar, label: 'Follow-ups' },
+      { to: '/admin/lead-management/unassigned', icon: AlertTriangle, label: 'Unassigned' },
+      { to: '/admin/lead-management/hot', icon: Target, label: 'Hot Leads' },
+    ],
+  },
+  {
     title: 'Operations',
     items: [
-      { to: '/admin/leads', icon: Target, label: 'Leads' },
       { to: '/admin/reviews', icon: Star, label: 'Reviews' },
     ],
   },
