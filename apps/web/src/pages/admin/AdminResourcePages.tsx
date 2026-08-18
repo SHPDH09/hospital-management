@@ -39,7 +39,10 @@ function OrgListPage({ type, title, subtitle }: { type: string; title: string; s
             { key: 'actions', label: 'Actions', render: (r) => (
               <div className="flex flex-wrap gap-2">
                 {r.verificationStatus === 'PENDING' && (
-                  <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => refetch())}>Approve</ActionBtn>
+                  <>
+                    <ActionBtn onClick={() => api.post(`/ai/approvals/organizations/${r.id}/analyze`, {}).then(() => alert('Verification analysis submitted — check AI Approvals queue'))}>AI Verify</ActionBtn>
+                    <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => refetch())}>Approve</ActionBtn>
+                  </>
                 )}
                 {r.verificationStatus === 'APPROVED' && (
                   <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: false, verificationStatus: 'SUSPENDED' }).then(() => refetch())}>Suspend</ActionBtn>
@@ -86,21 +89,75 @@ export function AdminDoctorsPage() {
 
 export function AdminPatientsPage() {
   const { data, isLoading, refetch } = useAdminList('/admin/patients', '?limit=50');
+  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
+  const { data: duplicates } = useQuery({
+    queryKey: ['patient-duplicates'],
+    queryFn: () => api.get<{ groups: { matchType: string; confidence: string; patients: { id: string; fullName: string; email: string | null }[] }[] }>('/ai/patients/duplicates'),
+  });
+  const { data: timeline } = useQuery({
+    queryKey: ['patient-timeline', selectedPatient],
+    queryFn: () => api.get(`/ai/patients/${selectedPatient}/timeline`),
+    enabled: Boolean(selectedPatient),
+  });
+
+  const refreshCompletion = (id: string) =>
+    api.post(`/ai/patients/${id}/completion`, {}).then(() => refetch());
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Patient Management" subtitle="View and manage all patients" />
+      <PageHeader title="Patient Management" subtitle="View patients, profile completion, duplicates, and AI timelines" actions={
+        <ActionBtn onClick={() => api.post('/ai/patients/batch-completion', {}).then(() => refetch())}>Refresh All Completion %</ActionBtn>
+      } />
+
+      {(duplicates?.data?.groups?.length ?? 0) > 0 && (
+        <div className="card p-4 mb-4 border-l-4 border-orange-500">
+          <p className="font-medium text-sm mb-2">AI Duplicate Detection — {duplicates?.data?.groups.length} group(s)</p>
+          {duplicates?.data?.groups.slice(0, 3).map((g, i) => (
+            <p key={i} className="text-sm text-gray-600">[{g.confidence}] {g.matchType}: {g.patients.map((p) => p.fullName).join(' · ')}</p>
+          ))}
+        </div>
+      )}
+
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'fullName', label: 'Name' },
           { key: 'email', label: 'Email', render: (r) => String((r.user as { email?: string })?.email || '-') },
           { key: 'city', label: 'City' },
+          { key: 'completion', label: 'Profile %', render: (r) => {
+            const pct = (r.profileCompletionPercent as number) ?? 0;
+            return <span className={pct < 70 ? 'text-orange-600 font-medium' : ''}>{pct}%</span>;
+          }},
           { key: 'appointments', label: 'Appointments', render: (r) => String((r._count as { appointments?: number })?.appointments || 0) },
           { key: 'actions', label: 'Actions', render: (r) => {
             const active = (r.user as { isActive?: boolean })?.isActive;
-            return <ActionBtn variant={active ? 'danger' : 'success'} onClick={() => api.patch(`/admin/patients/${r.id}/status`, { isActive: !active }).then(() => refetch())}>{active ? 'Block' : 'Unblock'}</ActionBtn>;
+            return (
+              <div className="flex flex-wrap gap-2">
+                <ActionBtn onClick={() => setSelectedPatient(r.id as string)}>Timeline</ActionBtn>
+                <ActionBtn onClick={() => refreshCompletion(r.id as string)}>Score</ActionBtn>
+                <ActionBtn variant={active ? 'danger' : 'success'} onClick={() => api.patch(`/admin/patients/${r.id}/status`, { isActive: !active }).then(() => refetch())}>{active ? 'Block' : 'Unblock'}</ActionBtn>
+              </div>
+            );
           }},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}
+
+      {selectedPatient && timeline?.data ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedPatient(null)}>
+          <div className="card p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold mb-2">{(timeline.data as { patient: { fullName: string }; aiSummary: string }).patient.fullName} — Timeline</h3>
+            <p className="text-sm text-gray-600 mb-4">{(timeline.data as { aiSummary: string }).aiSummary}</p>
+            <ul className="space-y-2 text-sm">
+              {((timeline.data as { events: { date: string; type: string; summary: string }[] }).events || []).map((e, i) => (
+                <li key={i} className="border-l-2 border-primary-200 pl-3">
+                  <span className="text-xs text-gray-400">{new Date(e.date).toLocaleDateString()} · {e.type}</span>
+                  <p>{e.summary}</p>
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="btn-ghost mt-4" onClick={() => setSelectedPatient(null)}>Close</button>
+          </div>
+        </div>
+      ) : null}
     </DashboardLayout>
   );
 }

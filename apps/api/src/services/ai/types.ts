@@ -41,6 +41,10 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
     reviewSentiment: true,
     ticketClassification: true,
     appointmentReminders: true,
+    documentVerification: true,
+    patientTimeline: true,
+    fraudDetection: true,
+    communicationAi: true,
   },
   leadScoringWeights: {
     source: 15,

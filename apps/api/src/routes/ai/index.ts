@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../middleware/auth';
+import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES, CRM_ROLES, resolveOrganizationId } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
 import { sendSuccess, sendPaginated } from '../../lib/response';
 import { prisma } from '../../lib/prisma';
 import { getAiSettings, updateAiSettings } from '../../services/ai';
 import { runAdminCopilot, getPlatformSummary } from '../../services/copilot/admin-copilot';
+import { runOrgCopilot } from '../../services/copilot/org-copilot';
+import aiApprovalsRoutes from './approvals';
+import aiPatientsRoutes from './patients';
+import aiPhase3Routes from './phase3';
 import { scoreLead, getLeadInsights } from '../../services/leads/lead-scoring';
 import { analyzeReview } from '../../services/reviews/review-analysis';
 import { classifyComplaint } from '../../services/support/ticket-classifier';
@@ -16,6 +20,9 @@ import aiAnalyticsRoutes from './analytics';
 const router = Router();
 router.use(authenticate);
 router.use('/analytics', aiAnalyticsRoutes);
+router.use('/approvals', aiApprovalsRoutes);
+router.use('/patients', aiPatientsRoutes);
+router.use(aiPhase3Routes);
 
 // Settings (Super Admin)
 router.get('/settings', requireRoles(...PLATFORM_ROLES), async (_req, res, next) => {
@@ -107,6 +114,21 @@ router.get('/audit-logs', requireRoles(...PLATFORM_ROLES), async (req, res, next
   } catch (err) { next(err); }
 });
 
+router.post('/copilot/org', requireRoles(...CRM_ROLES), validateBody(z.object({ query: z.string().min(1).max(2000) })), async (req: AuthRequest, res, next) => {
+  try {
+    if (isMedicalQuery(req.body.query)) {
+      return sendSuccess(res, { answer: medicalSafetyResponse(), fromAi: false, data: null });
+    }
+    const organizationId = (await resolveOrganizationId(req)) || undefined;
+    const result = await runOrgCopilot(req.body.query, {
+      userId: req.user!.userId,
+      role: req.user!.role,
+      organizationId,
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+});
+
 // General assistant (role-aware, safe)
 router.post('/assistant', validateBody(z.object({ query: z.string().min(1).max(2000) })), async (req: AuthRequest, res, next) => {
   try {
@@ -118,6 +140,15 @@ router.post('/assistant', validateBody(z.object({ query: z.string().min(1).max(2
         userId: req.user!.userId,
         role: req.user!.role,
         organizationId: req.user!.organizationId,
+      });
+      return sendSuccess(res, result);
+    }
+    if (CRM_ROLES.includes(req.user!.role)) {
+      const organizationId = (await resolveOrganizationId(req)) || undefined;
+      const result = await runOrgCopilot(req.body.query, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+        organizationId,
       });
       return sendSuccess(res, result);
     }

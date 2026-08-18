@@ -298,9 +298,48 @@ export function AdminLocationsPage() {
 
 export function AdminCommunicationsPage() {
   const { data, isLoading } = useList('/admin/communications');
+  const [draftForm, setDraftForm] = useState({ subject: '', body: '', tone: 'professional' as const });
+  const [draftResult, setDraftResult] = useState<string | null>(null);
+  const [translateText, setTranslateText] = useState('');
+  const [translateLang, setTranslateLang] = useState('Hindi');
+  const [translated, setTranslated] = useState<string | null>(null);
+
+  const draft = async () => {
+    const res = await api.post<{ draft: string; disclaimer?: string }>('/ai/communications/draft', draftForm);
+    setDraftResult(`${res.data?.draft}\n\n— ${res.data?.disclaimer || ''}`);
+  };
+
+  const translate = async () => {
+    const res = await api.post<{ translated: string }>('/ai/communications/translate', { text: translateText, targetLanguage: translateLang });
+    setTranslated(res.data?.translated || null);
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Communication Center" subtitle="Email, SMS, WhatsApp templates" />
+      <PageHeader title="Communication Center" subtitle="Templates plus AI reply drafts and translation" />
+
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="card p-5 space-y-3">
+          <h3 className="font-medium">AI Reply Draft</h3>
+          <input className="input w-full" placeholder="Subject" value={draftForm.subject} onChange={(e) => setDraftForm({ ...draftForm, subject: e.target.value })} />
+          <textarea className="input w-full min-h-[100px]" placeholder="Incoming message..." value={draftForm.body} onChange={(e) => setDraftForm({ ...draftForm, body: e.target.value })} />
+          <select className="input w-full" value={draftForm.tone} onChange={(e) => setDraftForm({ ...draftForm, tone: e.target.value as 'professional' })}>
+            <option value="professional">Professional</option>
+            <option value="empathetic">Empathetic</option>
+            <option value="concise">Concise</option>
+          </select>
+          <button type="button" className="btn-primary" onClick={draft} disabled={!draftForm.subject || !draftForm.body}>Generate Draft</button>
+          {draftResult && <pre className="text-sm bg-gray-50 p-3 rounded whitespace-pre-wrap">{draftResult}</pre>}
+        </div>
+        <div className="card p-5 space-y-3">
+          <h3 className="font-medium">AI Translation</h3>
+          <textarea className="input w-full min-h-[100px]" placeholder="Text to translate..." value={translateText} onChange={(e) => setTranslateText(e.target.value)} />
+          <input className="input w-full" placeholder="Target language" value={translateLang} onChange={(e) => setTranslateLang(e.target.value)} />
+          <button type="button" className="btn-primary" onClick={translate} disabled={!translateText}>Translate</button>
+          {translated && <pre className="text-sm bg-gray-50 p-3 rounded whitespace-pre-wrap">{translated}</pre>}
+        </div>
+      </div>
+
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'name', label: 'Template' },

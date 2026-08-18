@@ -23,6 +23,7 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
       { to: '/admin/ai/copilot', icon: Bot, label: 'AI Copilot' },
       { to: '/admin/ai/insights', icon: BarChart3, label: 'AI Insights' },
+      { to: '/admin/ai/approvals', icon: Shield, label: 'AI Approvals' },
     ],
   },
   {

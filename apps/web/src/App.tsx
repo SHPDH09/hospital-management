@@ -15,7 +15,7 @@ import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
 
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 import {
-  CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage,
+  CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage, CrmCopilotPage,
 } from '@/pages/crm/CrmPages';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
@@ -24,7 +24,7 @@ import {
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
-  AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage,
+  AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage, AdminApprovalsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -63,6 +63,7 @@ export default function App() {
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
 
             <Route path="/crm" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmDashboard /></ProtectedRoute>} />
+            <Route path="/crm/copilot" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmCopilotPage /></ProtectedRoute>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />
             <Route path="/crm/doctors" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><CrmDoctorsPage /></ProtectedRoute>} />
             <Route path="/crm/appointments" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}><CrmAppointmentsPage /></ProtectedRoute>} />
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
             <Route path="/admin/ai/copilot" element={<Admin><AdminAiCopilotPage /></Admin>} />
             <Route path="/admin/ai/insights" element={<Admin><AdminAiInsightsPage /></Admin>} />
+            <Route path="/admin/ai/approvals" element={<Admin><AdminApprovalsPage /></Admin>} />
             <Route path="/admin/ai/automation" element={<Admin><AdminAutomationPage /></Admin>} />
             <Route path="/admin/ai/settings" element={<Admin><AdminAiSettingsPage /></Admin>} />
             <Route path="/admin/ai/audit" element={<Admin><AdminAiAuditPage /></Admin>} />
