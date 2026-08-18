@@ -6,10 +6,12 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:push": "prisma db push"
+    "db:prepare": "node scripts/ensure-database-url.mjs",
+    "db:generate": "npm run db:prepare && prisma generate",
+    "db:migrate": "npm run db:prepare && prisma migrate dev",
+    "db:push": "npm run db:prepare && prisma db push",
+    "db:seed": "npm run db:prepare && tsx prisma/seed.ts",
+    "db:test": "npm run db:prepare && prisma db execute --stdin <<< 'SELECT 1'"
   },
   "dependencies": {
     "@healthcare/shared": "*",

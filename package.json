@@ -14,7 +14,7 @@
     "db:generate": "npm run db:generate --workspace=apps/api",
     "db:migrate": "npm run db:migrate --workspace=apps/api",
     "db:seed": "npm run db:seed --workspace=apps/api",
-    "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:generate --workspace=apps/api && npm run db:push --workspace=apps/api && npm run db:seed --workspace=apps/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
