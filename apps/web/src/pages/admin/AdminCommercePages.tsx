@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
@@ -35,21 +36,151 @@ export function AdminAdvertisementsPage() {
   );
 }
 
+const emptyCoupon = {
+  code: '',
+  discountType: 'PERCENT' as 'PERCENT' | 'FIXED',
+  discountValue: 10,
+  minAmount: '',
+  maxDiscount: '',
+  usageLimit: '',
+  expiresAt: '',
+  platformWide: true,
+  organizationId: '',
+};
+
 export function AdminCouponsPage() {
-  const { data, isLoading } = useList('/admin/coupons');
+  const qc = useQueryClient();
+  const { data, isLoading } = useList('/admin/coupons?limit=100');
+  const { data: orgs } = useList('/admin/organizations?limit=100');
+  const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [form, setForm] = useState(emptyCoupon);
+  const refetch = () => qc.invalidateQueries({ queryKey: ['/admin/coupons?limit=100'] });
+
+  const orgList = (orgs?.data as { id: string; name: string; type: string }[]) || [];
+
+  const save = async () => {
+    const payload = {
+      code: form.code,
+      discountType: form.discountType,
+      discountValue: Number(form.discountValue),
+      minAmount: form.minAmount ? Number(form.minAmount) : undefined,
+      maxDiscount: form.maxDiscount ? Number(form.maxDiscount) : undefined,
+      usageLimit: form.usageLimit ? Number(form.usageLimit) : undefined,
+      expiresAt: form.expiresAt || undefined,
+      platformWide: form.platformWide,
+      organizationId: form.platformWide ? undefined : form.organizationId || undefined,
+    };
+    if (editing?.id) await api.patch(`/admin/coupons/${editing.id}`, payload);
+    else await api.post('/admin/coupons', payload);
+    setEditing(null);
+    setForm(emptyCoupon);
+    refetch();
+  };
+
+  const openEdit = (row: Record<string, unknown>) => {
+    setEditing(row);
+    setForm({
+      code: String(row.code || ''),
+      discountType: (row.discountType as 'PERCENT' | 'FIXED') || 'PERCENT',
+      discountValue: Number(row.discountValue || 0),
+      minAmount: row.minAmount ? String(row.minAmount) : '',
+      maxDiscount: row.maxDiscount ? String(row.maxDiscount) : '',
+      usageLimit: row.usageLimit ? String(row.usageLimit) : '',
+      expiresAt: row.expiresAt ? String(row.expiresAt).slice(0, 10) : '',
+      platformWide: Boolean(row.platformWide),
+      organizationId: String((row.organization as { id?: string })?.id || row.organizationId || ''),
+    });
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Coupon Management" subtitle="Platform-wide and hospital-specific coupons" />
+      <PageHeader
+        title="Coupon Management"
+        subtitle="Create platform-wide or hospital-specific discount coupons"
+        actions={<button className="btn-primary text-sm" onClick={() => { setEditing({}); setForm(emptyCoupon); }}>+ Create Coupon</button>}
+      />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
-          { key: 'code', label: 'Code' },
+          { key: 'code', label: 'Code', render: (r) => <span className="font-mono font-medium">{String(r.code)}</span> },
+          { key: 'scope', label: 'Scope', render: (r) => r.platformWide ? 'Platform-wide' : String((r.organization as { name?: string })?.name || 'Hospital') },
           { key: 'discountType', label: 'Type' },
           { key: 'discountValue', label: 'Value', render: (r) => r.discountType === 'PERCENT' ? `${r.discountValue}%` : formatCurrency(r.discountValue as number) },
-          { key: 'usedCount', label: 'Used' },
-          { key: 'usageLimit', label: 'Limit', render: (r) => String(r.usageLimit || '∞') },
+          { key: 'minAmount', label: 'Min Amount', render: (r) => r.minAmount ? formatCurrency(r.minAmount as number) : '-' },
+          { key: 'usedCount', label: 'Used', render: (r) => `${r.usedCount}${r.usageLimit ? ` / ${r.usageLimit}` : ''}` },
           { key: 'expiresAt', label: 'Expires', render: (r) => r.expiresAt ? formatDate(r.expiresAt as string) : 'Never' },
           { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'CANCELLED'} /> },
+          { key: 'actions', label: 'Actions', render: (r) => (
+            <div className="flex flex-wrap gap-2">
+              <ActionBtn onClick={() => openEdit(r)}>Edit</ActionBtn>
+              {r.isActive
+                ? <ActionBtn variant="danger" onClick={() => api.patch(`/admin/coupons/${r.id}/deactivate`).then(refetch)}>Deactivate</ActionBtn>
+                : <ActionBtn variant="success" onClick={() => api.patch(`/admin/coupons/${r.id}/activate`).then(refetch)}>Activate</ActionBtn>}
+              <ActionBtn variant="danger" onClick={() => { if (confirm('Delete this coupon?')) api.delete(`/admin/coupons/${r.id}`).then(refetch); }}>Delete</ActionBtn>
+            </div>
+          )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h3 className="font-semibold mb-4">{editing.id ? 'Edit Coupon' : 'Create Coupon'}</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500">Coupon Code</label>
+                <input className="input w-full uppercase" placeholder="SAVE20" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Discount Type</label>
+                <select className="input w-full" value={form.discountType} onChange={(e) => setForm({ ...form, discountType: e.target.value as 'PERCENT' | 'FIXED' })}>
+                  <option value="PERCENT">Percent (%)</option>
+                  <option value="FIXED">Fixed Amount</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Discount Value</label>
+                <input type="number" className="input w-full" value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) })} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Min Order Amount</label>
+                <input type="number" className="input w-full" value={form.minAmount} onChange={(e) => setForm({ ...form, minAmount: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Max Discount</label>
+                <input type="number" className="input w-full" value={form.maxDiscount} onChange={(e) => setForm({ ...form, maxDiscount: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Usage Limit</label>
+                <input type="number" className="input w-full" placeholder="Unlimited" value={form.usageLimit} onChange={(e) => setForm({ ...form, usageLimit: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Expiry Date</label>
+                <input type="date" className="input w-full" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={form.platformWide} onChange={(e) => setForm({ ...form, platformWide: e.target.checked, organizationId: '' })} />
+                  Platform-wide coupon
+                </label>
+              </div>
+              {!form.platformWide && (
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">Hospital / Organization</label>
+                  <select className="input w-full" value={form.organizationId} onChange={(e) => setForm({ ...form, organizationId: e.target.value })}>
+                    <option value="">Select organization</option>
+                    {orgList.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.type})</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button className="btn-secondary text-sm" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="btn-primary text-sm" disabled={!form.code || form.discountValue <= 0 || (!form.platformWide && !form.organizationId)} onClick={save}>
+                {editing.id ? 'Update Coupon' : 'Create Coupon'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

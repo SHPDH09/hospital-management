@@ -9,10 +9,12 @@ import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../m
 import { validateBody } from '../../middleware/validate';
 import { logAudit } from '../../lib/audit';
 import subscriptionRoutes from './subscriptions';
+import couponRoutes from './coupons';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
 router.use('/subscriptions', subscriptionRoutes);
+router.use('/coupons', couponRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -461,28 +463,6 @@ router.patch('/complaints/:id', async (req: AuthRequest, res, next) => {
     const complaint = await prisma.complaint.update({ where: { id }, data: req.body });
     await logAudit(req, 'UPDATE', 'Complaint', id, req.body);
     sendSuccess(res, complaint);
-  } catch (err) { next(err); }
-});
-
-// ─── Coupons ─────────────────────────────────────────────────────────────────
-
-router.get('/coupons', async (_req, res, next) => {
-  try {
-    const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
-    sendSuccess(res, coupons);
-  } catch (err) { next(err); }
-});
-
-router.post('/coupons', validateBody(z.object({
-  code: z.string(), discountType: z.enum(['PERCENT', 'FIXED']), discountValue: z.number(),
-  minAmount: z.number().optional(), maxDiscount: z.number().optional(),
-  usageLimit: z.number().optional(), expiresAt: z.string().optional(), platformWide: z.boolean().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const data = { ...req.body, expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : undefined };
-    const coupon = await prisma.coupon.create({ data });
-    await logAudit(req, 'CREATE', 'Coupon', coupon.id);
-    sendSuccess(res, coupon, 'Coupon created', 201);
   } catch (err) { next(err); }
 });
 

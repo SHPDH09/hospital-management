@@ -129,6 +129,20 @@ async function main() {
     },
   });
 
+  // Demo coupons
+  const couponDefs = [
+    { code: 'WELCOME20', discountType: 'PERCENT' as const, discountValue: 20, maxDiscount: 500, usageLimit: 100, platformWide: true },
+    { code: 'FLAT500', discountType: 'FIXED' as const, discountValue: 500, minAmount: 2000, usageLimit: 50, platformWide: true },
+    { code: 'CITYHOSP10', discountType: 'PERCENT' as const, discountValue: 10, usageLimit: 25, platformWide: false, organizationId: organization.id },
+  ];
+  for (const c of couponDefs) {
+    await prisma.coupon.upsert({
+      where: { code: c.code },
+      update: { isActive: true },
+      create: { ...c, isActive: true },
+    });
+  }
+
   // Departments
   const cardiology = await prisma.department.create({
     data: { organizationId: organization.id, name: 'Cardiology', description: 'Heart and cardiovascular care' },
