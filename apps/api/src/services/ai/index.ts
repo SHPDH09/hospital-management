@@ -1,4 +1,5 @@
 import { logAiOperation } from './audit';
+import { BuiltinAiProvider } from './builtin-provider';
 import { GeminiProvider } from './gemini-provider';
 import { NoopAiProvider } from './noop-provider';
 import { OpenAiProvider } from './openai-provider';
@@ -6,20 +7,31 @@ import { getAiSettings } from './settings';
 import { AiCompleteParams, AiCompleteResult, AiProvider } from './types';
 
 function resolveProvider(settings: Awaited<ReturnType<typeof getAiSettings>>): AiProvider {
-  if (!settings.enabled || settings.provider === 'none') {
+  if (!settings.enabled) {
     return new NoopAiProvider();
   }
+
+  if (settings.provider === 'none') {
+    return new NoopAiProvider();
+  }
+
+  if (settings.provider === 'builtin') {
+    return new BuiltinAiProvider();
+  }
+
   if (settings.provider === 'openai') {
     const key = process.env.OPENAI_API_KEY;
-    if (!key) return new NoopAiProvider();
-    return new OpenAiProvider(key, settings.model);
+    if (key) return new OpenAiProvider(key, settings.model);
+    return new BuiltinAiProvider();
   }
+
   if (settings.provider === 'gemini') {
     const key = process.env.GEMINI_API_KEY;
-    if (!key) return new NoopAiProvider();
-    return new GeminiProvider(key, settings.model);
+    if (key) return new GeminiProvider(key, settings.model);
+    return new BuiltinAiProvider();
   }
-  return new NoopAiProvider();
+
+  return new BuiltinAiProvider();
 }
 
 export async function aiComplete(

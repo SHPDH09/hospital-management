@@ -5,7 +5,9 @@
   "env": {
     "DATABASE_URL": "postgresql://neondb_owner:npg_Ht8khKxFr2mS@ep-young-morning-ay7046ro-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require",
     "JWT_SECRET": "53412037806c94fb82745e7c148f19a1964e4806b9ee58d650ebba1c93f0ce93",
-    "JWT_REFRESH_SECRET": "e7d74b60196df8bac5f0b75fd41738dbb73b798bca0717b30eea2b60e3f225b5"
+    "JWT_REFRESH_SECRET": "e7d74b60196df8bac5f0b75fd41738dbb73b798bca0717b30eea2b60e3f225b5",
+    "AI_ENABLED": "true",
+    "AI_PROVIDER": "builtin"
   },
   "functions": {
     "api/index.ts": {

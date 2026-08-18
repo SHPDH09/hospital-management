@@ -282,7 +282,8 @@ export function AdminAiSettingsPage() {
         </label>
         <div>
           <label className="text-sm text-gray-600">Provider</label>
-          <select className="input w-full" value={String(current.provider || 'none')} onChange={(e) => setForm({ provider: e.target.value })}>
+          <select className="input w-full" value={String(current.provider || 'builtin')} onChange={(e) => setForm({ provider: e.target.value })}>
+            <option value="builtin">Built-in (default, no API key)</option>
             <option value="none">None (rule-based only)</option>
             <option value="openai">OpenAI</option>
             <option value="gemini">Gemini</option>
@@ -290,13 +291,15 @@ export function AdminAiSettingsPage() {
         </div>
         <div>
           <label className="text-sm text-gray-600">Model</label>
-          <input className="input w-full" value={String(current.model || '')} onChange={(e) => setForm({ model: e.target.value })} />
+          <input className="input w-full" value={String(current.model || 'healthcare-builtin-v1')} onChange={(e) => setForm({ model: e.target.value })} />
         </div>
         <p className="text-xs text-gray-500">
-          API keys are configured via server environment variables (OPENAI_API_KEY, GEMINI_API_KEY). Never exposed to the browser.
+          Built-in model works without API keys. Optional: set OPENAI_API_KEY or GEMINI_API_KEY for advanced responses.
         </p>
         <p className="text-xs text-gray-500">
-          OpenAI key: {settings?.hasOpenAiKey ? 'configured' : 'not set'} · Gemini key: {settings?.hasGeminiKey ? 'configured' : 'not set'}
+          Active provider: <strong>{String(settings?.activeProvider || 'builtin')}</strong>
+          {' · '}OpenAI key: {settings?.hasOpenAiKey ? 'configured' : 'not set'}
+          {' · '}Gemini key: {settings?.hasGeminiKey ? 'configured' : 'not set'}
         </p>
         <button type="button" className="btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>Save Settings</button>
       </div>

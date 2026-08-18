@@ -358,9 +358,9 @@ async function main() {
     create: {
       key: 'global',
       value: {
-        enabled: false,
-        provider: 'none',
-        model: 'gpt-4o-mini',
+        enabled: true,
+        provider: 'builtin',
+        model: 'healthcare-builtin-v1',
         maxTokens: 1024,
         temperature: 0.3,
         features: {
@@ -370,6 +370,10 @@ async function main() {
           reviewSentiment: true,
           ticketClassification: true,
           appointmentReminders: true,
+          documentVerification: true,
+          patientTimeline: true,
+          fraudDetection: true,
+          communicationAi: true,
         },
         leadScoringWeights: {
           source: 15,

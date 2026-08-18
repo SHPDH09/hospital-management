@@ -1,4 +1,4 @@
-export type AiProviderName = 'openai' | 'gemini' | 'none';
+export type AiProviderName = 'openai' | 'gemini' | 'builtin' | 'none';
 
 export interface AiCompleteParams {
   system: string;
@@ -29,9 +29,9 @@ export interface AiSettings {
 }
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
-  enabled: process.env.AI_ENABLED === 'true',
-  provider: (process.env.AI_PROVIDER as AiProviderName) || 'none',
-  model: process.env.AI_DEFAULT_MODEL || 'gpt-4o-mini',
+  enabled: process.env.AI_ENABLED !== 'false',
+  provider: (process.env.AI_PROVIDER as AiProviderName) || 'builtin',
+  model: process.env.AI_DEFAULT_MODEL || 'healthcare-builtin-v1',
   maxTokens: Number(process.env.AI_MAX_TOKENS) || 1024,
   temperature: 0.3,
   features: {

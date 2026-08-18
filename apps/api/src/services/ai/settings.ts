@@ -8,7 +8,7 @@ export async function getAiSettings(): Promise<AiSettings> {
   if (!row) return { ...DEFAULT_AI_SETTINGS };
 
   const stored = row.value as Partial<AiSettings>;
-  return {
+  const merged: AiSettings = {
     ...DEFAULT_AI_SETTINGS,
     ...stored,
     features: { ...DEFAULT_AI_SETTINGS.features, ...stored.features },
@@ -17,6 +17,18 @@ export async function getAiSettings(): Promise<AiSettings> {
       ...stored.leadScoringWeights,
     },
   };
+
+  const hasExternalKey = Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
+  if (!hasExternalKey && (merged.provider === 'openai' || merged.provider === 'gemini')) {
+    return {
+      ...merged,
+      enabled: true,
+      provider: 'builtin',
+      model: 'healthcare-builtin-v1',
+    };
+  }
+
+  return merged;
 }
 
 export async function updateAiSettings(updates: Partial<AiSettings>): Promise<AiSettings> {

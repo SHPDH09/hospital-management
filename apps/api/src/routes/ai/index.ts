@@ -28,13 +28,26 @@ router.use(aiPhase3Routes);
 router.get('/settings', requireRoles(...PLATFORM_ROLES), async (_req, res, next) => {
   try {
     const settings = await getAiSettings();
-    sendSuccess(res, { ...settings, hasOpenAiKey: Boolean(process.env.OPENAI_API_KEY), hasGeminiKey: Boolean(process.env.GEMINI_API_KEY) });
+    sendSuccess(res, {
+      ...settings,
+      hasOpenAiKey: Boolean(process.env.OPENAI_API_KEY),
+      hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+      activeProvider: settings.enabled
+        ? (settings.provider === 'openai' && process.env.OPENAI_API_KEY)
+          ? 'openai'
+          : (settings.provider === 'gemini' && process.env.GEMINI_API_KEY)
+            ? 'gemini'
+            : settings.provider === 'none'
+              ? 'none'
+              : 'builtin'
+        : 'none',
+    });
   } catch (err) { next(err); }
 });
 
 router.put('/settings', requireRoles('SUPER_ADMIN'), validateBody(z.object({
   enabled: z.boolean().optional(),
-  provider: z.enum(['openai', 'gemini', 'none']).optional(),
+  provider: z.enum(['openai', 'gemini', 'builtin', 'none']).optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
   temperature: z.number().optional(),
