@@ -12,7 +12,7 @@ import appointmentRoutes from './routes/appointments';
 import patientRoutes from './routes/patients';
 import billRoutes from './routes/bills';
 import dashboardRoutes from './routes/dashboard';
-import adminRoutes from './routes/admin';
+import adminRoutes from './routes/admin/index';
 import publicRoutes from './routes/public';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';

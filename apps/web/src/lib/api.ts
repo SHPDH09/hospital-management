@@ -112,6 +112,14 @@ class ApiClient {
   patch<T>(endpoint: string, body?: unknown) {
     return this.request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) });
   }
+
+  put<T>(endpoint: string, body?: unknown) {
+    return this.request<T>(endpoint, { method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  delete<T>(endpoint: string) {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
 }
 
 export const api = new ApiClient();
