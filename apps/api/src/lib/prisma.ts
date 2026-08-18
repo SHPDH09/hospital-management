@@ -40,22 +40,41 @@ function createClient(url?: string): PrismaClient {
   });
 }
 
-if (!globalForPrisma.prisma) {
-  globalForPrisma.prisma = createClient();
+function getPrisma(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createClient();
+  }
+  return globalForPrisma.prisma;
 }
 
-export const prisma = globalForPrisma.prisma;
-
-if (!globalForPrisma.prismaRead && process.env.DATABASE_URL_READ) {
-  globalForPrisma.prismaRead = createClient(process.env.DATABASE_URL_READ);
+function getPrismaRead(): PrismaClient | null {
+  if (!process.env.DATABASE_URL_READ) return null;
+  if (!globalForPrisma.prismaRead) {
+    globalForPrisma.prismaRead = createClient(process.env.DATABASE_URL_READ);
+  }
+  return globalForPrisma.prismaRead;
 }
 
-export const prismaRead = globalForPrisma.prismaRead ?? null;
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getPrisma(), prop, receiver);
+  },
+});
+
+export const prismaRead = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getPrismaRead();
+    if (!client) {
+      return Reflect.get(getPrisma(), prop, receiver);
+    }
+    return Reflect.get(client, prop, receiver);
+  },
+});
 
 export function readDb(): PrismaClient {
-  return prismaRead || prisma;
+  return getPrismaRead() || getPrisma();
 }
 
 export async function checkDatabaseConnection(): Promise<void> {
-  await prisma.$queryRaw`SELECT 1`;
+  await getPrisma().$queryRaw`SELECT 1`;
 }
