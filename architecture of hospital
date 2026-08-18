@@ -1,0 +1,536 @@
+# Healthcare Hospital & Clinic Network Platform
+## Product & Technical Documentation
+
+**Version:** 1.0
+**Document Type:** Master Product Requirements & System Design Document
+**Status:** Draft for Development
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#1-executive-summary)
+2. [Platform Vision & Business Model](#2-platform-vision--business-model)
+3. [System Architecture Overview](#3-system-architecture-overview)
+4. [Technology Stack](#4-technology-stack)
+5. [Multi-Tenancy Model](#5-multi-tenancy-model)
+6. [User Roles & Permissions](#6-user-roles--permissions)
+7. [Application Modules](#7-application-modules)
+   - 7.1 [Public Website](#71-public-website)
+   - 7.2 [Patient Portal](#72-patient-portal)
+   - 7.3 [Hospital/Clinic CRM](#73-hospitalclinic-crm)
+   - 7.4 [Super Admin Panel](#74-super-admin-panel)
+8. [Core Workflows](#8-core-workflows)
+9. [Database Architecture](#9-database-architecture)
+10. [Security & Compliance](#10-security--compliance)
+11. [Data Privacy](#11-data-privacy)
+12. [Subscription & Monetization Model](#12-subscription--monetization-model)
+13. [Notifications & Communication](#13-notifications--communication)
+14. [Search & Discovery](#14-search--discovery)
+15. [Analytics & Reporting](#15-analytics--reporting)
+16. [UI/UX Guidelines](#16-uiux-guidelines)
+17. [API & Mobile-Readiness Strategy](#17-api--mobile-readiness-strategy)
+18. [MVP Roadmap (Phased Delivery)](#18-mvp-roadmap-phased-delivery)
+19. [Future Roadmap](#19-future-roadmap)
+20. [Appendix: Glossary](#20-appendix-glossary)
+
+---
+
+## 1. Executive Summary
+
+The Healthcare Hospital & Clinic Network Platform is a **multi-tenant SaaS marketplace** that connects patients with hospitals, clinics, doctors, diagnostic centers, and pharmacies, while giving each healthcare provider a full-featured CRM to run their daily operations.
+
+The platform has three primary user-facing systems:
+
+| System | Primary Users | Core Purpose |
+|---|---|---|
+| Public Website + Patient Portal | Patients / general public | Discover → Compare → Book → Manage healthcare |
+| Hospital/Clinic CRM | Hospital admins, doctors, staff | Manage → Acquire patients → Operate → Analyze |
+| Super Admin Panel | Platform owner/operator | Govern network, verification, subscriptions, ads, revenue |
+
+The system is designed to be **production-grade** from day one: secure, scalable, API-first, and strictly data-isolated between organizations (tenants), while remaining simple enough for non-technical hospital staff to use daily.
+
+---
+
+## 2. Platform Vision & Business Model
+
+The platform operates as a **hybrid marketplace + SaaS product**:
+
+- **Marketplace revenue:** advertising, featured listings, lead generation, package promotions.
+- **SaaS revenue:** monthly/annual subscriptions paid by hospitals and clinics for CRM access (Starter / Professional / Enterprise tiers).
+- **Transaction revenue (optional, future):** payment gateway commission on bookings/packages.
+
+**Value loop:**
+
+```
+Patient discovers provider → Books appointment → Provider delivers care →
+Provider retains patient via CRM (records, reminders, follow-ups) →
+Platform earns subscription + advertising + lead revenue →
+Platform reinvests in patient acquisition (SEO, ads, search) →
+More patients discover providers
+```
+
+This creates a two-sided network effect: more verified providers attract more patients, and more patients attract more providers to subscribe.
+
+---
+
+## 3. System Architecture Overview
+
+The platform follows a **modular, API-first, multi-tenant SaaS architecture**.
+
+### High-Level Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         Client Applications                       │
+│   Public Website | Patient Web App | Hospital CRM Web App |       │
+│   Super Admin Web App | (Future) Mobile Apps (iOS/Android)        │
+└───────────────────────────┬────────────────────────────────────--┘
+                             │  HTTPS / REST (JSON) / WebSockets (chat)
+┌───────────────────────────▼────────────────────────────────────--┐
+│                         API Gateway Layer                         │
+│   Auth, Rate Limiting, Request Validation, Tenant Resolution      │
+└───────────────────────────┬────────────────────────────────────--┘
+                             │
+┌───────────────────────────▼────────────────────────────────────--┐
+│                      Application/Service Layer                    │
+│  Identity & Auth | Provider Directory | Appointments | Billing    │
+│  Medical Records | Pharmacy/Inventory | Notifications | Ads       │
+│  Leads | Reviews | Subscriptions | Reporting/Analytics | Audit    │
+└───────────────────────────┬────────────────────────────────────--┘
+                             │
+┌───────────────────────────▼────────────────────────────────────--┐
+│                        Data & Storage Layer                       │
+│   Relational DB (AWS RDS) | Object Storage (documents/images) |   │
+│   Cache (session/search) | Search Index (provider discovery)      │
+└──────────────────────────────────────────────────────────────────┘
+                             │
+┌───────────────────────────▼────────────────────────────────────--┐
+│                     External Integrations                         │
+│   Payment Gateway (Razorpay) | Email | SMS | WhatsApp Business    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Architectural Principles
+
+- **API-first:** All frontends (web, future mobile) consume the same versioned REST API. No business logic lives in the frontend.
+- **Tenant isolation by design:** Every data-bearing request is scoped by `organization_id` at the query layer, not just the UI layer.
+- **Modular services:** Each domain (appointments, billing, records, pharmacy, ads) is a separable module/service boundary, even if deployed as a modular monolith initially — enabling later extraction into microservices.
+- **Stateless application servers:** Sessions/tokens are externalized (JWT + refresh token store) so the app tier can scale horizontally.
+- **Event-driven notifications:** State changes (appointment confirmed, bill paid, report uploaded) emit events consumed by the notification service, decoupling core transactions from delivery channels (email/SMS/WhatsApp).
+- **Extensible by design:** Modules not built in MVP (telemedicine, insurance, AI assistant) are represented as placeholders in the data model/API surface so they can be added without breaking changes.
+
+---
+
+## 4. Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React + TypeScript + Vite + Tailwind CSS + modern component library (e.g. shadcn/ui or similar) |
+| State/Data fetching | React Query / equivalent for API caching and sync |
+| Backend API | Node.js/TypeScript (or equivalent typed backend) exposing REST endpoints, organized by module |
+| Database | AWS RDS (PostgreSQL recommended for relational integrity, JSON support, and row-level security features) |
+| File/Document Storage | Object storage (e.g. AWS S3) for medical documents, images, prescriptions, reports |
+| Cache/Session | Redis (or equivalent) for sessions, rate limiting, and search caching |
+| Search | Full-text/geo-aware search index (e.g. Postgres full-text initially, upgradeable to Elasticsearch/OpenSearch) |
+| Payments | Razorpay (or equivalent regional payment gateway) |
+| Notifications | Email provider, SMS gateway, WhatsApp Business API |
+| Hosting/Infra | AWS (RDS, S3, compute — e.g. ECS/EC2, CloudFront for static assets) |
+| Auth | JWT-based access/refresh tokens, secure password hashing (bcrypt/argon2), MFA-ready |
+
+**Design intent:** The backend is deliberately decoupled from any single frontend so that Android/iOS apps can be built later against the same API without backend rework.
+
+---
+
+## 5. Multi-Tenancy Model
+
+Every hospital, clinic, diagnostic center, or pharmacy that joins the platform becomes an **Organization** (tenant), with:
+
+- A unique `organization_id` used to scope all tenant-owned data.
+- Its own set of branches (for multi-branch hospital groups), staff, doctors, patients-of-record, appointments, billing, and settings.
+- Complete data isolation — no organization can query, view, or infer another organization's private data (patients, billing, staff, records).
+
+### Isolation Enforcement Strategy
+
+1. **Application-layer scoping:** Every authenticated CRM request resolves the caller's `organization_id` from their session/token and injects it into every query (never trusted from client input).
+2. **Database-layer enforcement:** Use PostgreSQL Row-Level Security (RLS) policies keyed on `organization_id` as a defense-in-depth layer beneath the application logic.
+3. **Cross-tenant references are read-only and public-safe only:** e.g., a doctor's *public* profile is visible platform-wide for discovery, but their *patient list, records, and earnings* are never exposed outside their organization.
+4. **Multi-branch organizations:** A parent organization can have multiple branches; branch-level data is scoped by `branch_id` within the same `organization_id`, and org-level admins can see consolidated (roll-up) data across branches, while branch admins see only their branch by default.
+
+---
+
+## 6. User Roles & Permissions
+
+### 6.1 Role Hierarchy
+
+**Platform Level**
+- Super Admin — full platform control
+- Platform Staff — limited operational access (support, moderation)
+
+**Hospital/Clinic Level**
+- Hospital Admin — full organization access
+- Branch Admin — full access scoped to one branch
+- Doctor — clinical access (own patients, records, prescriptions)
+- Receptionist — patients, appointments, basic billing
+- Nurse — patient care support, limited records access
+- Accountant — billing, payments, financial reports
+- Pharmacist — pharmacy/inventory
+- Lab Staff — lab orders and reports
+- Manager — operational oversight (configurable)
+
+**Customer Level**
+- Patient — self-service access to own data only
+
+### 6.2 Permission Matrix (representative)
+
+| Module | Hospital Admin | Doctor | Receptionist | Nurse | Accountant | Pharmacist | Lab Staff |
+|---|---|---|---|---|---|---|---|
+| Patients | Full | Assigned patients | Full (front-desk) | View + notes | View (billing context) | View (dispensing context) | View (lab context) |
+| Appointments | Full | Own schedule | Full | View | View | — | View (lab bookings) |
+| Medical Records | Full | Full (own patients) | — | View | — | — | Lab records only |
+| Prescriptions | Full | Create/manage | — | — | — | View/dispense | — |
+| Billing | Full | — | Basic (create bill) | — | Full | Pharmacy sales | Lab billing |
+| Staff Management | Full | — | — | — | — | — | — |
+| Inventory/Pharmacy | Full | — | — | — | — | Full | — |
+| Reports & Analytics | Full | Own performance | — | — | Financial reports | Inventory reports | Lab reports |
+| Settings | Full | — | — | — | — | — | — |
+
+Permissions are **configurable per role** by the Hospital Admin (Enterprise tier supports custom roles), not hard-coded — the platform ships with sensible defaults per role above.
+
+### 6.3 Patient Access
+
+Patients can only ever access their **own** profile, appointments, records, prescriptions, bills, and messages. There is no patient-to-patient visibility, and no cross-organization visibility of a patient's records without explicit sharing/consent (e.g., a referral).
+
+---
+
+## 7. Application Modules
+
+### 7.1 Public Website
+
+Unauthenticated, SEO-optimized marketing and discovery site.
+
+**Pages:** Home, Find Hospital, Find Clinic, Find Doctor, Find Diagnostic Center, Services, Health Packages, About Us, Contact Us, Login, Register, Hospital/Clinic Registration, Doctor Registration.
+
+**Homepage components:**
+- **Hero section** — Headline: *"Find the Right Healthcare, Near You."* Subheading: *"Discover trusted hospitals, clinics, doctors and healthcare services in one place."* CTAs: Find a Doctor / Find a Hospital / Book Appointment.
+- **Search section** — search by Hospital, Clinic, Doctor, Specialty, Location, or Service, with filters for Distance, Rating, Consultation Fee, Availability, Specialty, Hospital Type, Gender, Experience, Emergency Available.
+
+**Hospital/Clinic profile page** displays: name, logo, images, address/location, contact, departments, doctors, services, facilities, emergency availability, opening hours, consultation charges, health packages, ratings/reviews, and live appointment availability, with a prominent **Book Appointment** button.
+
+**Doctor profile page** displays: name, photo, qualification, specialization, experience, registration info, affiliated hospital/clinic, consultation fee, languages, available days/slots, rating/reviews, and an about section, with **Book Appointment** / **View Profile** actions.
+
+### 7.2 Patient Portal
+
+Authenticated experience for registered patients.
+
+**Registration fields:** Full Name, Email, Phone, Date of Birth, Gender, Address, City, State, Emergency Contact, Password — with email/phone verification.
+
+**Modules:**
+- Dashboard — upcoming appointment, previous appointments, recent prescriptions, recent lab reports, pending bills, medical records, notifications; quick actions (Book Appointment, Find Doctor, Find Hospital, Upload Medical Report, View Prescription).
+- Profile management
+- Provider search & discovery
+- Hospital / Clinic / Doctor detail pages
+- Appointment booking & "My Appointments" (with full status lifecycle)
+- Medical Records
+- Prescriptions
+- Lab Reports
+- Bills & Payments
+- Health Packages (browse & purchase)
+- Notifications
+- Messages (secure chat with providers)
+- Reviews (post-visit)
+- Favorites (saved providers)
+
+### 7.3 Hospital/Clinic CRM
+
+A fully isolated operational dashboard per organization (and per branch, for multi-branch groups).
+
+**Dashboard:** Total Patients, Today's Appointments, Upcoming Appointments, Completed Appointments, Revenue, Pending Payments, Active Doctors, Staff count, New Patients — plus charts for daily appointments, monthly revenue, patient growth, doctor performance, and department performance.
+
+**Core modules:**
+
+| Module | Key Capabilities |
+|---|---|
+| Patients | Add/search/edit/view patient, history, appointments, prescriptions, reports, billing, notes, document upload. Profile tabs: Overview, Personal Info, Appointments, Medical Records, Prescriptions, Lab Reports, Bills, Payments, Documents, Notes |
+| Doctors | Add/edit/activate-deactivate, assign department, set fee, set availability & time slots, view appointments and performance. Doctor's own view: today's/upcoming appointments, patients, prescriptions, records, reports, earnings |
+| Appointments | Full lifecycle management (see §8.2), staff-side booking, rescheduling, cancellation |
+| Departments | Configure clinical departments and assign doctors |
+| Services | Define billable services and pricing |
+| Staff | Manage Receptionist, Nurse, Accountant, Lab Staff, Pharmacist, Manager, others; each with role-based permissions |
+| Billing & Payments | Consultation, service, lab, pharmacy, package, and other charges; full invoice lifecycle |
+| Prescriptions | Digital prescription creation, print/PDF/send-to-patient |
+| Medical Records | Secure storage of documents, reports, diagnoses, treatment notes, imaging |
+| Lab Reports | Lab test results tied to patient record |
+| Pharmacy/Inventory | Medicines, stock, suppliers, purchases, sales, low-stock & expiry alerts |
+| Notifications | Org-level notification center |
+| Communication | Secure patient messaging scoped to own patients only |
+| Reviews | View and respond to patient reviews |
+| Reports & Analytics | Operational and financial analytics (see §15) |
+| Settings | Org profile, branding (white-label for premium tiers), branch management, role/permission configuration |
+
+### 7.4 Super Admin Panel
+
+Central governance console for the platform operator.
+
+**Dashboard metrics:** Total Hospitals, Total Clinics, Total Doctors, Total Patients, Total Appointments, Total Revenue, Active Subscriptions, New Registrations, Pending Verification, Active Advertisements — with charts for user growth, hospital growth, appointment growth, revenue growth, and city-wise distribution of users and hospitals.
+
+**Modules:** Hospitals, Clinics, Doctors, Patients, Staff, Appointments, Payments, Subscriptions, Advertisements, Leads, Reviews, Services, Health Packages, Diagnostic Centers, Pharmacies, Reports, Complaints, Verification Requests, Platform Settings, Roles & Permissions, Audit Logs.
+
+**Verification workflow:** hospitals/clinics submit organization name, owner name, contact details, address, registration/license documents; Super Admin can Review → Approve / Reject / Request Correction / Suspend. Approved organizations display a **Verified** badge platform-wide.
+
+---
+
+## 8. Core Workflows
+
+### 8.1 Patient Journey
+
+```
+Register/Login → Search & Compare Providers → View Hospital/Doctor Profile →
+Book Appointment → Pay (if required) → Visit Provider → Consultation →
+Prescription / Medical Record Generated → Billing/Payment →
+Lab/Pharmacy (if required) → Receive Records → Follow-up Reminder →
+Return for Future Appointment
+```
+
+### 8.2 Appointment Lifecycle
+
+**Booking flow:** Hospital → Department → Doctor → Date → Time Slot → Appointment Type → Confirmation → Payment (if required) → Appointment ID generated → Confirmation sent.
+
+**Status states:**
+
+```
+Pending → Confirmed → Checked In → In Consultation → Completed
+                    ↘ Cancelled
+                    ↘ No Show
+```
+
+Hospital staff can transition appointments through these states from the CRM; patients can view live status from the Patient Portal.
+
+### 8.3 Diagnostic Test Booking
+
+```
+Search Test → Select Lab → Book Test → Pay → Receive Report
+```
+
+### 8.4 Lead-to-Patient Conversion
+
+```
+Interest shown (search, profile view, package view) → Lead Created →
+New → Contacted → Interested → Appointment Booked → Converted (or Lost)
+```
+
+Leads are routed to the relevant hospital/clinic CRM with source tracking (organic, advertisement, referral).
+
+---
+
+## 9. Database Architecture
+
+A relational schema (PostgreSQL on AWS RDS) with strict foreign-key integrity and `organization_id`/`tenant_id` scoping on all tenant-owned tables.
+
+### 9.1 Core Entities (representative, not exhaustive)
+
+| Table | Purpose |
+|---|---|
+| `users` | Base identity record (login credentials, role reference) shared across patient/staff/doctor/admin accounts |
+| `organizations` | Hospital/clinic/diagnostic-center/pharmacy tenant record, verification status, subscription reference |
+| `branches` | Sub-locations under a parent organization |
+| `patients` | Patient profile data, linked to `users` |
+| `doctors` | Doctor profile, qualifications, specialization, fee, availability, linked to `organizations`/`branches` |
+| `staff` | Non-doctor employees, role, department, employee ID, status |
+| `departments` | Clinical departments per organization/branch |
+| `services` | Billable services offered by an organization |
+| `appointments` | Booking record: patient, doctor, department, branch, date/time, status, type |
+| `appointment_slots` | Doctor availability/time-slot inventory |
+| `medical_records` | Documents, diagnosis, treatment notes, imaging, linked to patient + doctor + organization |
+| `prescriptions` / `prescription_items` | Prescription header and line-item medicines/dosage/frequency/duration |
+| `lab_reports` | Lab test results linked to patient and diagnostic center |
+| `bills` | Invoice header: patient, services, totals, tax, discount, status |
+| `payments` | Payment transactions against bills, method, status |
+| `medicines` / `inventory` | Pharmacy stock: batch, quantity, purchase/selling price, expiry |
+| `health_packages` | Package definition: tests included, price, discount, validity |
+| `advertisements` | Ad campaigns: type, status, targeting, performance metrics |
+| `leads` | Prospective patient interest records with source/status tracking |
+| `reviews` | Ratings and comments on hospitals/clinics/doctors |
+| `notifications` | Notification log across in-app/email/SMS/WhatsApp channels |
+| `messages` | Patient–provider chat messages, scoped to appointment/organization context |
+| `subscriptions` / `subscription_plans` | Organization subscription state and plan catalog |
+| `documents` | Generic secure file storage references (S3 keys) with access-control metadata |
+| `audit_logs` | Immutable log of sensitive actions (see §10) |
+| `roles` / `permissions` | Role definitions and granular permission assignments per organization |
+
+### 9.2 Key Relationships
+
+- `organizations 1—N branches`
+- `organizations 1—N doctors, staff, departments, services`
+- `patients N—N organizations` (a patient can visit multiple hospitals; each visit history stays scoped to that org, but the patient's own aggregated view is assembled at the API layer for their own portal only)
+- `appointments` references `patients`, `doctors`, `departments`, `branches`, `organizations`
+- `bills 1—N payments`
+- `prescriptions 1—N prescription_items`
+- Every tenant-owned table carries `organization_id` (and `branch_id` where applicable) with an indexed foreign key, enforced additionally via row-level security policies.
+
+### 9.3 Indexing Strategy
+
+- Composite indexes on `(organization_id, created_at)` for CRM list views.
+- Indexes on `(doctor_id, date, status)` for slot/availability queries.
+- Full-text/geo indexes on `organizations`/`doctors` for public search.
+- Indexes on foreign keys for all join-heavy relations (`patient_id`, `appointment_id`, `bill_id`).
+
+---
+
+## 10. Security & Compliance
+
+| Control | Implementation Approach |
+|---|---|
+| Authentication | Secure login with hashed passwords (bcrypt/argon2), JWT access + refresh tokens, MFA-ready |
+| Authorization | Role-based access control (RBAC) combined with organization-level tenant scoping on every request |
+| Session Management | Short-lived access tokens, revocable refresh tokens, forced logout on password change |
+| API Security | Authenticated, versioned REST API; input validation and schema enforcement on every endpoint |
+| File Upload Validation | Type/size/content validation and virus scanning before storage; documents stored in access-controlled object storage, never served publicly by default |
+| Rate Limiting | Applied at the API gateway per user/IP to prevent abuse and brute-force attempts |
+| Database Security | Row-Level Security policies keyed on `organization_id`; least-privilege DB credentials per service |
+| Encryption | TLS in transit; encryption at rest for the database and object storage; sensitive fields (e.g., identifiers) encrypted at the application layer where warranted |
+| Audit Logging | Immutable logs for login/logout, record access, record updates, prescription creation, billing changes, payment changes, staff changes, permission changes, organization changes |
+| Public Data Boundaries | Public search/profile pages expose only non-sensitive, provider-controlled marketing data — never patient identities or medical data |
+
+---
+
+## 11. Data Privacy
+
+Healthcare data is treated as highly sensitive throughout the system:
+
+- **Strict access permissions** enforced by role + tenant scoping (§5, §6).
+- **Patient consent** captured wherever data sharing beyond the treating organization is required (e.g., referrals, family accounts).
+- **Audit logging** of all access to medical records and PII (§10).
+- **Secure document storage** — encrypted object storage with signed, time-limited access URLs rather than public file paths.
+- **Data isolation between organizations** — enforced at both application and database layers (§5).
+- **Secure deletion policies** — soft-delete with retention windows for compliance, followed by irreversible purge per configurable data-retention policy.
+- **Minimal data exposure** — public-facing endpoints (search, profiles) never return patient-identifiable or clinical data.
+- **Regulatory extensibility** — the data model and consent framework are designed so region-specific healthcare/privacy regulations (e.g., India's DPDP Act, HIPAA-equivalent controls for other markets) can be layered in per deployment region without a schema rewrite.
+
+---
+
+## 12. Subscription & Monetization Model
+
+### 12.1 Hospital/Clinic Subscription Tiers
+
+| Plan | Price | Includes |
+|---|---|---|
+| **Starter** | ₹999/month | Patient Management, Appointment Management, Basic Dashboard |
+| **Professional** | ₹2,499/month | Everything in Starter + Billing, Staff Management, Reports, Communication, Inventory |
+| **Enterprise** | Custom pricing | Multi-branch, Advanced Analytics, API access, Custom Branding, Advanced Permissions, Dedicated Support |
+
+Super Admin can create/edit plans and pricing; organizations upgrade/downgrade from their CRM Settings. Subscription status gates feature access at the API layer (not just UI).
+
+### 12.2 Advertising Platform
+
+Hospitals, clinics, doctors, diagnostic centers, and pharmacies can purchase advertising:
+
+- **Types:** Homepage Banner, Search Result Promotion, Featured Hospital, Featured Doctor, Featured Clinic, Health Package Promotion.
+- **Approval workflow:** Admin reviews and approves before publishing.
+- **Statuses:** Pending → Approved → Active → Expired (or Rejected).
+- **Tracked metrics:** Impressions, Clicks, Leads, Bookings — feeding both advertiser-facing performance reports and platform revenue analytics.
+
+### 12.3 Lead Generation Revenue (optional model)
+
+Leads generated through the platform can be routed to organizations as part of paid plans or sold as a value-add, tracked through the `leads` module with source and conversion attribution.
+
+---
+
+## 13. Notifications & Communication
+
+### 13.1 Notification Channels
+In-app, Email, SMS, and WhatsApp (where supported by the regional provider).
+
+### 13.2 Key Notification Triggers
+Appointment confirmation, appointment reminder, appointment cancellation, payment confirmation, prescription available, lab report available, new lead (to organization), new patient (to organization), subscription expiry.
+
+Notifications are emitted as events from core modules and delivered asynchronously by a dedicated notification service, so a slow/failed SMS provider never blocks a core transaction (e.g., booking an appointment).
+
+### 13.3 Communication (Chat) Module
+- Secure patient ↔ provider messaging, with history and file sharing.
+- Conversations are tied to an appointment/organization context.
+- **Access control:** an organization can only see conversations involving its own patients; patients can only see conversations with providers they've engaged.
+
+---
+
+## 14. Search & Discovery
+
+- Global search across Hospitals, Clinics, Doctors, Services, Specializations, Diagnostic Centers, and Health Packages.
+- **Location-aware search:** current location, city, state, PIN code, distance radius; results show distance, address, and map location.
+- Search results respect visibility rules — only verified, active, and publicly-listed provider data appears; suspended or unverified organizations are excluded from public discovery until approved.
+- Sponsored placements (from the Advertising module) are clearly distinguished from organic results.
+
+---
+
+## 15. Analytics & Reporting
+
+### 15.1 Hospital/Clinic CRM Analytics
+Patient growth, appointment conversion rate, revenue, doctor performance, department performance, new vs. returning patients, cancellation rate, no-show rate.
+
+### 15.2 Super Admin Platform Analytics
+Platform growth, hospital acquisition, patient acquisition, revenue, subscription metrics (MRR, churn, upgrades), advertisement performance (impressions/clicks/conversion), city-wise distribution.
+
+All analytics are computed from the same source-of-truth transactional tables (no shadow data), with tenant-scoped aggregation for CRM views and platform-wide aggregation for Super Admin views.
+
+---
+
+## 16. UI/UX Guidelines
+
+- Clean, modern, healthcare-focused visual language that reads as **trustworthy and professional**, not clinical/cold.
+- Fully responsive across desktop, tablet, and mobile.
+- Consistent use of cards, tables, charts, filters, search bars, and modals across all three applications (Public/Patient, CRM, Admin) for a unified design system.
+- Explicit handling of **empty states**, **loading states**, and **error states** on every data view — no blank screens or silent failures.
+- Important actions (Book Appointment, Add Patient, Confirm Appointment, Pay Now) are always one click away from the relevant context — avoid burying primary actions in secondary menus.
+- Avoid interface complexity: progressive disclosure (tabs, expandable sections) is preferred over dense single-page forms, especially in patient profile and CRM views.
+
+---
+
+## 17. API & Mobile-Readiness Strategy
+
+- All product functionality is exposed via a **versioned REST API** (e.g., `/api/v1/...`), consumed identically by the web frontends.
+- No business logic (validation, permission checks, tenant scoping) lives only in the frontend — it is enforced server-side so future native mobile apps (Android/iOS) can integrate directly and securely.
+- API responses are designed to be **UI-agnostic** (structured JSON, not pre-formatted for a specific screen), enabling reuse across web and mobile.
+- Webhooks/events (appointment status change, payment confirmation) are structured for future push-notification integration on mobile.
+
+---
+
+## 18. MVP Roadmap (Phased Delivery)
+
+### Phase 1 — Core Marketplace + CRM Foundation
+**Patient:** Registration/Login, Search hospitals/clinics/doctors, Hospital profile, Doctor profile, Appointment booking, Patient dashboard.
+**Hospital:** Registration, Verification, CRM dashboard, Patient management, Doctor management, Appointment management, Basic billing, Basic reports.
+**Admin:** Hospital management, Patient management, Doctor management, Appointment management, Verification, Subscription management, Advertisement management.
+
+### Phase 2 — Clinical & Operational Depth
+Medical records, Prescriptions, Lab reports, Pharmacy, Inventory, Health packages, Reviews, Leads, Communication (chat).
+
+### Phase 3 — Advanced Platform Capabilities
+Advanced analytics, Telemedicine, AI features, Insurance integration, Ambulance booking, Home healthcare, native Mobile applications.
+
+Each phase is additive and non-breaking with respect to the data model defined in §9 — future modules (telemedicine sessions, insurance claims, wearables data) attach to existing `patients`, `appointments`, and `organizations` entities rather than requiring restructuring.
+
+---
+
+## 19. Future Roadmap
+
+The architecture is intentionally kept extensible for (not built in MVP):
+
+Telemedicine & video consultation, Ambulance booking, Home healthcare & home sample collection, Insurance integration, AI health assistant, AI appointment assistant, Voice assistant, richer Electronic Health Records, Wearable device integration, Health reminders, and Family accounts (linked patient profiles under one guardian login).
+
+---
+
+## 20. Appendix: Glossary
+
+| Term | Definition |
+|---|---|
+| Tenant / Organization | A hospital, clinic, diagnostic center, or pharmacy account with isolated data on the platform |
+| Branch | A physical sub-location under a multi-branch organization |
+| RBAC | Role-Based Access Control |
+| RLS | Row-Level Security (database-enforced tenant isolation) |
+| MRR | Monthly Recurring Revenue (subscription metric) |
+| Lead | A prospective patient's expressed interest in a provider or service, tracked to conversion |
+| White-label | Custom branding (logo, name, colors) applied to a hospital's patient-facing experience |
+
+---
+
+*End of document.*
