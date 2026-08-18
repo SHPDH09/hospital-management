@@ -1,6 +1,8 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import { resolveDatabaseUrl, resolveDatabaseReadUrl } from './database-url';
+import { AppError } from './response';
 
 export type TransactionClient = Prisma.TransactionClient;
 
@@ -26,9 +28,12 @@ function poolOptions(connectionString: string): pg.PoolConfig {
 }
 
 function createClient(url?: string): PrismaClient {
-  const connectionString = url || process.env.DATABASE_URL;
+  const connectionString = url || resolveDatabaseUrl();
   if (!connectionString) {
-    throw new Error('DATABASE_URL is not configured');
+    throw new AppError(
+      'Database not configured. Set DATABASE_URL or DB_PASSWORD in Vercel environment variables.',
+      503
+    );
   }
 
   const pool = new pg.Pool(poolOptions(connectionString));
@@ -48,9 +53,10 @@ function getPrisma(): PrismaClient {
 }
 
 function getPrismaRead(): PrismaClient | null {
-  if (!process.env.DATABASE_URL_READ) return null;
+  const readUrl = resolveDatabaseReadUrl();
+  if (!readUrl) return null;
   if (!globalForPrisma.prismaRead) {
-    globalForPrisma.prismaRead = createClient(process.env.DATABASE_URL_READ);
+    globalForPrisma.prismaRead = createClient(readUrl);
   }
   return globalForPrisma.prismaRead;
 }
