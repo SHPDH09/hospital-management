@@ -51,8 +51,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <>
-                <Link to="/login" className="btn-ghost text-sm">
-                  Login
+                <Link to="/login/patient" className="btn-ghost text-sm">
+                  Patient Login
                 </Link>
                 <Link to="/register" className="btn-primary text-sm">
                   Register
@@ -81,7 +81,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 </>
               ) : (
                 <>
-                  <Link to="/login" className="btn-secondary flex-1 text-sm">Login</Link>
+                  <Link to="/login/patient" className="btn-secondary flex-1 text-sm">Patient Login</Link>
                   <Link to="/register" className="btn-primary flex-1 text-sm">Register</Link>
                 </>
               )}
@@ -116,7 +116,16 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <h4 className="font-semibold text-sm mb-3">For Providers</h4>
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><Link to="/register/hospital" className="hover:text-primary-600">Register Hospital</Link></li>
-                <li><Link to="/login" className="hover:text-primary-600">Provider Login</Link></li>
+                <li><Link to="/login/hospital" className="hover:text-primary-600">Hospital Login</Link></li>
+                <li><Link to="/login/doctor" className="hover:text-primary-600">Doctor Login</Link></li>
+                <li><Link to="/login/staff" className="hover:text-primary-600">Staff Login</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-3">For Patients</h4>
+              <ul className="space-y-2 text-sm text-gray-500">
+                <li><Link to="/login/patient" className="hover:text-primary-600">Patient Login</Link></li>
+                <li><Link to="/register" className="hover:text-primary-600">Create Account</Link></li>
               </ul>
             </div>
             <div>

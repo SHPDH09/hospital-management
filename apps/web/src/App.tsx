@@ -5,7 +5,16 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 import { HomePage } from '@/pages/public/HomePage';
 import { FindHospitalsPage, FindClinicsPage, FindDoctorsPage } from '@/pages/public/SearchPages';
-import { LoginPage, RegisterPage, RegisterHospitalPage } from '@/pages/public/AuthPages';
+import {
+  LoginPage,
+  PatientLoginPage,
+  DoctorLoginPage,
+  HospitalLoginPage,
+  StaffLoginPage,
+  AdminLoginPage,
+  RegisterPage,
+  RegisterHospitalPage,
+} from '@/pages/public/AuthPages';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 
@@ -43,6 +52,11 @@ export default function App() {
             <Route path="/organizations/:slug" element={<OrganizationDetailPage />} />
             <Route path="/doctors/:id" element={<DoctorDetailPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/login/patient" element={<PatientLoginPage />} />
+            <Route path="/login/doctor" element={<DoctorLoginPage />} />
+            <Route path="/login/hospital" element={<HospitalLoginPage />} />
+            <Route path="/login/staff" element={<StaffLoginPage />} />
+            <Route path="/login/admin" element={<AdminLoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
 

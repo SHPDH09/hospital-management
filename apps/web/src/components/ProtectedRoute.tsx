@@ -20,7 +20,7 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login/patient" replace />;
   }
 
   if (roles && user && !roles.includes(user.role)) {

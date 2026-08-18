@@ -46,7 +46,7 @@ class ApiClient {
         return retry.json();
       }
       this.clearTokens();
-      window.location.href = '/login';
+      window.location.href = '/login/patient';
     }
 
     return response.json();
