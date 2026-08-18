@@ -4,9 +4,10 @@ export {
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';
 export {
-  AdminSubscriptionsPage, AdminAdvertisementsPage, AdminCouponsPage,
+  AdminAdvertisementsPage, AdminCouponsPage,
   AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
 } from './AdminCommercePages';
+export { AdminSubscriptionsPage } from './AdminSubscriptionPages';
 export {
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,

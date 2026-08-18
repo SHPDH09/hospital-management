@@ -12,6 +12,7 @@ export function CrmDashboard() {
 
   const dashboard = data?.data as CrmDashboardData | undefined;
   const stats = dashboard?.stats;
+  const subscription = dashboard?.subscription;
 
   const statCards = stats
     ? [
@@ -30,6 +31,17 @@ export function CrmDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">Hospital Dashboard</h1>
         <p className="text-gray-500 mt-1">Overview of your organization's performance</p>
       </div>
+
+      {subscription?.isRestricted && (
+        <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+          <p className="font-semibold">Subscription {subscription.status}</p>
+          <p className="text-sm mt-1">
+            {subscription.status === 'SUSPENDED'
+              ? `Your subscription has been suspended${subscription.suspendReason ? `: ${subscription.suspendReason}` : ''}. Please contact support.`
+              : 'Your subscription is inactive. Please contact support to renew.'}
+          </p>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading...</div>
@@ -288,6 +300,13 @@ interface CrmDashboardData {
     activeDoctors: number;
     monthlyRevenue: number;
     newPatientsThisMonth: number;
+  };
+  subscription?: {
+    status: string;
+    planName: string;
+    endDate?: string;
+    suspendReason?: string;
+    isRestricted: boolean;
   };
   recentAppointments: CrmAppointment[];
 }

@@ -65,6 +65,7 @@ enum PaymentStatus {
 
 enum SubscriptionPlanTier {
   FREE
+  BASIC
   STARTER
   PROFESSIONAL
   ENTERPRISE
@@ -75,6 +76,18 @@ enum SubscriptionStatus {
   EXPIRED
   CANCELLED
   TRIAL
+  SUSPENDED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionChangeSource {
+  MANUAL
+  PAYMENT
+  SYSTEM
 }
 
 enum AdvertisementStatus {
@@ -455,37 +468,84 @@ model Payment {
 }
 
 model SubscriptionPlan {
-  id          String               @id @default(uuid())
-  tier        SubscriptionPlanTier @unique
-  name        String
-  description String?
-  price       Float?
-  currency    String               @default("INR")
-  features    String[]
-  isActive    Boolean              @default(true)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id                String                @id @default(uuid())
+  tier              SubscriptionPlanTier?
+  code              String                @unique
+  name              String
+  description       String?
+  price             Float?
+  monthlyPrice      Float?
+  yearlyPrice       Float?
+  currency          String                @default("INR")
+  trialDays         Int                   @default(0)
+  features          String[]
+  userLimit         Int?
+  doctorLimit       Int?
+  patientLimit      Int?
+  storageLimitMb    Int?
+  branchLimit       Int?
+  appointmentLimit  Int?
+  isActive          Boolean               @default(true)
+  isDefault         Boolean               @default(false)
+  sortOrder         Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions     Subscription[]
+  historyAsPrevious SubscriptionHistory[] @relation("PreviousPlan")
+  historyAsNew      SubscriptionHistory[] @relation("NewPlan")
 
   @@map("subscription_plans")
 }
 
 model Subscription {
-  id             String             @id @default(uuid())
+  id             String                   @id @default(uuid())
   organizationId String
   planId         String
-  status         SubscriptionStatus @default(TRIAL)
-  startDate      DateTime           @default(now())
+  status         SubscriptionStatus       @default(TRIAL)
+  billingCycle   BillingCycle             @default(MONTHLY)
+  price          Float?
+  discount       Float?
+  startDate      DateTime                 @default(now())
   endDate        DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  trialEndsAt    DateTime?
+  suspendReason  String?
+  changeSource   SubscriptionChangeSource @default(SYSTEM)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan      @relation(fields: [planId], references: [id])
+  history      SubscriptionHistory[]
 
   @@index([organizationId])
+  @@index([status, endDate])
   @@map("subscriptions")
+}
+
+model SubscriptionHistory {
+  id             String                   @id @default(uuid())
+  subscriptionId String
+  organizationId String
+  previousPlanId String?
+  newPlanId      String?
+  previousPrice  Float?
+  newPrice       Float?
+  previousStatus String?
+  newStatus      String?
+  reason         String?
+  changeSource   SubscriptionChangeSource @default(MANUAL)
+  changedById    String?
+  changedByEmail String?
+  createdAt      DateTime                 @default(now())
+
+  subscription Subscription      @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  previousPlan SubscriptionPlan? @relation("PreviousPlan", fields: [previousPlanId], references: [id])
+  newPlan      SubscriptionPlan? @relation("NewPlan", fields: [newPlanId], references: [id])
+
+  @@index([subscriptionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("subscription_history")
 }
 
 model Advertisement {

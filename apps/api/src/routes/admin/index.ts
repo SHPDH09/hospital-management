@@ -8,9 +8,11 @@ import { paramId } from '../../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
 import { logAudit } from '../../lib/audit';
+import subscriptionRoutes from './subscriptions';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
+router.use('/subscriptions', subscriptionRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -296,61 +298,6 @@ router.get('/payments', async (req, res, next) => {
       prisma.payment.count({ where }),
     ]);
     sendPaginated(res, payments, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-// ─── Subscriptions ───────────────────────────────────────────────────────────
-
-router.get('/subscriptions/plans', async (_req, res, next) => {
-  try {
-    const plans = await prisma.subscriptionPlan.findMany({ orderBy: { price: 'asc' } });
-    sendSuccess(res, plans);
-  } catch (err) { next(err); }
-});
-
-router.post('/subscriptions/plans', validateBody(z.object({
-  tier: z.enum(['FREE', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
-  name: z.string(), description: z.string().optional(), price: z.number().optional(),
-  features: z.array(z.string()), isActive: z.boolean().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const plan = await prisma.subscriptionPlan.create({ data: req.body });
-    await logAudit(req, 'CREATE', 'SubscriptionPlan', plan.id);
-    sendSuccess(res, plan, 'Plan created', 201);
-  } catch (err) { next(err); }
-});
-
-router.patch('/subscriptions/plans/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const plan = await prisma.subscriptionPlan.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'SubscriptionPlan', id);
-    sendSuccess(res, plan);
-  } catch (err) { next(err); }
-});
-
-router.get('/subscriptions', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [subs, total] = await Promise.all([
-      prisma.subscription.findMany({
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { plan: true, organization: { select: { id: true, name: true, type: true } } },
-      }),
-      prisma.subscription.count(),
-    ]);
-    sendPaginated(res, subs, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/subscriptions/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const sub = await prisma.subscription.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Subscription', id, req.body);
-    sendSuccess(res, sub);
   } catch (err) { next(err); }
 });
 

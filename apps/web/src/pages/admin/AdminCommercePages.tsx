@@ -8,35 +8,6 @@ function useList(endpoint: string) {
   return useQuery({ queryKey: [endpoint], queryFn: () => api.get(endpoint) });
 }
 
-export function AdminSubscriptionsPage() {
-  const { data: plans } = useList('/admin/subscriptions/plans');
-  const { data: subs, isLoading } = useList('/admin/subscriptions');
-
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Subscription Management" subtitle="Plans, pricing, and organization subscriptions" />
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        {(plans?.data as Record<string, unknown>[])?.map((plan) => (
-          <div key={plan.id as string} className="card p-6">
-            <h3 className="font-semibold text-lg">{plan.name as string}</h3>
-            <p className="text-2xl font-bold text-primary-600 mt-2">{plan.price ? `${formatCurrency(plan.price as number)}/mo` : 'Custom'}</p>
-            <p className="text-xs text-gray-400 mt-1">{plan.tier as string}</p>
-            <ul className="mt-3 space-y-1">{(plan.features as string[])?.map((f) => <li key={f} className="text-sm text-gray-500">✓ {f}</li>)}</ul>
-          </div>
-        ))}
-      </div>
-      {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name) },
-          { key: 'plan', label: 'Plan', render: (r) => String((r.plan as { name?: string })?.name) },
-          { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
-          { key: 'endDate', label: 'End Date', render: (r) => r.endDate ? formatDate(r.endDate as string) : '-' },
-        ]} rows={(subs?.data as Record<string, unknown>[]) || []} />
-      )}
-    </DashboardLayout>
-  );
-}
-
 export function AdminAdvertisementsPage() {
   const { data, isLoading, refetch } = useList('/admin/advertisements');
   return (
