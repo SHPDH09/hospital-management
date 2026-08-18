@@ -9,49 +9,6 @@ function useList(endpoint: string) {
   return useQuery({ queryKey: [endpoint], queryFn: () => api.get(endpoint) });
 }
 
-export function AdminStaffPage() {
-  const { data, isLoading, refetch } = useList('/admin/staff');
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', role: 'PLATFORM_STAFF' });
-
-  const createStaff = async () => {
-    await api.post('/admin/staff', form);
-    setShowForm(false);
-    refetch();
-  };
-
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Platform Staff" subtitle="Manage operations, verification, finance, support teams" actions={
-        <button className="btn-primary text-sm" onClick={() => setShowForm(!showForm)}>+ Add Staff</button>
-      } />
-      {showForm && (
-        <div className="card p-4 mb-6 grid grid-cols-1 md:grid-cols-4 gap-3">
-          <input className="input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input className="input" type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            <option value="PLATFORM_STAFF">Platform Staff</option>
-            <option value="SUPER_ADMIN">Super Admin</option>
-          </select>
-          <button className="btn-primary" onClick={createStaff}>Create</button>
-        </div>
-      )}
-      {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'email', label: 'Email' },
-          { key: 'role', label: 'Role' },
-          { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'SUSPENDED'} /> },
-          { key: 'lastLoginAt', label: 'Last Login', render: (r) => r.lastLoginAt ? formatDate(r.lastLoginAt as string) : 'Never' },
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <ActionBtn variant={r.isActive ? 'danger' : 'success'} onClick={() => api.patch(`/admin/staff/${r.id}`, { isActive: !r.isActive }).then(() => refetch())}>
-              {r.isActive ? 'Block' : 'Unblock'}
-            </ActionBtn>
-          )},
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-      )}
-    </DashboardLayout>
-  );
-}
 
 export function AdminRolesPage() {
   const { data, isLoading } = useList('/admin/roles');

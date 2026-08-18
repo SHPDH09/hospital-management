@@ -53,7 +53,6 @@ export const adminNavGroups: AdminNavGroup[] = [
     title: 'Platform',
     items: [
       { to: '/admin/staff', icon: UserCog, label: 'Staff' },
-      { to: '/admin/roles', icon: Shield, label: 'Roles & Permissions' },
       { to: '/admin/security', icon: Shield, label: 'Security Center' },
       { to: '/admin/audit-logs', icon: FileText, label: 'Audit Logs' },
     ],

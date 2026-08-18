@@ -17,6 +17,7 @@ import cmsRoutes from './cms';
 import settingsRoutes from './settings';
 import emergencyRoutes from './emergency';
 import advertisementRoutes from './advertisements';
+import platformStaffRoutes from './platform-staff';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -29,6 +30,7 @@ router.use('/cms', cmsRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/emergency', emergencyRoutes);
 router.use('/advertisements', advertisementRoutes);
+router.use('/platform-staff', platformStaffRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -371,47 +373,6 @@ router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Staff (Platform) ────────────────────────────────────────────────────────
-
-router.get('/staff', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where: { role: { in: ['SUPER_ADMIN', 'PLATFORM_STAFF'] } },
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        select: { id: true, email: true, role: true, isActive: true, lastLoginAt: true, createdAt: true },
-      }),
-      prisma.user.count({ where: { role: { in: ['SUPER_ADMIN', 'PLATFORM_STAFF'] } } }),
-    ]);
-    sendPaginated(res, users, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.post('/staff', validateBody(z.object({
-  email: z.string().email(), password: z.string().min(8), role: z.enum(['SUPER_ADMIN', 'PLATFORM_STAFF']),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const { email, password, role } = req.body;
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) throw new AppError('Email already exists', 409);
-    const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({ data: { email, passwordHash, role, isActive: true, emailVerified: true } });
-    await logAudit(req, 'CREATE', 'PlatformStaff', user.id);
-    sendSuccess(res, { id: user.id, email: user.email, role: user.role }, 'Staff created', 201);
-  } catch (err) { next(err); }
-});
-
-router.patch('/staff/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const user = await prisma.user.update({ where: { id }, data: { isActive: req.body.isActive, role: req.body.role } });
-    await logAudit(req, 'UPDATE', 'PlatformStaff', id, req.body);
-    sendSuccess(res, user);
-  } catch (err) { next(err); }
-});
 
 // ─── Complaints ──────────────────────────────────────────────────────────────
 

@@ -163,6 +163,7 @@ model User {
   auditLogs     AuditLog[]
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
+  platformStaffProfile PlatformStaffProfile?
 
   @@map("users")
 }
@@ -224,6 +225,7 @@ model Organization {
   documents       Document[]
   complaints      Complaint[]
   coupons         Coupon[]
+  platformStaffAssignments PlatformStaffAssignment[]
 
   @@index([city, state])
   @@index([verificationStatus, isActive, isPubliclyListed])
@@ -1135,9 +1137,12 @@ model PlatformDepartment {
   name        String   @unique
   description String?
   isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  staff PlatformStaffProfile[]
 
   @@map("platform_departments")
 }
@@ -1523,4 +1528,149 @@ model EmergencySuspension {
 
   @@index([type, targetId, isActive])
   @@map("emergency_suspensions")
+}
+
+enum PlatformStaffStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PlatformTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PlatformTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model PlatformStaffRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String?  @unique
+  description String?
+  level       Int      @default(3)
+  permissions Json
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staff PlatformStaffProfile[]
+
+  @@map("platform_staff_roles")
+}
+
+model PlatformStaffProfile {
+  id                String              @id @default(uuid())
+  userId            String              @unique
+  fullName          String
+  profilePhoto      String?
+  phone             String?
+  employeeId        String?             @unique
+  departmentId      String?
+  designation       String?
+  platformRoleId    String?
+  joiningDate       DateTime?
+  status            PlatformStaffStatus @default(ACTIVE)
+  customPermissions Json?
+  assignedLocations String[]
+  twoFactorEnabled  Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   PlatformDepartment?      @relation(fields: [departmentId], references: [id])
+  platformRole PlatformStaffRole?       @relation(fields: [platformRoleId], references: [id])
+  tasks        PlatformStaffTask[]      @relation("AssignedTasks")
+  assignments  PlatformStaffAssignment[]
+  activities   PlatformStaffActivity[]
+  attendance   PlatformStaffAttendance[]
+
+  @@map("platform_staff_profiles")
+}
+
+model PlatformStaffTask {
+  id              String               @id @default(uuid())
+  title           String
+  description     String?
+  assignedToId    String
+  assignedByEmail String?
+  priority        PlatformTaskPriority @default(MEDIUM)
+  status          PlatformTaskStatus   @default(PENDING)
+  dueDate         DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  assignedTo PlatformStaffProfile @relation("AssignedTasks", fields: [assignedToId], references: [id])
+
+  @@index([assignedToId, status])
+  @@map("platform_staff_tasks")
+}
+
+model PlatformStaffAssignment {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  organizationId String?
+  locationName   String?
+  stateName      String?
+  assignmentType String   @default("organization")
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  organization Organization?        @relation(fields: [organizationId], references: [id])
+
+  @@index([staffProfileId])
+  @@map("platform_staff_assignments")
+}
+
+model PlatformStaffActivity {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  action         String
+  entityType     String?
+  entityId       String?
+  entityName     String?
+  details        Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, createdAt])
+  @@map("platform_staff_activities")
+}
+
+model PlatformStaffAttendance {
+  id             String    @id @default(uuid())
+  staffProfileId String
+  checkInAt      DateTime  @default(now())
+  checkOutAt     DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, checkInAt])
+  @@map("platform_staff_attendance")
+}
+
+model PlatformStaffAnnouncement {
+  id             String   @id @default(uuid())
+  title          String
+  message        String   @db.Text
+  audience       String[] @default(["all"])
+  isActive       Boolean  @default(true)
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("platform_staff_announcements")
 }
