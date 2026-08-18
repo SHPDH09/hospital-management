@@ -1,0 +1,587 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  PLATFORM_STAFF
+  HOSPITAL_ADMIN
+  BRANCH_ADMIN
+  DOCTOR
+  RECEPTIONIST
+  NURSE
+  ACCOUNTANT
+  PHARMACIST
+  LAB_STAFF
+  MANAGER
+  PATIENT
+}
+
+enum OrganizationType {
+  HOSPITAL
+  CLINIC
+  DIAGNOSTIC_CENTER
+  PHARMACY
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  CORRECTION_REQUESTED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  IN_CONSULTATION
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum BillStatus {
+  DRAFT
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionPlanTier {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  TRIAL
+}
+
+enum AdvertisementStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  EXPIRED
+  REJECTED
+}
+
+enum AdvertisementType {
+  HOMEPAGE_BANNER
+  SEARCH_PROMOTION
+  FEATURED_HOSPITAL
+  FEATURED_DOCTOR
+  FEATURED_CLINIC
+  HEALTH_PACKAGE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  APPOINTMENT_BOOKED
+  CONVERTED
+  LOST
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  phone         String?   @unique
+  passwordHash  String
+  role          UserRole
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patient       Patient?
+  doctor        Doctor?
+  staff         Staff?
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Organization {
+  id                 String             @id @default(uuid())
+  name               String
+  slug               String             @unique
+  type               OrganizationType
+  description        String?
+  logoUrl            String?
+  coverImageUrl      String?
+  email              String?
+  phone              String?
+  website            String?
+  address            String?
+  city               String?
+  state              String?
+  pinCode            String?
+  latitude           Float?
+  longitude          Float?
+  verificationStatus VerificationStatus @default(PENDING)
+  isActive           Boolean            @default(true)
+  isPubliclyListed   Boolean            @default(false)
+  emergencyAvailable Boolean            @default(false)
+  openingHours       Json?
+  facilities         String[]
+  ownerName          String?
+  registrationNumber String?
+  averageRating      Float              @default(0)
+  reviewCount        Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  branches        Branch[]
+  doctors         Doctor[]
+  staff           Staff[]
+  departments     Department[]
+  services        Service[]
+  appointments    Appointment[]
+  bills           Bill[]
+  subscriptions   Subscription[]
+  advertisements  Advertisement[]
+  leads           Lead[]
+  reviews         Review[]
+  patientOrgs     PatientOrganization[]
+  documents       Document[]
+
+  @@index([city, state])
+  @@index([verificationStatus, isActive, isPubliclyListed])
+  @@map("organizations")
+}
+
+model Branch {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  address        String?
+  city           String?
+  state          String?
+  pinCode        String?
+  phone          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  doctors      Doctor[]
+  staff        Staff[]
+  departments  Department[]
+  appointments Appointment[]
+
+  @@index([organizationId])
+  @@map("branches")
+}
+
+model Patient {
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  fullName         String
+  dateOfBirth      DateTime?
+  gender           Gender?
+  address          String?
+  city             String?
+  state            String?
+  emergencyContact String?
+  bloodGroup       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizations PatientOrganization[]
+  appointments  Appointment[]
+  bills         Bill[]
+  reviews       Review[]
+
+  @@map("patients")
+}
+
+model PatientOrganization {
+  id             String   @id @default(uuid())
+  patientId      String
+  organizationId String
+  patientNumber  String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, organizationId])
+  @@index([organizationId])
+  @@map("patient_organizations")
+}
+
+model Doctor {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  organizationId     String
+  branchId           String?
+  departmentId       String?
+  fullName           String
+  specialization     String?
+  qualification      String?
+  experience         Int?
+  registrationNumber String?
+  consultationFee    Float    @default(0)
+  bio                String?
+  photoUrl           String?
+  languages          String[]
+  isActive           Boolean  @default(true)
+  averageRating      Float    @default(0)
+  reviewCount        Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?           @relation(fields: [branchId], references: [id])
+  department   Department?       @relation(fields: [departmentId], references: [id])
+  appointments Appointment[]
+  slots        AppointmentSlot[]
+  reviews      Review[]
+
+  @@index([organizationId])
+  @@index([specialization])
+  @@map("doctors")
+}
+
+model Staff {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  organizationId String
+  branchId       String?
+  fullName       String
+  role           UserRole
+  employeeId     String?
+  department     String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id])
+
+  @@index([organizationId])
+  @@map("staff")
+}
+
+model Department {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?       @relation(fields: [branchId], references: [id])
+  doctors      Doctor[]
+  appointments Appointment[]
+
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Service {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  price          Float
+  duration       Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billItems    BillItem[]
+
+  @@index([organizationId])
+  @@map("services")
+}
+
+model AppointmentSlot {
+  id        String   @id @default(uuid())
+  doctorId  String
+  date      DateTime @db.Date
+  startTime String
+  endTime   String
+  isBooked  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([doctorId, date, startTime])
+  @@index([doctorId, date])
+  @@map("appointment_slots")
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  organizationId String
+  branchId       String?
+  patientId      String
+  doctorId       String
+  departmentId   String?
+  slotId         String?
+  appointmentDate DateTime         @db.Date
+  startTime      String
+  endTime        String?
+  type           String            @default("consultation")
+  status         AppointmentStatus @default(PENDING)
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?          @relation(fields: [branchId], references: [id])
+  patient      Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       Doctor           @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  department   Department?      @relation(fields: [departmentId], references: [id])
+  slot         AppointmentSlot? @relation(fields: [slotId], references: [id])
+  bills        Bill[]
+
+  @@index([organizationId, appointmentDate])
+  @@index([doctorId, appointmentDate, status])
+  @@index([patientId])
+  @@map("appointments")
+}
+
+model Bill {
+  id             String     @id @default(uuid())
+  organizationId String
+  patientId      String
+  appointmentId  String?
+  billNumber     String
+  subtotal       Float      @default(0)
+  tax            Float      @default(0)
+  discount       Float      @default(0)
+  total          Float      @default(0)
+  status         BillStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id])
+  items        BillItem[]
+  payments     Payment[]
+
+  @@unique([organizationId, billNumber])
+  @@index([organizationId, createdAt])
+  @@map("bills")
+}
+
+model BillItem {
+  id          String  @id @default(uuid())
+  billId      String
+  serviceId   String?
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Float
+  total       Float
+
+  bill    Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  @@map("bill_items")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  billId        String
+  amount        Float
+  method        String
+  status        PaymentStatus @default(PENDING)
+  transactionId String?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model SubscriptionPlan {
+  id          String               @id @default(uuid())
+  tier        SubscriptionPlanTier @unique
+  name        String
+  description String?
+  price       Float?
+  currency    String               @default("INR")
+  features    String[]
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id             String             @id @default(uuid())
+  organizationId String
+  planId         String
+  status         SubscriptionStatus @default(TRIAL)
+  startDate      DateTime           @default(now())
+  endDate        DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([organizationId])
+  @@map("subscriptions")
+}
+
+model Advertisement {
+  id             String              @id @default(uuid())
+  organizationId String?
+  title          String
+  type           AdvertisementType
+  status         AdvertisementStatus @default(PENDING)
+  imageUrl       String?
+  targetUrl      String?
+  startDate      DateTime?
+  endDate        DateTime?
+  impressions    Int                 @default(0)
+  clicks         Int                 @default(0)
+  budget         Float?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@map("advertisements")
+}
+
+model Lead {
+  id             String     @id @default(uuid())
+  organizationId String
+  name           String?
+  email          String?
+  phone          String?
+  source         String?
+  status         LeadStatus @default(NEW)
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("leads")
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  patientId      String
+  organizationId String?
+  doctorId       String?
+  rating         Int
+  comment        String?
+  response       String?
+  isPublished    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+
+  @@map("reviews")
+}
+
+model Document {
+  id             String   @id @default(uuid())
+  organizationId String
+  fileName       String
+  fileKey        String
+  mimeType       String?
+  fileSize       Int?
+  uploadedBy     String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("documents")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
