@@ -65,6 +65,7 @@ enum PaymentStatus {
 
 enum SubscriptionPlanTier {
   FREE
+  BASIC
   STARTER
   PROFESSIONAL
   ENTERPRISE
@@ -75,6 +76,18 @@ enum SubscriptionStatus {
   EXPIRED
   CANCELLED
   TRIAL
+  SUSPENDED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionChangeSource {
+  MANUAL
+  PAYMENT
+  SYSTEM
 }
 
 enum AdvertisementStatus {
@@ -455,37 +468,84 @@ model Payment {
 }
 
 model SubscriptionPlan {
-  id          String               @id @default(uuid())
-  tier        SubscriptionPlanTier @unique
-  name        String
-  description String?
-  price       Float?
-  currency    String               @default("INR")
-  features    String[]
-  isActive    Boolean              @default(true)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id                String                @id @default(uuid())
+  tier              SubscriptionPlanTier?
+  code              String                @unique
+  name              String
+  description       String?
+  price             Float?
+  monthlyPrice      Float?
+  yearlyPrice       Float?
+  currency          String                @default("INR")
+  trialDays         Int                   @default(0)
+  features          String[]
+  userLimit         Int?
+  doctorLimit       Int?
+  patientLimit      Int?
+  storageLimitMb    Int?
+  branchLimit       Int?
+  appointmentLimit  Int?
+  isActive          Boolean               @default(true)
+  isDefault         Boolean               @default(false)
+  sortOrder         Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions     Subscription[]
+  historyAsPrevious SubscriptionHistory[] @relation("PreviousPlan")
+  historyAsNew      SubscriptionHistory[] @relation("NewPlan")
 
   @@map("subscription_plans")
 }
 
 model Subscription {
-  id             String             @id @default(uuid())
+  id             String                   @id @default(uuid())
   organizationId String
   planId         String
-  status         SubscriptionStatus @default(TRIAL)
-  startDate      DateTime           @default(now())
+  status         SubscriptionStatus       @default(TRIAL)
+  billingCycle   BillingCycle             @default(MONTHLY)
+  price          Float?
+  discount       Float?
+  startDate      DateTime                 @default(now())
   endDate        DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  trialEndsAt    DateTime?
+  suspendReason  String?
+  changeSource   SubscriptionChangeSource @default(SYSTEM)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan      @relation(fields: [planId], references: [id])
+  history      SubscriptionHistory[]
 
   @@index([organizationId])
+  @@index([status, endDate])
   @@map("subscriptions")
+}
+
+model SubscriptionHistory {
+  id             String                   @id @default(uuid())
+  subscriptionId String
+  organizationId String
+  previousPlanId String?
+  newPlanId      String?
+  previousPrice  Float?
+  newPrice       Float?
+  previousStatus String?
+  newStatus      String?
+  reason         String?
+  changeSource   SubscriptionChangeSource @default(MANUAL)
+  changedById    String?
+  changedByEmail String?
+  createdAt      DateTime                 @default(now())
+
+  subscription Subscription      @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  previousPlan SubscriptionPlan? @relation("PreviousPlan", fields: [previousPlanId], references: [id])
+  newPlan      SubscriptionPlan? @relation("NewPlan", fields: [newPlanId], references: [id])
+
+  @@index([subscriptionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("subscription_history")
 }
 
 model Advertisement {
@@ -718,10 +778,171 @@ model Specialization {
   department  String?
   services    String[]
   isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("specializations")
+}
+
+enum MasterCatalogKind {
+  HOSPITAL_TYPE
+  CLINIC_TYPE
+  FACILITY
+  HEALTH_PACKAGE_CATEGORY
+}
+
+model PlatformDepartment {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("platform_departments")
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  services PlatformHealthcareService[]
+
+  @@map("service_categories")
+}
+
+model PlatformHealthcareService {
+  id           String   @id @default(uuid())
+  name         String
+  categoryId   String?
+  description  String?
+  defaultPrice Float?
+  duration     Int?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category ServiceCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("platform_healthcare_services")
+}
+
+model TestCategory {
+  id        String   @id @default(uuid())
+  name      String
+  group     String?
+  parentId  String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   TestCategory?  @relation("TestCategoryHierarchy", fields: [parentId], references: [id])
+  children TestCategory[] @relation("TestCategoryHierarchy")
+  tests    DiagnosticTest[]
+
+  @@index([parentId])
+  @@map("test_categories")
+}
+
+model DiagnosticTest {
+  id           String   @id @default(uuid())
+  name         String
+  categoryId   String?
+  sampleType   String?
+  preparation  String?
+  defaultPrice Float?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category TestCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("diagnostic_tests")
+}
+
+model Medicine {
+  id           String   @id @default(uuid())
+  name         String
+  genericName  String?
+  brandName    String?
+  category     String?
+  dosageForm   String?
+  strength     String?
+  manufacturer String?
+  unit         String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("medicines")
+}
+
+model MasterCatalog {
+  id          String            @id @default(uuid())
+  kind        MasterCatalogKind
+  name        String
+  description String?
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([kind, name])
+  @@index([kind, isActive])
+  @@map("master_catalog")
+}
+
+model InsuranceProvider {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  logoUrl   String?
+  contact   String?
+  website   String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("insurance_providers")
+}
+
+model DoctorQualification {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  shortName   String?
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("doctor_qualifications")
+}
+
+model StaffRoleMaster {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String?  @unique
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("staff_role_masters")
 }
 
 model Location {

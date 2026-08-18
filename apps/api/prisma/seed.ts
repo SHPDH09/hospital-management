@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
+import { seedMasterData } from './master-data-seed';
 
 async function main() {
   console.log('Seeding database...');
@@ -7,48 +8,24 @@ async function main() {
   const passwordHash = await bcrypt.hash('Password123!', 12);
 
   // Subscription plans
-  const plans = await Promise.all([
+  const planDefs = [
+    { code: 'free', tier: 'FREE' as const, name: 'Free', monthlyPrice: 0, yearlyPrice: 0, trialDays: 0, isDefault: false, sortOrder: 1,
+      features: ['Basic Listing', 'Up to 2 Doctors'], userLimit: 5, doctorLimit: 2, patientLimit: 50, branchLimit: 1, appointmentLimit: 100 },
+    { code: 'basic', tier: 'BASIC' as const, name: 'Basic', monthlyPrice: 999, yearlyPrice: 9999, trialDays: 14, isDefault: true, sortOrder: 2,
+      features: ['Patient Management', 'Appointments', 'Basic Dashboard', 'Billing'], userLimit: 20, doctorLimit: 10, patientLimit: 500, branchLimit: 2, appointmentLimit: 1000 },
+    { code: 'professional', tier: 'PROFESSIONAL' as const, name: 'Professional', monthlyPrice: 2499, yearlyPrice: 24999, trialDays: 14, isDefault: false, sortOrder: 3,
+      features: ['Everything in Basic', 'Staff Management', 'Reports', 'Inventory', 'Communication'], userLimit: 100, doctorLimit: 50, patientLimit: 5000, branchLimit: 10, appointmentLimit: 10000 },
+    { code: 'enterprise', tier: 'ENTERPRISE' as const, name: 'Enterprise', monthlyPrice: null, yearlyPrice: null, trialDays: 30, isDefault: false, sortOrder: 4,
+      features: ['Multi-branch', 'Advanced Analytics', 'API Access', 'Custom Branding', 'Dedicated Support'], userLimit: null, doctorLimit: null, patientLimit: null, branchLimit: null, appointmentLimit: null },
+  ];
+
+  const plans = await Promise.all(planDefs.map((p) =>
     prisma.subscriptionPlan.upsert({
-      where: { tier: 'FREE' },
-      update: {},
-      create: {
-        tier: 'FREE',
-        name: 'Free',
-        price: 0,
-        features: ['Basic Listing', 'Up to 2 Doctors', 'Basic Dashboard'],
-      },
-    }),
-    prisma.subscriptionPlan.upsert({
-      where: { tier: 'STARTER' },
-      update: {},
-      create: {
-        tier: 'STARTER',
-        name: 'Starter',
-        price: 999,
-        features: ['Patient Management', 'Appointment Management', 'Basic Dashboard'],
-      },
-    }),
-    prisma.subscriptionPlan.upsert({
-      where: { tier: 'PROFESSIONAL' },
-      update: {},
-      create: {
-        tier: 'PROFESSIONAL',
-        name: 'Professional',
-        price: 2499,
-        features: ['Everything in Starter', 'Billing', 'Staff Management', 'Reports', 'Communication', 'Inventory'],
-      },
-    }),
-    prisma.subscriptionPlan.upsert({
-      where: { tier: 'ENTERPRISE' },
-      update: {},
-      create: {
-        tier: 'ENTERPRISE',
-        name: 'Enterprise',
-        price: null,
-        features: ['Multi-branch', 'Advanced Analytics', 'API Access', 'Custom Branding', 'Advanced Permissions', 'Dedicated Support'],
-      },
-    }),
-  ]);
+      where: { code: p.code },
+      update: { isDefault: p.isDefault, monthlyPrice: p.monthlyPrice ?? undefined, yearlyPrice: p.yearlyPrice ?? undefined },
+      create: { ...p, price: p.monthlyPrice ?? 0, features: p.features, isActive: true },
+    })
+  ));
 
   // Super Admin (demo)
   await prisma.user.upsert({
@@ -152,6 +129,20 @@ async function main() {
       endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
     },
   });
+
+  // Demo coupons
+  const couponDefs = [
+    { code: 'WELCOME20', discountType: 'PERCENT' as const, discountValue: 20, maxDiscount: 500, usageLimit: 100, platformWide: true },
+    { code: 'FLAT500', discountType: 'FIXED' as const, discountValue: 500, minAmount: 2000, usageLimit: 50, platformWide: true },
+    { code: 'CITYHOSP10', discountType: 'PERCENT' as const, discountValue: 10, usageLimit: 25, platformWide: false, organizationId: organization.id },
+  ];
+  for (const c of couponDefs) {
+    await prisma.coupon.upsert({
+      where: { code: c.code },
+      update: { isActive: true },
+      create: { ...c, isActive: true },
+    });
+  }
 
   // Departments
   const cardiology = await prisma.department.create({
@@ -333,10 +324,19 @@ async function main() {
   }
 
   // Locations
-  const india = await prisma.location.create({ data: { name: 'India', type: 'COUNTRY' } });
-  const mh = await prisma.location.create({ data: { name: 'Maharashtra', type: 'STATE', parentId: india.id } });
-  await prisma.location.create({ data: { name: 'Mumbai', type: 'CITY', parentId: mh.id, pinCode: '400001' } });
-  await prisma.location.create({ data: { name: 'Pune', type: 'CITY', parentId: mh.id, pinCode: '411001' } });
+  const upsertLocation = async (data: { name: string; type: 'COUNTRY' | 'STATE' | 'CITY' | 'DISTRICT' | 'AREA'; parentId?: string; pinCode?: string }) => {
+    const existing = await prisma.location.findFirst({
+      where: { name: data.name, type: data.type, parentId: data.parentId ?? null },
+    });
+    if (existing) return existing;
+    return prisma.location.create({ data });
+  };
+  const india = await upsertLocation({ name: 'India', type: 'COUNTRY' });
+  const mh = await upsertLocation({ name: 'Maharashtra', type: 'STATE', parentId: india.id });
+  await upsertLocation({ name: 'Mumbai', type: 'CITY', parentId: mh.id, pinCode: '400001' });
+  await upsertLocation({ name: 'Pune', type: 'CITY', parentId: mh.id, pinCode: '411001' });
+  const delhi = await upsertLocation({ name: 'Delhi', type: 'STATE', parentId: india.id });
+  await upsertLocation({ name: 'New Delhi', type: 'CITY', parentId: delhi.id, pinCode: '110001' });
 
   // Platform Settings
   const settings = [
@@ -348,6 +348,8 @@ async function main() {
   for (const s of settings) {
     await prisma.platformSetting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
   }
+
+  await seedMasterData(prisma);
 
   console.log('Seed completed!');
   console.log('\nDemo accounts (password: Password123!):');

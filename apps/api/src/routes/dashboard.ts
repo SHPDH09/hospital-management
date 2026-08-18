@@ -70,6 +70,12 @@ router.get('/crm', authenticate, requireRoles(...CRM_ROLES), async (req: AuthReq
       }),
     ]);
 
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: 'desc' },
+      include: { plan: { select: { name: true } } },
+    });
+
     sendSuccess(res, {
       stats: {
         totalPatients,
@@ -82,6 +88,13 @@ router.get('/crm', authenticate, requireRoles(...CRM_ROLES), async (req: AuthReq
         monthlyRevenue: monthlyRevenue._sum.amount || 0,
         pendingPayments: pendingPayments._sum.total || 0,
       },
+      subscription: subscription ? {
+        status: subscription.status,
+        planName: subscription.plan.name,
+        endDate: subscription.endDate,
+        suspendReason: subscription.suspendReason,
+        isRestricted: subscription.status === 'SUSPENDED' || subscription.status === 'EXPIRED' || subscription.status === 'CANCELLED',
+      } : null,
       recentAppointments,
     });
   } catch (err) {

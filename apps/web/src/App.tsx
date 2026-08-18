@@ -11,6 +11,7 @@ import {
 } from '@/pages/public/AuthPages';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
+import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
 
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 import {
@@ -46,6 +47,8 @@ export default function App() {
             <Route path="/find/doctors" element={<FindDoctorsPage />} />
             <Route path="/organizations/:slug" element={<OrganizationDetailPage />} />
             <Route path="/doctors/:id" element={<DoctorDetailPage />} />
+            <Route path="/book" element={<BookAppointmentPage />} />
+            <Route path="/book/:slug" element={<BookAppointmentPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/login/patient" element={<PatientLoginPage />} />
             <Route path="/login/doctor" element={<DoctorLoginPage />} />
@@ -75,7 +78,7 @@ export default function App() {
             <Route path="/admin/patients" element={<Admin><AdminPatientsPage /></Admin>} />
             <Route path="/admin/appointments" element={<Admin><AdminAppointmentsPage /></Admin>} />
             <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
-            <Route path="/admin/subscriptions" element={<Admin><AdminSubscriptionsPage /></Admin>} />
+            <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
             <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
@@ -86,7 +89,7 @@ export default function App() {
             <Route path="/admin/audit-logs" element={<Admin><AdminAuditLogsPage /></Admin>} />
             <Route path="/admin/complaints" element={<Admin><AdminComplaintsPage /></Admin>} />
             <Route path="/admin/locations" element={<Admin><AdminLocationsPage /></Admin>} />
-            <Route path="/admin/master-data" element={<Admin><AdminMasterDataPage /></Admin>} />
+            <Route path="/admin/master-data/*" element={<Admin><AdminMasterDataPage /></Admin>} />
             <Route path="/admin/communications" element={<Admin><AdminCommunicationsPage /></Admin>} />
             <Route path="/admin/cms" element={<Admin><AdminCmsPage /></Admin>} />
             <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />

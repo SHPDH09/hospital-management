@@ -8,9 +8,17 @@ import { paramId } from '../../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
 import { logAudit } from '../../lib/audit';
+import subscriptionRoutes from './subscriptions';
+import couponRoutes from './coupons';
+import locationRoutes from './locations';
+import masterDataRoutes from './master-data';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
+router.use('/subscriptions', subscriptionRoutes);
+router.use('/coupons', couponRoutes);
+router.use('/locations', locationRoutes);
+router.use('/master-data', masterDataRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -299,61 +307,6 @@ router.get('/payments', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Subscriptions ───────────────────────────────────────────────────────────
-
-router.get('/subscriptions/plans', async (_req, res, next) => {
-  try {
-    const plans = await prisma.subscriptionPlan.findMany({ orderBy: { price: 'asc' } });
-    sendSuccess(res, plans);
-  } catch (err) { next(err); }
-});
-
-router.post('/subscriptions/plans', validateBody(z.object({
-  tier: z.enum(['FREE', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
-  name: z.string(), description: z.string().optional(), price: z.number().optional(),
-  features: z.array(z.string()), isActive: z.boolean().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const plan = await prisma.subscriptionPlan.create({ data: req.body });
-    await logAudit(req, 'CREATE', 'SubscriptionPlan', plan.id);
-    sendSuccess(res, plan, 'Plan created', 201);
-  } catch (err) { next(err); }
-});
-
-router.patch('/subscriptions/plans/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const plan = await prisma.subscriptionPlan.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'SubscriptionPlan', id);
-    sendSuccess(res, plan);
-  } catch (err) { next(err); }
-});
-
-router.get('/subscriptions', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [subs, total] = await Promise.all([
-      prisma.subscription.findMany({
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { plan: true, organization: { select: { id: true, name: true, type: true } } },
-      }),
-      prisma.subscription.count(),
-    ]);
-    sendPaginated(res, subs, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/subscriptions/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const sub = await prisma.subscription.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Subscription', id, req.body);
-    sendSuccess(res, sub);
-  } catch (err) { next(err); }
-});
-
 // ─── Advertisements ──────────────────────────────────────────────────────────
 
 router.get('/advertisements', async (req, res, next) => {
@@ -517,28 +470,6 @@ router.patch('/complaints/:id', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Coupons ─────────────────────────────────────────────────────────────────
-
-router.get('/coupons', async (_req, res, next) => {
-  try {
-    const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
-    sendSuccess(res, coupons);
-  } catch (err) { next(err); }
-});
-
-router.post('/coupons', validateBody(z.object({
-  code: z.string(), discountType: z.enum(['PERCENT', 'FIXED']), discountValue: z.number(),
-  minAmount: z.number().optional(), maxDiscount: z.number().optional(),
-  usageLimit: z.number().optional(), expiresAt: z.string().optional(), platformWide: z.boolean().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const data = { ...req.body, expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : undefined };
-    const coupon = await prisma.coupon.create({ data });
-    await logAudit(req, 'CREATE', 'Coupon', coupon.id);
-    sendSuccess(res, coupon, 'Coupon created', 201);
-  } catch (err) { next(err); }
-});
-
 // ─── Audit Logs & Security ───────────────────────────────────────────────────
 
 router.get('/audit-logs', async (req, res, next) => {
@@ -569,15 +500,38 @@ router.get('/security/login-history', async (req, res, next) => {
 
 router.get('/security/sessions', async (_req, res, next) => {
   try {
-    const sessions = await prisma.refreshToken.findMany({
+    const tokens = await prisma.refreshToken.findMany({
       where: { expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
-      take: 100,
     });
-    const enriched = await Promise.all(sessions.map(async (s) => {
-      const user = await prisma.user.findUnique({ where: { id: s.userId }, select: { email: true, role: true } });
-      return { ...s, user };
-    }));
+
+    const byUser = new Map<string, { userId: string; expiresAt: Date; createdAt: Date; sessionCount: number }>();
+    for (const token of tokens) {
+      const existing = byUser.get(token.userId);
+      if (!existing) {
+        byUser.set(token.userId, {
+          userId: token.userId,
+          expiresAt: token.expiresAt,
+          createdAt: token.createdAt,
+          sessionCount: 1,
+        });
+      } else {
+        existing.sessionCount += 1;
+        if (token.expiresAt > existing.expiresAt) existing.expiresAt = token.expiresAt;
+        if (token.createdAt > existing.createdAt) existing.createdAt = token.createdAt;
+      }
+    }
+
+    const enriched = await Promise.all(
+      Array.from(byUser.values()).map(async (session) => {
+        const user = await prisma.user.findUnique({
+          where: { id: session.userId },
+          select: { email: true, role: true },
+        });
+        return { ...session, user };
+      })
+    );
+
     sendSuccess(res, enriched);
   } catch (err) { next(err); }
 });
@@ -588,43 +542,6 @@ router.delete('/security/sessions/:userId', async (req: AuthRequest, res, next) 
     await prisma.refreshToken.deleteMany({ where: { userId } });
     await logAudit(req, 'FORCE_LOGOUT', 'User', userId);
     sendSuccess(res, null, 'All sessions revoked');
-  } catch (err) { next(err); }
-});
-
-// ─── Master Data ─────────────────────────────────────────────────────────────
-
-router.get('/specializations', async (_req, res, next) => {
-  try {
-    const items = await prisma.specialization.findMany({ orderBy: { name: 'asc' } });
-    sendSuccess(res, items);
-  } catch (err) { next(err); }
-});
-
-router.post('/specializations', validateBody(z.object({
-  name: z.string(), description: z.string().optional(), department: z.string().optional(), services: z.array(z.string()).optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const item = await prisma.specialization.create({ data: { ...req.body, services: req.body.services || [] } });
-    sendSuccess(res, item, 'Created', 201);
-  } catch (err) { next(err); }
-});
-
-router.get('/locations', async (req, res, next) => {
-  try {
-    const type = req.query.type as string | undefined;
-    const where = type ? { type: type as never } : {};
-    const locations = await prisma.location.findMany({ where, orderBy: { name: 'asc' }, include: { parent: { select: { name: true } } } });
-    sendSuccess(res, locations);
-  } catch (err) { next(err); }
-});
-
-router.post('/locations', validateBody(z.object({
-  name: z.string(), type: z.enum(['COUNTRY', 'STATE', 'CITY', 'DISTRICT', 'AREA']),
-  parentId: z.string().optional(), pinCode: z.string().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const loc = await prisma.location.create({ data: req.body });
-    sendSuccess(res, loc, 'Created', 201);
   } catch (err) { next(err); }
 });
 

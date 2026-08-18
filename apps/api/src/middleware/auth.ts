@@ -20,14 +20,22 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     return sendError(res, 'Authentication required', 401);
   }
 
+  let payload: ReturnType<typeof verifyAccessToken>;
   try {
-    const token = header.slice(7);
-    const payload = verifyAccessToken(token);
-    req.user = payload;
-    next();
+    payload = verifyAccessToken(header.slice(7));
   } catch {
     return sendError(res, 'Invalid or expired token', 401);
   }
+
+  prisma.refreshToken.findFirst({
+    where: { userId: payload.userId, expiresAt: { gt: new Date() } },
+  }).then((session) => {
+    if (!session) {
+      return sendError(res, 'Session revoked. Please log in again.', 401);
+    }
+    req.user = payload;
+    next();
+  }).catch(next);
 }
 
 export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {

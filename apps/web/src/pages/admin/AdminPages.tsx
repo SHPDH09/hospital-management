@@ -4,12 +4,14 @@ export {
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';
 export {
-  AdminSubscriptionsPage, AdminAdvertisementsPage, AdminCouponsPage,
+  AdminAdvertisementsPage, AdminCouponsPage,
   AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
 } from './AdminCommercePages';
+export { AdminSubscriptionsPage } from './AdminSubscriptionPages';
+export { AdminMasterDataPage } from './AdminMasterDataPages';
 export {
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
-  AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
+  AdminComplaintsPage, AdminLocationsPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from './AdminPlatformPages';
 

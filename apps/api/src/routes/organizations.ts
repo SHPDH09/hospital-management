@@ -45,7 +45,9 @@ router.post('/register', validateBody(registerOrgSchema), async (req, res, next)
     if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
 
     const passwordHash = await hashPassword(data.password);
-    const starterPlan = await prisma.subscriptionPlan.findUnique({ where: { tier: 'STARTER' } });
+    const defaultPlan = await prisma.subscriptionPlan.findFirst({ where: { isDefault: true } })
+      || await prisma.subscriptionPlan.findFirst({ where: { code: 'basic' } })
+      || await prisma.subscriptionPlan.findFirst({ where: { code: 'starter' } });
 
     const result = await prisma.$transaction(async (tx: TransactionClient) => {
       const user = await tx.user.create({
@@ -80,15 +82,23 @@ router.post('/register', validateBody(registerOrgSchema), async (req, res, next)
         },
       });
 
-      if (starterPlan) {
+      if (defaultPlan) {
         const endDate = new Date();
-        endDate.setMonth(endDate.getMonth() + 1);
+        if (defaultPlan.trialDays > 0) {
+          endDate.setDate(endDate.getDate() + defaultPlan.trialDays);
+        } else {
+          endDate.setMonth(endDate.getMonth() + 1);
+        }
         await tx.subscription.create({
           data: {
             organizationId: organization.id,
-            planId: starterPlan.id,
-            status: 'TRIAL',
+            planId: defaultPlan.id,
+            status: defaultPlan.trialDays > 0 ? 'TRIAL' : 'ACTIVE',
+            billingCycle: 'MONTHLY',
+            price: defaultPlan.monthlyPrice ?? defaultPlan.price,
             endDate,
+            trialEndsAt: defaultPlan.trialDays > 0 ? endDate : undefined,
+            changeSource: 'SYSTEM',
           },
         });
       }
@@ -151,6 +161,37 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
     ]);
 
     sendPaginated(res, organizations, { page, limit, total });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/by-id/:id', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const org = await prisma.organization.findFirst({
+      where: { id, verificationStatus: 'APPROVED', isActive: true, isPubliclyListed: true },
+      include: {
+        departments: { where: { isActive: true } },
+        services: { where: { isActive: true } },
+        doctors: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            fullName: true,
+            specialization: true,
+            qualification: true,
+            experience: true,
+            consultationFee: true,
+            photoUrl: true,
+            averageRating: true,
+            reviewCount: true,
+          },
+        },
+      },
+    });
+    if (!org) throw new AppError('Organization not found', 404);
+    sendSuccess(res, org);
   } catch (err) {
     next(err);
   }
