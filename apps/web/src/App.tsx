@@ -19,7 +19,7 @@ import {
 } from '@/pages/crm/CrmPages';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage,
-  AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
+  AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
@@ -27,6 +27,7 @@ import {
   DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
   PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
   AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
+  PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -91,7 +92,11 @@ export default function App() {
             <Route path="/admin/appointment-management/appointments/:id" element={<Admin><AppointmentManagementDetailPage /></Admin>} />
             <Route path="/admin/appointment-management/today" element={<Admin><AppointmentManagementListPage todayOnly /></Admin>} />
             <Route path="/admin/appointments" element={<Navigate to="/admin/appointment-management/appointments" replace />} />
-            <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
+            <Route path="/admin/payment-management" element={<Admin><PaymentManagementDashboardPage /></Admin>} />
+            <Route path="/admin/payment-management/payments" element={<Admin><PaymentManagementListPage /></Admin>} />
+            <Route path="/admin/payment-management/payments/:id" element={<Admin><PaymentManagementDetailPage /></Admin>} />
+            <Route path="/admin/payment-management/exceptions" element={<Admin><PaymentExceptionsPage /></Admin>} />
+            <Route path="/admin/payments" element={<Navigate to="/admin/payment-management/payments" replace />} />
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />

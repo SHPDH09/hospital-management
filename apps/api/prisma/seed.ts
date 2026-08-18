@@ -280,7 +280,7 @@ async function main() {
 
   const demoDoctor = await prisma.doctor.findFirst({ where: { organizationId: organization.id } });
   if (demoDoctor) {
-    await prisma.appointment.upsert({
+    const demoAppointment = await prisma.appointment.upsert({
       where: { appointmentNumber: 'APT-00001' },
       update: {},
       create: {
@@ -296,6 +296,56 @@ async function main() {
         status: 'CONFIRMED',
         paymentStatus: 'PAID',
         referralSource: 'DIRECT',
+      },
+    });
+
+    const bill = await prisma.bill.upsert({
+      where: { organizationId_billNumber: { organizationId: organization.id, billNumber: 'INV-00001' } },
+      update: {},
+      create: {
+        organizationId: organization.id,
+        patientId: patient.id,
+        appointmentId: demoAppointment.id,
+        billNumber: 'INV-00001',
+        subtotal: 800,
+        tax: 0,
+        discount: 0,
+        total: 800,
+        status: 'PAID',
+        items: {
+          create: {
+            description: 'Consultation Fee',
+            quantity: 1,
+            unitPrice: 800,
+            total: 800,
+          },
+        },
+      },
+    });
+
+    await prisma.payment.upsert({
+      where: { paymentNumber: 'PAY-00001' },
+      update: {},
+      create: {
+        paymentNumber: 'PAY-00001',
+        billId: bill.id,
+        amount: 800,
+        method: 'UPI',
+        purpose: 'APPOINTMENT',
+        status: 'COMPLETED',
+        currency: 'INR',
+        transactionId: 'TXN-DEMO-10245',
+        gateway: 'Razorpay',
+        gatewayOrderId: 'order_demo_001',
+        gatewayPaymentId: 'pay_demo_001',
+        platformFee: 80,
+        providerShare: 720,
+        webhookStatus: 'VERIFIED',
+        webhookVerified: true,
+        riskLevel: 'LOW',
+        reconciliationStatus: 'MATCHED',
+        paidAt: new Date(),
+        capturedAt: new Date(),
       },
     });
   }

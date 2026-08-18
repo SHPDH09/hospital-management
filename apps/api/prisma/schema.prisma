@@ -79,10 +79,48 @@ enum BillStatus {
 }
 
 enum PaymentStatus {
+  INITIATED
+  PROCESSING
+  AUTHORIZED
   PENDING
+  CAPTURED
   COMPLETED
   FAILED
+  CANCELLED
+  EXPIRED
   REFUNDED
+  PARTIAL_REFUND
+  DISPUTED
+}
+
+enum PaymentPurpose {
+  APPOINTMENT
+  CONSULTATION
+  FOLLOW_UP
+  ONLINE_CONSULTATION
+  EMERGENCY
+  HOME_VISIT
+  SERVICE
+  DIAGNOSTIC
+  HEALTH_PACKAGE
+  PROCEDURE
+  TREATMENT
+  SUBSCRIPTION
+  ADVERTISEMENT
+  REFERRAL_COMMISSION
+  OTHER
+}
+
+enum PaymentMethod {
+  UPI
+  CREDIT_CARD
+  DEBIT_CARD
+  NET_BANKING
+  WALLET
+  PAYMENT_LINK
+  CASH
+  POS
+  BANK_TRANSFER
 }
 
 enum SubscriptionPlanTier {
@@ -523,17 +561,39 @@ model BillItem {
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  billId        String
-  amount        Float
-  method        String
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
+  id                String         @id @default(uuid())
+  paymentNumber     String         @unique
+  billId            String
+  amount            Float
+  method            PaymentMethod  @default(UPI)
+  purpose           PaymentPurpose @default(APPOINTMENT)
+  status            PaymentStatus  @default(PENDING)
+  currency          String         @default("INR")
+  transactionId     String?
+  gateway           String?
+  gatewayOrderId    String?
+  gatewayPaymentId  String?
+  idempotencyKey    String?        @unique
+  platformFee       Float          @default(0)
+  providerShare     Float          @default(0)
+  refundAmount      Float          @default(0)
+  refundReason      String?
+  refundId          String?
+  webhookStatus     String?
+  webhookVerified   Boolean        @default(false)
+  riskLevel         String         @default("LOW")
+  reconciliationStatus String?
+  paidAt            DateTime?
+  capturedAt        DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
+  @@index([paymentNumber])
+  @@index([status, createdAt])
+  @@index([gatewayPaymentId])
   @@map("payments")
 }
 

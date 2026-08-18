@@ -54,9 +54,16 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Payment Management',
+    items: [
+      { to: '/admin/payment-management', icon: Receipt, label: 'PM Dashboard' },
+      { to: '/admin/payment-management/payments', icon: CreditCard, label: 'All Payments' },
+      { to: '/admin/payment-management/exceptions', icon: AlertTriangle, label: 'Exceptions' },
+    ],
+  },
+  {
     title: 'Operations',
     items: [
-      { to: '/admin/payments', icon: Receipt, label: 'Payments' },
       { to: '/admin/leads', icon: Target, label: 'Leads' },
       { to: '/admin/reviews', icon: Star, label: 'Reviews' },
     ],

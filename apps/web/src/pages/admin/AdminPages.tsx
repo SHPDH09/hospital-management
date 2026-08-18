@@ -9,6 +9,9 @@ export {
   AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
 } from './AdminAppointmentManagementPages';
 export {
+  PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
+} from './AdminPaymentManagementPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';

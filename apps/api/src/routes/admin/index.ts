@@ -15,6 +15,7 @@ import masterDataRoutes from './master-data';
 import doctorManagementRoutes from './doctors';
 import patientManagementRoutes from './patients';
 import appointmentManagementRoutes from './appointments';
+import paymentManagementRoutes from './payments';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -25,6 +26,7 @@ router.use('/master-data', masterDataRoutes);
 router.use('/doctors', doctorManagementRoutes);
 router.use('/patients', patientManagementRoutes);
 router.use('/appointments', appointmentManagementRoutes);
+router.use('/payments', paymentManagementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -196,26 +198,6 @@ router.post('/organizations/:id/impersonate', async (req: AuthRequest, res, next
       user: { id: staff.user.id, email: staff.user.email, role: staff.user.role },
       redirectTo: '/crm',
     }, 'Impersonation token issued');
-  } catch (err) { next(err); }
-});
-
-// ─── Payments ────────────────────────────────────────────────────────────────
-
-router.get('/payments', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { bill: { include: { patient: { select: { fullName: true } }, organization: { select: { name: true } } } } },
-      }),
-      prisma.payment.count({ where }),
-    ]);
-    sendPaginated(res, payments, { page, limit, total });
   } catch (err) { next(err); }
 });
 
