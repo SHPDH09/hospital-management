@@ -43,10 +43,11 @@ function resolveProfileCompleted(user: User, explicit?: boolean): boolean {
 
 function withProfileCompleted(user: User, explicit?: boolean): User {
   const profileCompleted = resolveProfileCompleted(user, explicit);
+  const autoActivated = ['SUPER_ADMIN', 'PLATFORM_STAFF', 'PATIENT'].includes(user.role);
   return {
     ...user,
     profileCompleted,
-    accountActivated: user.accountActivated ?? true,
+    accountActivated: typeof user.accountActivated === 'boolean' ? user.accountActivated : autoActivated,
   };
 }
 
