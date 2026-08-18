@@ -3,9 +3,9 @@ import { User, Stethoscope, Building2, Users, Shield } from 'lucide-react';
 import { RoleLoginPage } from '@/components/auth/RoleLoginPage';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { apiBaseUrl } from '@/lib/api';
 
 const publicLoginLinks = [
   { to: '/login/patient', label: 'Patient' },
@@ -188,13 +188,13 @@ export function RegisterHospitalPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/organizations/register', {
+      const res = await fetch(`${apiBaseUrl}/organizations/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Registration failed');
+      const data = await res.json().catch(() => null);
+      if (!data?.success) throw new Error(data?.error || 'Registration failed');
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');

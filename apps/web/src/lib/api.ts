@@ -1,6 +1,28 @@
 import { ApiResponse } from '@healthcare/shared';
 
-const API_BASE = '/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+
+async function parseResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  const text = await response.text();
+
+  if (!text) {
+    return {
+      success: false,
+      error: response.ok
+        ? 'Empty response from server'
+        : `Server error (${response.status}). API may be unavailable — check DATABASE_URL on Vercel.`,
+    };
+  }
+
+  try {
+    return JSON.parse(text) as ApiResponse<T>;
+  } catch {
+    return {
+      success: false,
+      error: 'Invalid server response. Ensure the API is deployed and DATABASE_URL is configured.',
+    };
+  }
+}
 
 class ApiClient {
   private accessToken: string | null = null;
@@ -36,20 +58,29 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    } catch {
+      return { success: false, error: 'Network error. Could not reach the API server.' };
+    }
 
     if (response.status === 401 && this.refreshToken) {
       const refreshed = await this.tryRefresh();
       if (refreshed) {
         headers['Authorization'] = `Bearer ${this.accessToken}`;
-        const retry = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
-        return retry.json();
+        try {
+          response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+        } catch {
+          return { success: false, error: 'Network error after token refresh.' };
+        }
+        return parseResponse<T>(response);
       }
       this.clearTokens();
       window.location.href = '/login/patient';
     }
 
-    return response.json();
+    return parseResponse<T>(response);
   }
 
   private async tryRefresh(): Promise<boolean> {
@@ -59,7 +90,7 @@ class ApiClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: this.refreshToken }),
       });
-      const data = await res.json();
+      const data = await parseResponse<{ accessToken: string; refreshToken: string }>(res);
       if (data.success && data.data) {
         this.setTokens(data.data.accessToken, data.data.refreshToken);
         return true;
@@ -84,3 +115,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+export const apiBaseUrl = API_BASE;
