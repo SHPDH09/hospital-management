@@ -303,13 +303,37 @@ async function main() {
 
   // CMS Pages
   const cmsPages = [
-    { slug: 'about', title: 'About Us', content: 'Healthcare Platform — connecting patients with hospitals and clinics.', isPublished: true },
-    { slug: 'terms', title: 'Terms & Conditions', content: 'Terms and conditions for using the platform.', isPublished: true },
-    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data.', isPublished: true },
-    { slug: 'faq', title: 'FAQ', content: 'Frequently asked questions.', isPublished: true },
+    { slug: 'about', title: 'About Us', content: 'Healthcare Platform — connecting patients with hospitals and clinics.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
+    { slug: 'contact', title: 'Contact Us', content: 'Contact us at support@healthcare.platform', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
+    { slug: 'services', title: 'Services', content: 'Find hospitals, clinics, and doctors.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
+    { slug: 'terms', title: 'Terms & Conditions', content: 'Terms and conditions for using the platform.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data. Version 2.1', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'cookie-policy', title: 'Cookie Policy', content: 'Cookie usage policy.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'refund-policy', title: 'Refund Policy', content: 'Refund terms.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
   ];
   for (const page of cmsPages) {
-    await prisma.cmsPage.upsert({ where: { slug: page.slug }, update: {}, create: page });
+    await prisma.cmsPage.upsert({ where: { slug: page.slug }, update: { isPublished: page.isPublished, status: page.status }, create: page });
+  }
+
+  const menuItems = [
+    { label: 'Home', url: '/', sortOrder: 1 },
+    { label: 'Find Doctor', url: '/find/doctors', sortOrder: 2 },
+    { label: 'Find Hospital', url: '/find/hospitals', sortOrder: 3 },
+    { label: 'About', url: '/about', sortOrder: 4 },
+    { label: 'Contact', url: '/contact', sortOrder: 5 },
+  ];
+  for (const item of menuItems) {
+    const existing = await prisma.cmsMenuItem.findFirst({ where: { label: item.label } });
+    if (!existing) await prisma.cmsMenuItem.create({ data: item });
+  }
+
+  const faqs = [
+    { question: 'How do I book an appointment?', answer: 'Search for a hospital or doctor and click Book Appointment.', category: 'Patients' },
+    { question: 'How do hospitals register?', answer: 'Click Register Hospital on the homepage.', category: 'Hospitals' },
+  ];
+  for (const faq of faqs) {
+    const existing = await prisma.cmsFaq.findFirst({ where: { question: faq.question } });
+    if (!existing) await prisma.cmsFaq.create({ data: faq });
   }
 
   // Communication Templates

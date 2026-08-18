@@ -759,16 +759,247 @@ model LoginHistory {
   @@map("login_history")
 }
 
+enum CmsContentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CmsPageType {
+  STATIC
+  LEGAL
+  LOCATION
+}
+
 model CmsPage {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  title       String
-  content     String   @db.Text
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String           @id @default(uuid())
+  slug            String           @unique
+  title           String
+  content         String           @db.Text
+  pageType        CmsPageType      @default(STATIC)
+  status          CmsContentStatus @default(DRAFT)
+  isPublished     Boolean          @default(false)
+  metaTitle       String?
+  metaDescription String?
+  keywords        String?
+  canonicalUrl    String?
+  ogTitle         String?
+  ogDescription   String?
+  ogImageUrl      String?
+  robots          String?          @default("index,follow")
+  publishAt       DateTime?
+  unpublishAt     DateTime?
+  version         Int              @default(1)
+  authorEmail     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@map("cms_pages")
+}
+
+model CmsBlog {
+  id              String           @id @default(uuid())
+  title           String
+  slug            String           @unique
+  coverImageUrl   String?
+  content         String           @db.Text
+  author          String?
+  category        String?
+  tags            String[]
+  metaTitle       String?
+  metaDescription String?
+  keywords        String?
+  status          CmsContentStatus @default(DRAFT)
+  publishAt       DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("cms_blogs")
+}
+
+model CmsBanner {
+  id          String           @id @default(uuid())
+  title       String
+  bannerType  String           @default("HOMEPAGE")
+  imageUrl    String?
+  mobileImageUrl String?
+  description String?
+  ctaText     String?
+  ctaLink     String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      CmsContentStatus @default(DRAFT)
+  sortOrder   Int              @default(0)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("cms_banners")
+}
+
+model CmsFaq {
+  id        String           @id @default(uuid())
+  question  String
+  answer    String           @db.Text
+  category  String           @default("General")
+  status    CmsContentStatus @default(PUBLISHED)
+  sortOrder Int              @default(0)
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("cms_faqs")
+}
+
+model CmsTestimonial {
+  id        String           @id @default(uuid())
+  name      String
+  imageUrl  String?
+  role      String?
+  content   String           @db.Text
+  rating    Int              @default(5)
+  status    CmsContentStatus @default(DRAFT)
+  isActive  Boolean          @default(true)
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("cms_testimonials")
+}
+
+model CmsPromotion {
+  id          String           @id @default(uuid())
+  title       String
+  description String?
+  imageUrl    String?
+  ctaText     String?
+  ctaLink     String?
+  promoType   String           @default("OFFER")
+  startDate   DateTime?
+  endDate     DateTime?
+  status      CmsContentStatus @default(DRAFT)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("cms_promotions")
+}
+
+model CmsMedia {
+  id        String   @id @default(uuid())
+  filename  String
+  url       String
+  mimeType  String?
+  size      Int?
+  folder    String?  @default("general")
+  altText   String?
+  createdAt DateTime @default(now())
+
+  @@map("cms_media")
+}
+
+model CmsMenuItem {
+  id        String   @id @default(uuid())
+  label     String
+  url       String
+  parentId  String?
+  target    String?  @default("_self")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   CmsMenuItem?  @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children CmsMenuItem[] @relation("MenuHierarchy")
+
+  @@map("cms_menu_items")
+}
+
+model CmsFooterLink {
+  id        String   @id @default(uuid())
+  section   String
+  label     String
+  url       String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("cms_footer_links")
+}
+
+model CmsHomepageSection {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  title     String
+  content   Json?
+  isVisible Boolean  @default(true)
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("cms_homepage_sections")
+}
+
+model CmsFeaturedItem {
+  id        String   @id @default(uuid())
+  itemType  String
+  refId     String?
+  refName   String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([itemType, isActive])
+  @@map("cms_featured_items")
+}
+
+model CmsHealthArticle {
+  id              String           @id @default(uuid())
+  title           String
+  slug            String           @unique
+  category        String?
+  content         String           @db.Text
+  coverImageUrl   String?
+  metaTitle       String?
+  metaDescription String?
+  status          CmsContentStatus @default(DRAFT)
+  publishAt       DateTime?
+  authorEmail     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("cms_health_articles")
+}
+
+model CmsLocationPage {
+  id              String           @id @default(uuid())
+  city            String
+  state           String?
+  slug            String           @unique
+  title           String
+  content         String           @db.Text
+  metaTitle       String?
+  metaDescription String?
+  status          CmsContentStatus @default(DRAFT)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("cms_location_pages")
+}
+
+model CmsVersion {
+  id          String   @id @default(uuid())
+  entityType  String
+  entityId    String
+  version     Int
+  data        Json
+  changedBy   String?
+  changeNote  String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@map("cms_versions")
 }
 
 model Specialization {

@@ -13,6 +13,7 @@ import couponRoutes from './coupons';
 import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
 import communicationRoutes from './communications';
+import cmsRoutes from './cms';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -21,6 +22,7 @@ router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
 router.use('/communications', communicationRoutes);
+router.use('/cms', cmsRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -544,32 +546,6 @@ router.delete('/security/sessions/:userId', async (req: AuthRequest, res, next) 
     await prisma.refreshToken.deleteMany({ where: { userId } });
     await logAudit(req, 'FORCE_LOGOUT', 'User', userId);
     sendSuccess(res, null, 'All sessions revoked');
-  } catch (err) { next(err); }
-});
-
-// ─── CMS ─────────────────────────────────────────────────────────────────────
-
-router.get('/cms', async (_req, res, next) => {
-  try {
-    const pages = await prisma.cmsPage.findMany({ orderBy: { title: 'asc' } });
-    sendSuccess(res, pages);
-  } catch (err) { next(err); }
-});
-
-router.post('/cms', validateBody(z.object({
-  slug: z.string(), title: z.string(), content: z.string(), isPublished: z.boolean().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const page = await prisma.cmsPage.create({ data: req.body });
-    sendSuccess(res, page, 'Page created', 201);
-  } catch (err) { next(err); }
-});
-
-router.patch('/cms/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const page = await prisma.cmsPage.update({ where: { id }, data: req.body });
-    sendSuccess(res, page);
   } catch (err) { next(err); }
 });
 

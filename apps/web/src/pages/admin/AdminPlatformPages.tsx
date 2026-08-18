@@ -296,23 +296,6 @@ export function AdminLocationsPage() {
   );
 }
 
-export function AdminCmsPage() {
-  const { data, isLoading } = useList('/admin/cms');
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="CMS Management" subtitle="Website content — About, FAQ, Terms, Privacy" />
-      {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'title', label: 'Page' },
-          { key: 'slug', label: 'Slug' },
-          { key: 'isPublished', label: 'Status', render: (r) => <StatusBadge status={r.isPublished ? 'ACTIVE' : 'PENDING'} /> },
-          { key: 'updatedAt', label: 'Updated', render: (r) => formatDate(r.updatedAt as string) },
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-      )}
-    </DashboardLayout>
-  );
-}
-
 export function AdminSettingsPage() {
   const { data, isLoading } = useList('/admin/settings');
   return (
