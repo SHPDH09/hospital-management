@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma, readDb } from '../lib/prisma';
+import { prisma, readDb, TransactionClient } from '../lib/prisma';
 import { hashPassword, slugify } from '../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
@@ -47,7 +47,7 @@ router.post('/register', validateBody(registerOrgSchema), async (req, res, next)
     const passwordHash = await hashPassword(data.password);
     const starterPlan = await prisma.subscriptionPlan.findUnique({ where: { tier: 'STARTER' } });
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: TransactionClient) => {
       const user = await tx.user.create({
         data: { email: data.email, phone: data.phone, passwordHash, role: 'HOSPITAL_ADMIN' },
       });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/prisma';
+import { prisma, TransactionClient } from '../lib/prisma';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
@@ -82,7 +82,7 @@ router.post('/', authenticate, requireRoles(...CRM_ROLES), validateBody(createPa
 
     const data = req.body;
 
-    const patient = await prisma.$transaction(async (tx) => {
+    const patient = await prisma.$transaction(async (tx: TransactionClient) => {
       let patientRecord;
 
       if (data.email) {
