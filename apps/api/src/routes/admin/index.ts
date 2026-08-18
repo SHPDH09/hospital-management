@@ -12,6 +12,7 @@ import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
 import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
+import communicationRoutes from './communications';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -19,6 +20,7 @@ router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
+router.use('/communications', communicationRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -568,24 +570,6 @@ router.patch('/cms/:id', async (req: AuthRequest, res, next) => {
     const id = paramId(req.params.id);
     const page = await prisma.cmsPage.update({ where: { id }, data: req.body });
     sendSuccess(res, page);
-  } catch (err) { next(err); }
-});
-
-// ─── Communication Templates ─────────────────────────────────────────────────
-
-router.get('/communications', async (_req, res, next) => {
-  try {
-    const templates = await prisma.communicationTemplate.findMany({ orderBy: { name: 'asc' } });
-    sendSuccess(res, templates);
-  } catch (err) { next(err); }
-});
-
-router.post('/communications', validateBody(z.object({
-  name: z.string(), channel: z.string(), subject: z.string().optional(), body: z.string(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const tpl = await prisma.communicationTemplate.create({ data: req.body });
-    sendSuccess(res, tpl, 'Template created', 201);
   } catch (err) { next(err); }
 });
 

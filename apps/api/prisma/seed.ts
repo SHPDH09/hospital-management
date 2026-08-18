@@ -314,13 +314,21 @@ async function main() {
 
   // Communication Templates
   const templates = [
-    { name: 'Appointment Confirmation', channel: 'EMAIL', subject: 'Appointment Confirmed', body: 'Your appointment has been confirmed.' },
-    { name: 'Payment Receipt', channel: 'EMAIL', subject: 'Payment Received', body: 'Thank you for your payment.' },
-    { name: 'Welcome Message', channel: 'SMS', body: 'Welcome to Healthcare Platform!' },
-    { name: 'Password Reset', channel: 'EMAIL', subject: 'Reset Password', body: 'Click the link to reset your password.' },
+    { name: 'Appointment Confirmed', channel: 'EMAIL' as const, category: 'Appointment', subject: 'Appointment Confirmed', body: 'Hello {{patient_name}}, your appointment with {{doctor_name}} at {{hospital_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.' },
+    { name: 'Appointment Reminder', channel: 'SMS' as const, category: 'Appointment Reminder', body: 'Reminder: Your appointment with {{doctor_name}} is on {{appointment_date}} at {{appointment_time}}.' },
+    { name: 'Payment Successful', channel: 'EMAIL' as const, category: 'Payment', subject: 'Payment Received', body: 'Payment of {{amount}} received. Invoice: {{invoice_number}}.' },
+    { name: 'Welcome', channel: 'EMAIL' as const, category: 'Account', subject: 'Welcome', body: 'Welcome {{patient_name}} to Healthcare Platform!' },
+    { name: 'Subscription Expiring', channel: 'SMS' as const, category: 'Subscription', body: 'Your subscription at {{hospital_name}} is expiring soon.' },
+    { name: 'Lab Report Available', channel: 'WHATSAPP' as const, category: 'Healthcare', body: 'Hello {{patient_name}}, your lab report is now available.' },
+    { name: 'Appointment Push', channel: 'PUSH' as const, category: 'Appointment', body: 'New appointment booked with {{doctor_name}}.' },
   ];
   for (const tpl of templates) {
-    await prisma.communicationTemplate.create({ data: tpl });
+    const existing = await prisma.communicationTemplate.findFirst({ where: { name: tpl.name } });
+    if (!existing) {
+      await prisma.communicationTemplate.create({
+        data: { ...tpl, variables: ['patient_name', 'doctor_name', 'hospital_name', 'appointment_date', 'appointment_time', 'amount', 'invoice_number'] },
+      });
+    }
   }
 
   // Locations

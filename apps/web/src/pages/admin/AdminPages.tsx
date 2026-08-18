@@ -9,10 +9,11 @@ export {
 } from './AdminCommercePages';
 export { AdminSubscriptionsPage } from './AdminSubscriptionPages';
 export { AdminMasterDataPage } from './AdminMasterDataPages';
+export { AdminCommunicationsPage } from './AdminCommunicationPages';
 export {
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from './AdminPlatformPages';
 
 // Legacy aliases

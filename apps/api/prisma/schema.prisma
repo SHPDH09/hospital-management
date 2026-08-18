@@ -961,14 +961,128 @@ model Location {
 }
 
 model CommunicationTemplate {
-  id        String   @id @default(uuid())
+  id        String              @id @default(uuid())
   name      String
-  channel   String
+  channel   CommunicationChannel
+  category  String?
   subject   String?
-  body      String   @db.Text
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  body      String              @db.Text
+  variables String[]
+  isActive  Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  messages CommunicationMessage[]
 
   @@map("communication_templates")
+}
+
+enum CommunicationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum CommunicationStatus {
+  PENDING
+  SCHEDULED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum AnnouncementType {
+  INFORMATION
+  WARNING
+  MAINTENANCE
+  EMERGENCY
+}
+
+model CommunicationMessage {
+  id             String                @id @default(uuid())
+  channel        CommunicationChannel
+  status         CommunicationStatus   @default(PENDING)
+  recipientType  String?
+  recipientId    String?
+  recipientEmail String?
+  recipientPhone String?
+  recipientName  String?
+  subject        String?
+  body           String                @db.Text
+  templateId     String?
+  campaignId     String?
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  failureReason  String?
+  cost           Float?
+  metadata       Json?
+  createdById    String?
+  createdByEmail String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  template CommunicationTemplate? @relation(fields: [templateId], references: [id])
+  campaign CommunicationCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([channel, status, createdAt])
+  @@index([recipientId])
+  @@index([scheduledAt])
+  @@map("communication_messages")
+}
+
+model CommunicationCampaign {
+  id          String                @id @default(uuid())
+  name        String
+  description String?
+  channels    CommunicationChannel[]
+  audience    Json?
+  subject     String?
+  body        String                @db.Text
+  status      String                @default("DRAFT")
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  stats       Json?
+  createdById String?
+  createdByEmail String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  messages CommunicationMessage[]
+
+  @@map("communication_campaigns")
+}
+
+model ScheduledCommunication {
+  id          String               @id @default(uuid())
+  name        String
+  channel     CommunicationChannel
+  cronExpr    String?
+  runAt       DateTime?
+  templateId  String?
+  audience    Json?
+  isActive    Boolean              @default(true)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@map("scheduled_communications")
+}
+
+model SystemAnnouncement {
+  id        String           @id @default(uuid())
+  title     String
+  message   String           @db.Text
+  type      AnnouncementType @default(INFORMATION)
+  audience  String[]
+  isActive  Boolean          @default(true)
+  startsAt  DateTime         @default(now())
+  endsAt    DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("system_announcements")
 }

@@ -296,23 +296,6 @@ export function AdminLocationsPage() {
   );
 }
 
-export function AdminCommunicationsPage() {
-  const { data, isLoading } = useList('/admin/communications');
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Communication Center" subtitle="Email, SMS, WhatsApp templates" />
-      {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'name', label: 'Template' },
-          { key: 'channel', label: 'Channel' },
-          { key: 'subject', label: 'Subject' },
-          { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'SUSPENDED'} /> },
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-      )}
-    </DashboardLayout>
-  );
-}
-
 export function AdminCmsPage() {
   const { data, isLoading } = useList('/admin/cms');
   return (

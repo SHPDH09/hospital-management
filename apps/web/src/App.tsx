@@ -90,7 +90,7 @@ export default function App() {
             <Route path="/admin/complaints" element={<Admin><AdminComplaintsPage /></Admin>} />
             <Route path="/admin/locations" element={<Admin><AdminLocationsPage /></Admin>} />
             <Route path="/admin/master-data/*" element={<Admin><AdminMasterDataPage /></Admin>} />
-            <Route path="/admin/communications" element={<Admin><AdminCommunicationsPage /></Admin>} />
+            <Route path="/admin/communications/*" element={<Admin><AdminCommunicationsPage /></Admin>} />
             <Route path="/admin/cms" element={<Admin><AdminCmsPage /></Admin>} />
             <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />
             <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
