@@ -6,9 +6,11 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { HomePage } from '@/pages/public/HomePage';
 import { FindHospitalsPage, FindClinicsPage, FindDoctorsPage } from '@/pages/public/SearchPages';
 import {
-  LoginPage, PatientLoginPage, DoctorLoginPage, HospitalLoginPage,
+  LoginPage, DoctorLoginPage, HospitalLoginPage,
   StaffLoginPage, AdminLoginPage, RegisterPage, RegisterHospitalPage,
 } from '@/pages/public/AuthPages';
+import { PatientLoginPage } from '@/pages/public/PatientLoginPage';
+import { PatientCompleteProfilePage } from '@/pages/patient/PatientCompleteProfilePage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
@@ -62,6 +64,7 @@ export default function App() {
 
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
+            <Route path="/patient/complete-profile" element={<ProtectedRoute roles={['PATIENT']} allowIncompleteProfile><PatientCompleteProfilePage /></ProtectedRoute>} />
 
             <Route path="/crm" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmDashboard /></ProtectedRoute>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />

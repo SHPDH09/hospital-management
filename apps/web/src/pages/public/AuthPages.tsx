@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { User, Stethoscope, Building2, Users, Shield } from 'lucide-react';
+import { Stethoscope, Building2, Users, Shield } from 'lucide-react';
 import { RoleLoginPage } from '@/components/auth/RoleLoginPage';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { useState } from 'react';
@@ -13,23 +13,6 @@ const publicLoginLinks = [
   { to: '/login/hospital', label: 'Hospital' },
   { to: '/login/staff', label: 'Staff' },
 ];
-
-export function PatientLoginPage() {
-  return (
-    <RoleLoginPage
-      config={{
-        title: 'Patient Login',
-        subtitle: 'Sign in to book appointments and manage your health records',
-        allowedRoles: ['PATIENT'],
-        portalKey: 'patient',
-        icon: <User className="h-10 w-10 text-primary-600" />,
-        registerLink: { to: '/register', label: 'Create patient account' },
-        alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/patient'),
-        showDemo: true,
-      }}
-    />
-  );
-}
 
 export function DoctorLoginPage() {
   return (
@@ -111,8 +94,8 @@ export function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await register(form);
-      navigate('/patient');
+      const profileCompleted = await register(form);
+      navigate(profileCompleted ? '/patient' : '/patient/complete-profile');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

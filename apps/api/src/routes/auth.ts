@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { hashPassword, comparePassword, signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/auth';
@@ -11,6 +12,8 @@ import {
   verifyPasswordResetOtp,
   resetPasswordWithToken,
 } from '../lib/password-reset';
+import { verifyGoogleIdToken, isGoogleAuthConfigured } from '../lib/google-auth';
+import { computeProfileCompletion, profileToResponse } from '../lib/patient-profile';
 
 const router = Router();
 
@@ -97,7 +100,15 @@ router.post('/login', validateBody(loginSchema), async (req, res, next) => {
       await logLogin(fullUser.email, true, fullUser.id, undefined, req);
 
       const tokens = await issueTokens(fullUser.id, fullUser.email, fullUser.role);
-      sendSuccess(res, { user: sanitizeUser(fullUser), ...tokens }, 'Login successful');
+      const safe = sanitizeUser(fullUser);
+      let profileCompleted = false;
+      if (fullUser.role === 'PATIENT' && fullUser.patient) {
+        const profile = profileToResponse(fullUser.patient as never);
+        (safe as Record<string, unknown>).patient = profile;
+        profileCompleted = profile.profileCompleted;
+        (safe as Record<string, unknown>).profileCompleted = profileCompleted;
+      }
+      sendSuccess(res, { user: safe, ...tokens, profileCompleted }, 'Login successful');
       return;
     }
 
@@ -144,13 +155,128 @@ router.get('/me', authenticate, async (req: AuthRequest, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      include: { patient: true, doctor: true, staff: true },
+      include: {
+        patient: { include: { user: { select: { email: true, phone: true, phoneVerified: true, emailVerified: true, profilePhotoUrl: true } } } },
+        doctor: true,
+        staff: true,
+      },
     });
     if (!user) return sendError(res, 'User not found', 404);
-    sendSuccess(res, sanitizeUser(user));
+
+    const safe = sanitizeUser(user);
+    if (user.patient && user.role === 'PATIENT') {
+      const profile = profileToResponse(user.patient as never);
+      (safe as Record<string, unknown>).patient = profile;
+      (safe as Record<string, unknown>).profileCompleted = profile.profileCompleted;
+    }
+    sendSuccess(res, safe);
   } catch (err) {
     next(err);
   }
+});
+
+// ─── Google Authentication (Patients) ────────────────────────────────────────
+
+router.get('/google/config', async (_req, res) => {
+  sendSuccess(res, {
+    enabled: isGoogleAuthConfigured(),
+    clientId: process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || null,
+  });
+});
+
+router.post('/google', validateBody(z.object({
+  credential: z.string().min(1),
+})), async (req, res, next) => {
+  try {
+    const googleUser = await verifyGoogleIdToken(req.body.credential);
+
+    let user = await prisma.user.findFirst({
+      where: { OR: [{ googleId: googleUser.googleId }, { email: googleUser.email }] },
+      include: {
+        patient: { include: { user: { select: { email: true, phone: true, phoneVerified: true, emailVerified: true, profilePhotoUrl: true } } } },
+      },
+    });
+
+    if (user && user.role !== 'PATIENT') {
+      throw new AppError('This Google account is linked to a non-patient account. Use the correct login portal.', 403);
+    }
+
+    if (!user) {
+      const randomPassword = await hashPassword(crypto.randomBytes(32).toString('hex'));
+      user = await prisma.user.create({
+        data: {
+          email: googleUser.email,
+          passwordHash: randomPassword,
+          role: 'PATIENT',
+          authProvider: 'google',
+          googleId: googleUser.googleId,
+          profilePhotoUrl: googleUser.profilePhoto,
+          emailVerified: googleUser.emailVerified,
+          patient: {
+            create: {
+              fullName: googleUser.fullName,
+              profilePhoto: googleUser.profilePhoto,
+              profileCompleted: false,
+              profileCompletionStep: 'basic',
+            },
+          },
+        },
+        include: {
+          patient: { include: { user: { select: { email: true, phone: true, phoneVerified: true, emailVerified: true, profilePhotoUrl: true } } } },
+        },
+      });
+    } else {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId: googleUser.googleId,
+          authProvider: user.authProvider === 'local' ? 'google' : user.authProvider,
+          profilePhotoUrl: googleUser.profilePhoto || user.profilePhotoUrl,
+          emailVerified: googleUser.emailVerified || user.emailVerified,
+        },
+        include: {
+          patient: { include: { user: { select: { email: true, phone: true, phoneVerified: true, emailVerified: true, profilePhotoUrl: true } } } },
+        },
+      });
+
+      if (!user.patient) {
+        await prisma.patient.create({
+          data: {
+            userId: user.id,
+            fullName: googleUser.fullName,
+            profilePhoto: googleUser.profilePhoto,
+            profileCompleted: false,
+          },
+        });
+        user = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: {
+            patient: { include: { user: { select: { email: true, phone: true, phoneVerified: true, emailVerified: true, profilePhotoUrl: true } } } },
+          },
+        }) as typeof user;
+      } else if (!user.patient.fullName || user.patient.fullName === googleUser.email.split('@')[0]) {
+        await prisma.patient.update({
+          where: { id: user.patient.id },
+          data: { fullName: googleUser.fullName, profilePhoto: googleUser.profilePhoto || user.patient.profilePhoto },
+        });
+      }
+    }
+
+    if (!user) throw new AppError('Failed to create account', 500);
+
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await logLogin(googleUser.email, true, user.id, 'Google login', req);
+
+    const tokens = await issueTokens(user.id, user.email, user.role);
+    const safe = sanitizeUser(user);
+    const profile = user.patient ? profileToResponse(user.patient as never) : null;
+    if (profile) {
+      (safe as Record<string, unknown>).patient = profile;
+      (safe as Record<string, unknown>).profileCompleted = profile.profileCompleted;
+    }
+
+    sendSuccess(res, { user: safe, ...tokens, profileCompleted: profile?.profileCompleted ?? false }, 'Google login successful');
+  } catch (err) { next(err); }
 });
 
 // ─── Forgot Password ─────────────────────────────────────────────────────────

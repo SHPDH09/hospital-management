@@ -255,7 +255,7 @@ async function main() {
 
   const patient = await prisma.patient.upsert({
     where: { userId: patientUser.id },
-    update: {},
+    update: { profileCompleted: true, profileCompletionPercent: 100 },
     create: {
       userId: patientUser.id,
       fullName: 'Rahul Verma',
@@ -264,8 +264,20 @@ async function main() {
       address: '78 Lake View Apartments',
       city: 'Mumbai',
       state: 'Maharashtra',
+      country: 'India',
+      pinCode: '400001',
       emergencyContact: '+91-9876543298',
+      emergencyContactName: 'Priya Verma',
+      profileCompleted: true,
+      profileCompletionPercent: 100,
+      termsAcceptedAt: new Date(),
+      privacyAcceptedAt: new Date(),
     },
+  });
+
+  await prisma.user.update({
+    where: { id: patientUser.id },
+    data: { phoneVerified: true },
   });
 
   await prisma.patientOrganization.create({
