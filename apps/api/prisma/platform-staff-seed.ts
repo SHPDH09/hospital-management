@@ -13,13 +13,21 @@ export async function seedPlatformStaff(prisma: PrismaClient) {
   for (const tpl of DEFAULT_ROLE_TEMPLATES) {
     await prisma.platformStaffRole.upsert({
       where: { name: tpl.name },
-      update: {},
+      update: {
+        permissions: tpl.permissions,
+        roleType: tpl.roleType,
+        level: tpl.level,
+        organizationScope: tpl.organizationScope,
+        description: tpl.description,
+      },
       create: {
         name: tpl.name,
         code: tpl.code,
         description: tpl.description,
+        roleType: tpl.roleType,
         level: tpl.level,
         permissions: tpl.permissions,
+        organizationScope: tpl.organizationScope,
         isSystem: true,
       },
     });

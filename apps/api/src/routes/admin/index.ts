@@ -18,6 +18,7 @@ import settingsRoutes from './settings';
 import emergencyRoutes from './emergency';
 import advertisementRoutes from './advertisements';
 import platformStaffRoutes from './platform-staff';
+import permissionsRoutes from './permissions';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -31,6 +32,7 @@ router.use('/settings', settingsRoutes);
 router.use('/emergency', emergencyRoutes);
 router.use('/advertisements', advertisementRoutes);
 router.use('/platform-staff', platformStaffRoutes);
+router.use('/permissions', permissionsRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 

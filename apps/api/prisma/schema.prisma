@@ -1143,6 +1143,7 @@ model PlatformDepartment {
   updatedAt   DateTime @updatedAt
 
   staff PlatformStaffProfile[]
+  roles PlatformStaffRole[]
 
   @@map("platform_departments")
 }
@@ -1536,6 +1537,27 @@ enum PlatformStaffStatus {
   SUSPENDED
 }
 
+enum PlatformRoleType {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  DEPARTMENT_MANAGER
+  PLATFORM_STAFF
+}
+
+enum OrganizationScope {
+  ALL_ORGANIZATIONS
+  ASSIGNED_ORGANIZATIONS
+  OWN_DEPARTMENT
+  OWN_RECORDS
+}
+
+enum PermissionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
 enum PlatformTaskStatus {
   PENDING
   IN_PROGRESS
@@ -1551,47 +1573,63 @@ enum PlatformTaskPriority {
 }
 
 model PlatformStaffRole {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  code        String?  @unique
-  description String?
-  level       Int      @default(3)
-  permissions Json
-  isSystem    Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                  String             @id @default(uuid())
+  name                String             @unique
+  code                String?            @unique
+  description         String?
+  roleType            PlatformRoleType   @default(PLATFORM_STAFF)
+  level               Int                @default(3)
+  permissions         Json
+  deniedPermissions   Json?
+  fieldPermissions    Json?
+  organizationScope   OrganizationScope  @default(ASSIGNED_ORGANIZATIONS)
+  locationScope       Json?
+  departmentId        String?
+  parentRoleId        String?
+  isSystem            Boolean            @default(false)
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  staff PlatformStaffProfile[]
+  department   PlatformDepartment?  @relation(fields: [departmentId], references: [id])
+  parentRole   PlatformStaffRole?   @relation("RoleHierarchy", fields: [parentRoleId], references: [id])
+  childRoles   PlatformStaffRole[]  @relation("RoleHierarchy")
+  staff        PlatformStaffProfile[]
 
   @@map("platform_staff_roles")
 }
 
 model PlatformStaffProfile {
-  id                String              @id @default(uuid())
-  userId            String              @unique
-  fullName          String
-  profilePhoto      String?
-  phone             String?
-  employeeId        String?             @unique
-  departmentId      String?
-  designation       String?
-  platformRoleId    String?
-  joiningDate       DateTime?
-  status            PlatformStaffStatus @default(ACTIVE)
-  customPermissions Json?
-  assignedLocations String[]
-  twoFactorEnabled  Boolean             @default(false)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                  String              @id @default(uuid())
+  userId              String              @unique
+  fullName            String
+  profilePhoto        String?
+  phone               String?
+  employeeId          String?             @unique
+  departmentId        String?
+  designation         String?
+  platformRoleId      String?
+  joiningDate         DateTime?
+  status              PlatformStaffStatus @default(ACTIVE)
+  customPermissions   Json?
+  permissionDenials   Json?
+  fieldPermissions    Json?
+  organizationScope   OrganizationScope?
+  assignedLocations   String[]
+  twoFactorEnabled    Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
-  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department   PlatformDepartment?      @relation(fields: [departmentId], references: [id])
-  platformRole PlatformStaffRole?       @relation(fields: [platformRoleId], references: [id])
-  tasks        PlatformStaffTask[]      @relation("AssignedTasks")
+  user         User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   PlatformDepartment?          @relation(fields: [departmentId], references: [id])
+  platformRole PlatformStaffRole?           @relation(fields: [platformRoleId], references: [id])
+  tasks        PlatformStaffTask[]          @relation("AssignedTasks")
   assignments  PlatformStaffAssignment[]
   activities   PlatformStaffActivity[]
   attendance   PlatformStaffAttendance[]
+  tempPermissions PlatformTemporaryPermission[]
+  permissionRequests PlatformPermissionRequest[] @relation("Requester")
+  permissionHistory PlatformPermissionHistory[]
 
   @@map("platform_staff_profiles")
 }
@@ -1673,4 +1711,58 @@ model PlatformStaffAnnouncement {
   updatedAt      DateTime @updatedAt
 
   @@map("platform_staff_announcements")
+}
+
+model PlatformPermissionHistory {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  module         String
+  action         String
+  previousValue  String?
+  newValue       String?
+  changedByEmail String?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, createdAt])
+  @@map("platform_permission_history")
+}
+
+model PlatformTemporaryPermission {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  module         String
+  action         String
+  reason         String?
+  startsAt       DateTime @default(now())
+  expiresAt      DateTime
+  grantedByEmail String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, expiresAt])
+  @@map("platform_temporary_permissions")
+}
+
+model PlatformPermissionRequest {
+  id             String                  @id @default(uuid())
+  staffProfileId String
+  module         String
+  action         String
+  reason         String
+  status         PermissionRequestStatus @default(PENDING)
+  reviewedByEmail String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  staffProfile PlatformStaffProfile @relation("Requester", fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("platform_permission_requests")
 }

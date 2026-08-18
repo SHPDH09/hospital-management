@@ -13,7 +13,7 @@ import {
   DEFAULT_ROLE_TEMPLATES,
   mergePermissions,
   StaffPermissions,
-} from '../../lib/platform-staff';
+} from '../../lib/permissions';
 
 const router = Router();
 

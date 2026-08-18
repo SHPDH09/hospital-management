@@ -15,6 +15,7 @@ export { AdminCmsPage } from './AdminCmsPages';
 export { AdminSettingsPage } from './AdminSettingsPages';
 export { AdminEmergencyPage } from './AdminEmergencyPages';
 export { AdminStaffPage } from './AdminPlatformStaffPages';
+export { AdminPermissionsPage } from './AdminPermissionsPages';
 export {
   AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage,

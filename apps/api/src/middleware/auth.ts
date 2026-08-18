@@ -12,6 +12,7 @@ export interface AuthRequest extends Request {
     organizationId?: string;
     branchId?: string;
   };
+  userAccess?: import('./permissions').ResolvedAccess;
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
