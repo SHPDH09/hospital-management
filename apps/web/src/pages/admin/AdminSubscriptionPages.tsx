@@ -310,7 +310,7 @@ function AllSubscriptionsPage({ filter = '' }: { filter?: string }) {
           { key: 'endDate', label: 'Expiry', render: (r) => r.endDate ? formatDate(r.endDate as string) : '-' },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
           { key: 'source', label: 'Source', render: (r) => <span className="text-xs text-gray-500">{r.changeSource as string}</span> },
-          { key: 'actions', label: 'Actions', render: (r) => <SubscriptionActions sub={r} onDone={refetch} /> },
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => <SubscriptionActions sub={r} onDone={refetch} /> },
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}
     </SubscriptionLayout>

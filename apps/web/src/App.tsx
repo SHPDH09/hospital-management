@@ -21,8 +21,8 @@ import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
-  AdminStaffPage, AdminPermissionsPage, AdminSecurityPage, AdminAuditLogsPage,
-  AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
+  AdminStaffPage, AdminPermissionsPage, AdminSupportPage, AdminSecurityPage, AdminAuditLogsPage,
+  AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from '@/pages/admin/AdminPages';
 
@@ -88,7 +88,8 @@ export default function App() {
             <Route path="/admin/roles" element={<Navigate to="/admin/permissions" replace />} />
             <Route path="/admin/security" element={<Admin><AdminSecurityPage /></Admin>} />
             <Route path="/admin/audit-logs" element={<Admin><AdminAuditLogsPage /></Admin>} />
-            <Route path="/admin/complaints" element={<Admin><AdminComplaintsPage /></Admin>} />
+            <Route path="/admin/support/*" element={<Admin><AdminSupportPage /></Admin>} />
+            <Route path="/admin/complaints" element={<Navigate to="/admin/support" replace />} />
             <Route path="/admin/locations" element={<Admin><AdminLocationsPage /></Admin>} />
             <Route path="/admin/master-data/*" element={<Admin><AdminMasterDataPage /></Admin>} />
             <Route path="/admin/communications/*" element={<Admin><AdminCommunicationsPage /></Admin>} />

@@ -308,6 +308,9 @@ async function main() {
   const { seedPlatformStaff } = await import('./platform-staff-seed');
   await seedPlatformStaff(prisma);
 
+  const { seedSupport } = await import('./support-seed');
+  await seedSupport(prisma);
+
   // Specializations (Master Data)
   const specs = [
     { name: 'Cardiology', department: 'Cardiology', services: ['ECG', 'Echo', 'Stress Test', 'Cardiac Surgery'] },

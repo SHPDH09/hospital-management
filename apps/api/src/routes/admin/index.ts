@@ -19,6 +19,7 @@ import emergencyRoutes from './emergency';
 import advertisementRoutes from './advertisements';
 import platformStaffRoutes from './platform-staff';
 import permissionsRoutes from './permissions';
+import supportRoutes from './support';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -33,6 +34,7 @@ router.use('/emergency', emergencyRoutes);
 router.use('/advertisements', advertisementRoutes);
 router.use('/platform-staff', platformStaffRoutes);
 router.use('/permissions', permissionsRoutes);
+router.use('/support', supportRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -376,19 +378,18 @@ router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
 });
 
 
-// ─── Complaints ──────────────────────────────────────────────────────────────
-
+// Legacy complaints routes (backward compatible)
 router.get('/complaints', async (req, res, next) => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
+    const where = status ? { status: status as never, isArchived: false } : { isArchived: false };
     const [complaints, total] = await Promise.all([
       prisma.complaint.findMany({
         where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { assignedTo: { select: { email: true } }, organization: { select: { name: true } } },
+        include: { assignedTo: { select: { email: true } }, organization: { select: { name: true } }, category: true },
       }),
       prisma.complaint.count({ where }),
     ]);
@@ -402,7 +403,8 @@ router.post('/complaints', validateBody(z.object({
   complainantEmail: z.string().optional(), organizationId: z.string().optional(),
 })), async (req: AuthRequest, res, next) => {
   try {
-    const ticketId = `TKT-${Date.now().toString(36).toUpperCase()}`;
+    const { generateTicketId } = await import('../../lib/support');
+    const ticketId = generateTicketId();
     const complaint = await prisma.complaint.create({ data: { ...req.body, ticketId } });
     sendSuccess(res, complaint, 'Complaint created', 201);
   } catch (err) { next(err); }

@@ -163,6 +163,7 @@ model User {
   auditLogs     AuditLog[]
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
+  createdTickets     Complaint[] @relation("UserTickets")
   platformStaffProfile PlatformStaffProfile?
 
   @@map("users")
@@ -763,10 +764,14 @@ model Notification {
 
 enum ComplaintStatus {
   NEW
+  OPEN
   ASSIGNED
   IN_PROGRESS
+  WAITING_FOR_USER
   RESOLVED
   CLOSED
+  ESCALATED
+  REOPENED
 }
 
 enum ComplaintPriority {
@@ -774,6 +779,7 @@ enum ComplaintPriority {
   MEDIUM
   HIGH
   URGENT
+  CRITICAL
 }
 
 enum ComplaintType {
@@ -781,6 +787,19 @@ enum ComplaintType {
   HOSPITAL
   DOCTOR
   GENERAL
+}
+
+enum TicketKind {
+  SUPPORT_REQUEST
+  COMPLAINT
+}
+
+enum ComplainantType {
+  PATIENT
+  HOSPITAL
+  DOCTOR
+  PLATFORM_STAFF
+  GUEST
 }
 
 enum DiscountType {
@@ -797,28 +816,185 @@ enum LocationType {
 }
 
 model Complaint {
-  id             String            @id @default(uuid())
-  ticketId       String            @unique
-  subject        String
-  description    String
-  type           ComplaintType       @default(GENERAL)
-  priority       ComplaintPriority   @default(MEDIUM)
-  status         ComplaintStatus     @default(NEW)
-  assignedToId   String?
-  organizationId String?
+  id               String            @id @default(uuid())
+  ticketId         String            @unique
+  kind             TicketKind        @default(SUPPORT_REQUEST)
+  subject          String
+  description      String
+  type             ComplaintType     @default(GENERAL)
+  complainantType  ComplainantType   @default(GUEST)
+  categoryId       String?
+  priority         ComplaintPriority @default(MEDIUM)
+  status           ComplaintStatus   @default(NEW)
+  userId           String?
+  assignedToId     String?
+  department       String?
+  organizationId   String?
   complainantName  String?
   complainantEmail String?
   complainantPhone String?
-  resolution     String?
-  internalNotes  String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  resolution       String?
+  internalNotes    String?
+  firstResponseAt  DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  escalatedAt      DateTime?
+  escalatedTo      String?
+  slaResponseDue   DateTime?
+  slaResolutionDue DateTime?
+  csatRating       Int?
+  csatFeedback     String?
+  reopenReason     String?
+  isArchived       Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  assignedTo   User?         @relation("AssignedComplaints", fields: [assignedToId], references: [id])
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  category     SupportCategory?       @relation(fields: [categoryId], references: [id])
+  user         User?                  @relation("UserTickets", fields: [userId], references: [id])
+  assignedTo   User?                  @relation("AssignedComplaints", fields: [assignedToId], references: [id])
+  organization Organization?          @relation(fields: [organizationId], references: [id])
+  messages     SupportTicketMessage[]
+  history      SupportTicketHistory[]
+  transfers    SupportTicketTransfer[]
 
   @@index([status, priority])
+  @@index([kind, status])
+  @@index([assignedToId])
   @@map("complaints")
+}
+
+model SupportCategory {
+  id              String            @id @default(uuid())
+  name            String            @unique
+  slug            String            @unique
+  description     String?
+  userTypes       String[]          @default([])
+  defaultPriority ComplaintPriority @default(MEDIUM)
+  department      String?
+  isActive        Boolean           @default(true)
+  sortOrder       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  complaints Complaint[]
+
+  @@map("support_categories")
+}
+
+model SupportSlaRule {
+  id                String            @id @default(uuid())
+  name              String
+  priority          ComplaintPriority @unique
+  responseMinutes   Int
+  resolutionMinutes Int
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("support_sla_rules")
+}
+
+model SupportTeam {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  department  String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("support_teams")
+}
+
+model SupportTicketMessage {
+  id          String   @id @default(uuid())
+  complaintId String
+  senderId    String?
+  senderName  String?
+  senderType  String   @default("staff")
+  body        String   @db.Text
+  isInternal  Boolean  @default(false)
+  attachments Json?
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+  @@map("support_ticket_messages")
+}
+
+model SupportTicketHistory {
+  id               String   @id @default(uuid())
+  complaintId      String
+  action           String
+  fromValue        String?
+  toValue          String?
+  performedByEmail String?
+  details          Json?
+  createdAt        DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+  @@map("support_ticket_history")
+}
+
+model SupportTicketTransfer {
+  id                 String   @id @default(uuid())
+  complaintId        String
+  fromStaffId        String?
+  toStaffId          String?
+  toDepartment       String?
+  reason             String?
+  transferredByEmail String?
+  createdAt          DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+  @@map("support_ticket_transfers")
+}
+
+model SupportAssignmentRule {
+  id              String             @id @default(uuid())
+  name            String
+  categorySlug    String?
+  keywordPattern  String?
+  department      String
+  teamName        String?
+  defaultPriority ComplaintPriority?
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@map("support_assignment_rules")
+}
+
+model SupportCannedResponse {
+  id        String   @id @default(uuid())
+  title     String
+  body      String   @db.Text
+  category  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("support_canned_responses")
+}
+
+model SupportKnowledgeArticle {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  content     String   @db.Text
+  category    String?
+  tags        String[] @default([])
+  isPublished Boolean  @default(false)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("support_knowledge_articles")
 }
 
 model Coupon {

@@ -61,7 +61,7 @@ export const adminNavGroups: AdminNavGroup[] = [
   {
     title: 'Support',
     items: [
-      { to: '/admin/complaints', icon: Headphones, label: 'Complaints' },
+      { to: '/admin/support', icon: Headphones, label: 'Support & Complaints' },
     ],
   },
   {

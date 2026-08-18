@@ -16,6 +16,7 @@ export { AdminSettingsPage } from './AdminSettingsPages';
 export { AdminEmergencyPage } from './AdminEmergencyPages';
 export { AdminStaffPage } from './AdminPlatformStaffPages';
 export { AdminPermissionsPage } from './AdminPermissionsPages';
+export { AdminSupportPage } from './AdminSupportPages';
 export {
   AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage,
