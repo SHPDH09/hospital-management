@@ -122,6 +122,26 @@ enum Gender {
   OTHER
 }
 
+enum PatientAccountStatus {
+  ACTIVE
+  PENDING_PROFILE
+  UNVERIFIED
+  SUSPENDED
+  BLOCKED
+  DEACTIVATED
+}
+
+enum PatientRegistrationSource {
+  DIRECT
+  REFERRAL
+  AASHA
+  ADVERTISEMENT
+  GOOGLE
+  WEBSITE
+  CAMPAIGN
+  DOCTOR_REFERRAL
+}
+
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -233,18 +253,24 @@ model Branch {
 }
 
 model Patient {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  fullName         String
-  dateOfBirth      DateTime?
-  gender           Gender?
-  address          String?
-  city             String?
-  state            String?
-  emergencyContact String?
-  bloodGroup       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                 String                    @id @default(uuid())
+  userId             String                    @unique
+  globalPatientId    String                    @unique
+  fullName           String
+  dateOfBirth        DateTime?
+  gender             Gender?
+  address            String?
+  city               String?
+  state              String?
+  pinCode            String?
+  photoUrl           String?
+  emergencyContact   String?
+  bloodGroup         String?
+  profileCompleted   Boolean                   @default(false)
+  accountStatus      PatientAccountStatus      @default(PENDING_PROFILE)
+  registrationSource PatientRegistrationSource @default(DIRECT)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizations PatientOrganization[]
@@ -252,16 +278,22 @@ model Patient {
   bills         Bill[]
   reviews       Review[]
 
+  @@index([globalPatientId])
+  @@index([city, state])
+  @@index([accountStatus])
   @@map("patients")
 }
 
 model PatientOrganization {
-  id             String   @id @default(uuid())
+  id             String                    @id @default(uuid())
   patientId      String
   organizationId String
   patientNumber  String?
+  sourceType     PatientRegistrationSource @default(DIRECT)
+  referralName   String?
+  referralId     String?
   notes          String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime                  @default(now())
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

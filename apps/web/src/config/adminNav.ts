@@ -31,11 +31,18 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Patient Management',
+    items: [
+      { to: '/admin/patient-management', icon: Users, label: 'PM Dashboard' },
+      { to: '/admin/patient-management/patients', icon: Users, label: 'All Patients' },
+      { to: '/admin/patient-management/duplicates', icon: Users, label: 'Duplicates' },
+    ],
+  },
+  {
     title: 'Healthcare',
     items: [
       { to: '/admin/hospitals', icon: Building2, label: 'Hospitals' },
       { to: '/admin/clinics', icon: Store, label: 'Clinics' },
-      { to: '/admin/patients', icon: Users, label: 'Patients' },
     ],
   },
   {

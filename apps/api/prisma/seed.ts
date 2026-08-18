@@ -260,6 +260,7 @@ async function main() {
     update: {},
     create: {
       userId: patientUser.id,
+      globalPatientId: 'PAT-00000001',
       fullName: 'Rahul Verma',
       dateOfBirth: new Date('1990-05-15'),
       gender: 'MALE',
@@ -267,6 +268,9 @@ async function main() {
       city: 'Mumbai',
       state: 'Maharashtra',
       emergencyContact: '+91-9876543298',
+      profileCompleted: true,
+      accountStatus: 'ACTIVE',
+      registrationSource: 'DIRECT',
     },
   });
 

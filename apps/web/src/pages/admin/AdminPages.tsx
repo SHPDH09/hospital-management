@@ -3,6 +3,9 @@ export {
   DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
 } from './AdminDoctorManagementPages';
 export {
+  PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
+} from './AdminPatientManagementPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';
