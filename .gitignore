@@ -8,3 +8,5 @@ build/
 coverage/
 .turbo/
 *.tsbuildinfo
+uploads/
+!uploads/.gitkeep

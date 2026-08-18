@@ -120,6 +120,22 @@ class ApiClient {
   delete<T>(endpoint: string) {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
+
+  async uploadFile(file: File, folder: 'logos' | 'favicons' | 'images' | 'covers' | 'photos' = 'images') {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+    return this.post<{ url: string; filename: string }>('/admin/uploads', {
+      filename: file.name,
+      mimeType: file.type || 'image/png',
+      data: base64,
+      folder,
+    });
+  }
 }
 
 export const api = new ApiClient();

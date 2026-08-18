@@ -17,6 +17,7 @@ export {
 export {
   ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
 } from './AdminReviewManagementPages';
+export { AdminConfigurationPage } from './AdminConfigurationPages';
 export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,

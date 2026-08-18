@@ -23,13 +23,14 @@ import {
   AdminCouponsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCommunicationsPage, AdminCmsPage, AdminEmergencyPage,
   DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
   PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
   AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
   PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
   LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
   ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
+  AdminConfigurationPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -125,7 +126,7 @@ export default function App() {
             <Route path="/admin/master-data/*" element={<Admin><AdminMasterDataPage /></Admin>} />
             <Route path="/admin/communications" element={<Admin><AdminCommunicationsPage /></Admin>} />
             <Route path="/admin/cms" element={<Admin><AdminCmsPage /></Admin>} />
-            <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />
+            <Route path="/admin/settings/*" element={<Admin><AdminConfigurationPage /></Admin>} />
             <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
           </Routes>
         </BrowserRouter>

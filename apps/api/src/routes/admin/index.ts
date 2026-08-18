@@ -18,6 +18,8 @@ import appointmentManagementRoutes from './appointments';
 import paymentManagementRoutes from './payments';
 import leadManagementRoutes from './leads';
 import reviewManagementRoutes from './reviews';
+import uploadRoutes from './uploads';
+import settingsConfigRoutes from './settings-config';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -31,6 +33,8 @@ router.use('/appointments', appointmentManagementRoutes);
 router.use('/payments', paymentManagementRoutes);
 router.use('/leads', leadManagementRoutes);
 router.use('/reviews', reviewManagementRoutes);
+router.use('/uploads', uploadRoutes);
+router.use('/settings-config', settingsConfigRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 

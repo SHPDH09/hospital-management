@@ -1,5 +1,6 @@
 import './lib/env';
 import express from 'express';
+import { getUploadRoot } from './lib/uploads';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -40,6 +41,10 @@ if (!isVercel) {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
 app.use(express.json({ limit: '10mb' }));
+
+if (!isVercel) {
+  app.use('/api/v1/uploads', express.static(getUploadRoot()));
+}
 
 if (!isVercel) {
   app.use(
