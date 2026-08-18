@@ -296,23 +296,6 @@ export function AdminLocationsPage() {
   );
 }
 
-export function AdminMasterDataPage() {
-  const { data, isLoading } = useList('/admin/specializations');
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Healthcare Master Data" subtitle="Specializations, departments, and medical services" />
-      {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'name', label: 'Specialization' },
-          { key: 'department', label: 'Department' },
-          { key: 'services', label: 'Services', render: (r) => (r.services as string[])?.join(', ') || '-' },
-          { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'SUSPENDED'} /> },
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-      )}
-    </DashboardLayout>
-  );
-}
-
 export function AdminCommunicationsPage() {
   const { data, isLoading } = useList('/admin/communications');
   return (

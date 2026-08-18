@@ -778,10 +778,171 @@ model Specialization {
   department  String?
   services    String[]
   isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("specializations")
+}
+
+enum MasterCatalogKind {
+  HOSPITAL_TYPE
+  CLINIC_TYPE
+  FACILITY
+  HEALTH_PACKAGE_CATEGORY
+}
+
+model PlatformDepartment {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("platform_departments")
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  services PlatformHealthcareService[]
+
+  @@map("service_categories")
+}
+
+model PlatformHealthcareService {
+  id           String   @id @default(uuid())
+  name         String
+  categoryId   String?
+  description  String?
+  defaultPrice Float?
+  duration     Int?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category ServiceCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("platform_healthcare_services")
+}
+
+model TestCategory {
+  id        String   @id @default(uuid())
+  name      String
+  group     String?
+  parentId  String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   TestCategory?  @relation("TestCategoryHierarchy", fields: [parentId], references: [id])
+  children TestCategory[] @relation("TestCategoryHierarchy")
+  tests    DiagnosticTest[]
+
+  @@index([parentId])
+  @@map("test_categories")
+}
+
+model DiagnosticTest {
+  id           String   @id @default(uuid())
+  name         String
+  categoryId   String?
+  sampleType   String?
+  preparation  String?
+  defaultPrice Float?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category TestCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("diagnostic_tests")
+}
+
+model Medicine {
+  id           String   @id @default(uuid())
+  name         String
+  genericName  String?
+  brandName    String?
+  category     String?
+  dosageForm   String?
+  strength     String?
+  manufacturer String?
+  unit         String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("medicines")
+}
+
+model MasterCatalog {
+  id          String            @id @default(uuid())
+  kind        MasterCatalogKind
+  name        String
+  description String?
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([kind, name])
+  @@index([kind, isActive])
+  @@map("master_catalog")
+}
+
+model InsuranceProvider {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  logoUrl   String?
+  contact   String?
+  website   String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("insurance_providers")
+}
+
+model DoctorQualification {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  shortName   String?
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("doctor_qualifications")
+}
+
+model StaffRoleMaster {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String?  @unique
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("staff_role_masters")
 }
 
 model Location {

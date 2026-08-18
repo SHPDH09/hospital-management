@@ -11,12 +11,14 @@ import { logAudit } from '../../lib/audit';
 import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
 import locationRoutes from './locations';
+import masterDataRoutes from './master-data';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
 router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
+router.use('/master-data', masterDataRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -540,24 +542,6 @@ router.delete('/security/sessions/:userId', async (req: AuthRequest, res, next) 
     await prisma.refreshToken.deleteMany({ where: { userId } });
     await logAudit(req, 'FORCE_LOGOUT', 'User', userId);
     sendSuccess(res, null, 'All sessions revoked');
-  } catch (err) { next(err); }
-});
-
-// ─── Master Data ─────────────────────────────────────────────────────────────
-
-router.get('/specializations', async (_req, res, next) => {
-  try {
-    const items = await prisma.specialization.findMany({ orderBy: { name: 'asc' } });
-    sendSuccess(res, items);
-  } catch (err) { next(err); }
-});
-
-router.post('/specializations', validateBody(z.object({
-  name: z.string(), description: z.string().optional(), department: z.string().optional(), services: z.array(z.string()).optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const item = await prisma.specialization.create({ data: { ...req.body, services: req.body.services || [] } });
-    sendSuccess(res, item, 'Created', 201);
   } catch (err) { next(err); }
 });
 

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
+import { seedMasterData } from './master-data-seed';
 
 async function main() {
   console.log('Seeding database...');
@@ -334,8 +335,8 @@ async function main() {
   const mh = await upsertLocation({ name: 'Maharashtra', type: 'STATE', parentId: india.id });
   await upsertLocation({ name: 'Mumbai', type: 'CITY', parentId: mh.id, pinCode: '400001' });
   await upsertLocation({ name: 'Pune', type: 'CITY', parentId: mh.id, pinCode: '411001' });
-  await upsertLocation({ name: 'Delhi', type: 'STATE', parentId: india.id });
-  await upsertLocation({ name: 'New Delhi', type: 'CITY', parentId: india.id, pinCode: '110001' });
+  const delhi = await upsertLocation({ name: 'Delhi', type: 'STATE', parentId: india.id });
+  await upsertLocation({ name: 'New Delhi', type: 'CITY', parentId: delhi.id, pinCode: '110001' });
 
   // Platform Settings
   const settings = [
@@ -347,6 +348,8 @@ async function main() {
   for (const s of settings) {
     await prisma.platformSetting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
   }
+
+  await seedMasterData(prisma);
 
   console.log('Seed completed!');
   console.log('\nDemo accounts (password: Password123!):');
