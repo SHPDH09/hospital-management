@@ -22,6 +22,7 @@ import permissionsRoutes from './permissions';
 import supportRoutes from './support';
 import verificationRoutes from './verification';
 import hospitalManagementRoutes from './hospitals';
+import clinicManagementRoutes from './clinics';
 import {
   ORG_BRANDING_SELECT,
   formatHospitalBranding,
@@ -45,6 +46,7 @@ router.use('/permissions', permissionsRoutes);
 router.use('/support', supportRoutes);
 router.use('/verification', verificationRoutes);
 router.use('/hospitals', hospitalManagementRoutes);
+router.use('/clinics', clinicManagementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 

@@ -3,6 +3,9 @@ export {
   HospitalManagementDashboardPage, HospitalManagementListPage, HospitalManagementDetailPage,
 } from './AdminHospitalManagementPages';
 export {
+  ClinicManagementDashboardPage, ClinicManagementListPage, ClinicManagementDetailPage,
+} from './AdminClinicManagementPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';

@@ -33,9 +33,16 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Clinic Management',
+    items: [
+      { to: '/admin/clinic-management', icon: Store, label: 'CM Dashboard' },
+      { to: '/admin/clinic-management/clinics', icon: Store, label: 'All Clinics' },
+      { to: '/admin/verification/applications?type=CLINIC', icon: FileText, label: 'Clinic Applications' },
+    ],
+  },
+  {
     title: 'Healthcare',
     items: [
-      { to: '/admin/clinics', icon: Store, label: 'Clinics' },
       { to: '/admin/doctors', icon: Stethoscope, label: 'Doctors' },
       { to: '/admin/patients', icon: Users, label: 'Patients' },
     ],

@@ -41,7 +41,7 @@ import {
   ReferralAnalyticsPage, ReferralCommissionsPage, ReferralPayoutsPage, ReferralCampaignsPage,
 } from '@/pages/referral/ReferralPortalPages';
 import {
-  AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
+  AdminDashboard, AdminHospitalsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminPermissionsPage, AdminSupportPage, AdminSecurityPage, AdminAuditLogsPage,
@@ -54,6 +54,9 @@ import {
 import {
   HospitalManagementDashboardPage, HospitalManagementListPage, HospitalManagementDetailPage,
 } from '@/pages/admin/AdminHospitalManagementPages';
+import {
+  ClinicManagementDashboardPage, ClinicManagementListPage, ClinicManagementDetailPage,
+} from '@/pages/admin/AdminClinicManagementPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
@@ -166,7 +169,10 @@ export default function App() {
             <Route path="/admin/hospital-management/hospitals" element={<Admin><HospitalManagementListPage /></Admin>} />
             <Route path="/admin/hospital-management/hospitals/:id" element={<Admin><HospitalManagementDetailPage /></Admin>} />
             <Route path="/admin/hospitals" element={<Navigate to="/admin/hospital-management/hospitals" replace />} />
-            <Route path="/admin/clinics" element={<Admin><AdminClinicsPage /></Admin>} />
+            <Route path="/admin/clinic-management" element={<Admin><ClinicManagementDashboardPage /></Admin>} />
+            <Route path="/admin/clinic-management/clinics" element={<Admin><ClinicManagementListPage /></Admin>} />
+            <Route path="/admin/clinic-management/clinics/:id" element={<Admin><ClinicManagementDetailPage /></Admin>} />
+            <Route path="/admin/clinics" element={<Navigate to="/admin/clinic-management/clinics" replace />} />
             <Route path="/admin/organizations" element={<Admin><AdminHospitalsPage /></Admin>} />
             <Route path="/admin/doctors" element={<Admin><AdminDoctorsPage /></Admin>} />
             <Route path="/admin/patients" element={<Admin><AdminPatientsPage /></Admin>} />
