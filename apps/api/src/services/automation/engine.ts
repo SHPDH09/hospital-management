@@ -94,6 +94,15 @@ export async function seedDefaultAutomations() {
       isActive: true,
     },
     {
+      name: 'Subscription Renewal Reminder',
+      module: 'SUBSCRIPTIONS' as const,
+      trigger: 'subscription.expiring',
+      conditions: [{ field: 'daysLeft', operator: 'lte', value: 7 }],
+      actions: [{ type: 'alert_admin', title: 'Subscription Expiring', message: 'A subscription is expiring within 7 days.' }],
+      channel: 'push,email',
+      isActive: true,
+    },
+    {
       name: 'Critical Support Ticket',
       module: 'COMPLAINTS' as const,
       trigger: 'complaint.created',

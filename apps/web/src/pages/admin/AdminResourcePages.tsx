@@ -120,6 +120,7 @@ export function AdminAppointmentsPage() {
           { key: 'doctor', label: 'Doctor', render: (r) => String((r.doctor as { fullName?: string })?.fullName) },
           { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name) },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
+          { key: 'risk', label: 'No-Show Risk', render: (r) => r.noShowRisk ? <StatusBadge status={r.noShowRisk === 'HIGH' ? 'URGENT' : r.noShowRisk === 'MEDIUM' ? 'PENDING' : 'ACTIVE'} /> : '-' },
           { key: 'actions', label: 'Actions', render: (r) => r.status !== 'CANCELLED' && (
             <ActionBtn variant="danger" onClick={() => api.patch(`/admin/appointments/${r.id}/status`, { status: 'CANCELLED' }).then(() => refetch())}>Cancel</ActionBtn>
           )},
@@ -133,9 +134,17 @@ export function AdminAppointmentsPage() {
 
 export function AdminPaymentsPage() {
   const { data, isLoading } = useAdminList('/admin/payments', '?limit=50');
+  const { data: paymentAi } = useQuery({ queryKey: ['ai-payments'], queryFn: () => api.get('/ai/analytics/payments') });
+  const alerts = (paymentAi?.data as { alerts?: { severity: string; message: string }[] })?.alerts || [];
   return (
     <DashboardLayout portal="admin">
       <PageHeader title="Payment Management" subtitle="All platform transactions" />
+      {alerts.length > 0 && (
+        <div className="card p-4 mb-4 border-l-4 border-orange-500">
+          <p className="font-medium text-sm mb-2">AI Payment Alerts</p>
+          {alerts.map((a, i) => <p key={i} className="text-sm text-gray-600">[{a.severity}] {a.message}</p>)}
+        </div>
+      )}
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'transactionId', label: 'Transaction ID', render: (r) => String(r.transactionId || r.id) },

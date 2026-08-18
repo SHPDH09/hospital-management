@@ -150,6 +150,52 @@ const templates: QueryTemplate[] = [
     },
     format: (d) => `Lead pipeline: ${d.hot} hot, ${d.warm} warm, ${d.cold} cold leads.`,
   },
+  {
+    keywords: ['payment alert', 'payment anomaly', 'payment failure'],
+    run: async () => {
+      const { detectPaymentAnomalies } = await import('../payments/payment-monitoring');
+      const alerts = await detectPaymentAnomalies();
+      return { alerts };
+    },
+    format: (d) => {
+      const alerts = d.alerts as { message: string; severity: string }[];
+      if (!alerts.length) return 'No payment anomalies detected in the last 2 hours.';
+      return `Payment alerts:\n${alerts.map((a) => `• [${a.severity}] ${a.message}`).join('\n')}`;
+    },
+  },
+  {
+    keywords: ['campaign', 'advertisement', 'ad performance'],
+    run: async () => {
+      const { getCampaignAnalytics } = await import('../analytics/campaign-analytics');
+      const data = await getCampaignAnalytics();
+      return { campaigns: data.campaigns.slice(0, 5), insight: data.insight };
+    },
+    format: (d) => {
+      const campaigns = d.campaigns as { title: string; leads: number; conversionRate: number; ctr: number }[];
+      const lines = campaigns.map((c) => `• ${c.title}: ${c.leads} leads, ${c.conversionRate}% conversion, ${c.ctr}% CTR`).join('\n');
+      return `${d.insight || 'Campaign performance:'}\n${lines}`;
+    },
+  },
+  {
+    keywords: ['referral', 'aasha'],
+    run: async () => {
+      const { getReferralAnalytics } = await import('../analytics/referral-analytics');
+      return await getReferralAnalytics();
+    },
+    format: (d) => {
+      const partners = d.partners as { source: string; leads: number; converted: number }[];
+      const top = partners.slice(0, 5).map((p) => `• ${p.source}: ${p.leads} leads, ${p.converted} converted`).join('\n');
+      return `${d.insight || 'Referral analytics:'}\n${top || 'No referral data yet.'}\nGrowth: ${(d.totals as { growthPct: number })?.growthPct}% this month.`;
+    },
+  },
+  {
+    keywords: ['no-show', 'no show', 'appointment risk'],
+    run: async () => {
+      const { getNoShowRiskDashboard } = await import('../appointments/no-show-batch');
+      return await getNoShowRiskDashboard();
+    },
+    format: (d) => `No-show risk (next 2 days): ${d.high} high, ${d.medium} medium, ${d.low} low risk appointments.`,
+  },
 ];
 
 function matchTemplate(query: string): QueryTemplate | null {

@@ -7,7 +7,10 @@ export type JobType =
   | 'review_sentiment'
   | 'complaint_classify'
   | 'automation_execute'
-  | 'appointment_risk_scan';
+  | 'appointment_risk_scan'
+  | 'payment_monitor_scan'
+  | 'subscription_renewal_scan'
+  | 'noshow_risk_scan';
 
 export async function enqueueJob(
   type: JobType,
@@ -106,6 +109,21 @@ async function handleJob(type: string, payload: Record<string, unknown>) {
       if (payload.appointmentId) {
         await calculateNoShowRisk(payload.appointmentId as string);
       }
+      break;
+    }
+    case 'payment_monitor_scan': {
+      const { scanPaymentAnomalies } = await import('../payments/payment-monitoring');
+      await scanPaymentAnomalies();
+      break;
+    }
+    case 'subscription_renewal_scan': {
+      const { processSubscriptionRenewalReminders } = await import('../subscriptions/subscription-automation');
+      await processSubscriptionRenewalReminders();
+      break;
+    }
+    case 'noshow_risk_scan': {
+      const { scanUpcomingNoShowRisk } = await import('../appointments/no-show-batch');
+      await scanUpcomingNoShowRisk();
       break;
     }
     default:

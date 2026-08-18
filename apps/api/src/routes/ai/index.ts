@@ -11,9 +11,11 @@ import { analyzeReview } from '../../services/reviews/review-analysis';
 import { classifyComplaint } from '../../services/support/ticket-classifier';
 import { paramId } from '../../lib/params';
 import { isMedicalQuery, medicalSafetyResponse } from '../../services/ai';
+import aiAnalyticsRoutes from './analytics';
 
 const router = Router();
 router.use(authenticate);
+router.use('/analytics', aiAnalyticsRoutes);
 
 // Settings (Super Admin)
 router.get('/settings', requireRoles(...PLATFORM_ROLES), async (_req, res, next) => {

@@ -24,7 +24,7 @@ import {
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
-  AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage,
+  AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -96,6 +96,7 @@ export default function App() {
             <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />
             <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
             <Route path="/admin/ai/copilot" element={<Admin><AdminAiCopilotPage /></Admin>} />
+            <Route path="/admin/ai/insights" element={<Admin><AdminAiInsightsPage /></Admin>} />
             <Route path="/admin/ai/automation" element={<Admin><AdminAutomationPage /></Admin>} />
             <Route path="/admin/ai/settings" element={<Admin><AdminAiSettingsPage /></Admin>} />
             <Route path="/admin/ai/audit" element={<Admin><AdminAiAuditPage /></Admin>} />
