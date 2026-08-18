@@ -2,5 +2,11 @@
   "buildCommand": "npm run vercel-build",
   "installCommand": "npm install",
   "framework": null,
-  "outputDirectory": "apps/web/dist"
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
