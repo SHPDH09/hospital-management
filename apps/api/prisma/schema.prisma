@@ -46,6 +46,28 @@ enum AppointmentStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+  RESCHEDULED
+  REJECTED
+}
+
+enum AppointmentPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum AppointmentType {
+  IN_PERSON
+  VIDEO
+  PHONE
+  FOLLOW_UP
+  EMERGENCY
+  WALK_IN
+  HOME_VISIT
+  DIAGNOSTIC
 }
 
 enum BillStatus {
@@ -57,10 +79,48 @@ enum BillStatus {
 }
 
 enum PaymentStatus {
+  INITIATED
+  PROCESSING
+  AUTHORIZED
   PENDING
+  CAPTURED
   COMPLETED
   FAILED
+  CANCELLED
+  EXPIRED
   REFUNDED
+  PARTIAL_REFUND
+  DISPUTED
+}
+
+enum PaymentPurpose {
+  APPOINTMENT
+  CONSULTATION
+  FOLLOW_UP
+  ONLINE_CONSULTATION
+  EMERGENCY
+  HOME_VISIT
+  SERVICE
+  DIAGNOSTIC
+  HEALTH_PACKAGE
+  PROCEDURE
+  TREATMENT
+  SUBSCRIPTION
+  ADVERTISEMENT
+  REFERRAL_COMMISSION
+  OTHER
+}
+
+enum PaymentMethod {
+  UPI
+  CREDIT_CARD
+  DEBIT_CARD
+  NET_BANKING
+  WALLET
+  PAYMENT_LINK
+  CASH
+  POS
+  BANK_TRANSFER
 }
 
 enum SubscriptionPlanTier {
@@ -120,6 +180,26 @@ enum Gender {
   MALE
   FEMALE
   OTHER
+}
+
+enum PatientAccountStatus {
+  ACTIVE
+  PENDING_PROFILE
+  UNVERIFIED
+  SUSPENDED
+  BLOCKED
+  DEACTIVATED
+}
+
+enum PatientRegistrationSource {
+  DIRECT
+  REFERRAL
+  AASHA
+  ADVERTISEMENT
+  GOOGLE
+  WEBSITE
+  CAMPAIGN
+  DOCTOR_REFERRAL
 }
 
 model User {
@@ -233,18 +313,24 @@ model Branch {
 }
 
 model Patient {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  fullName         String
-  dateOfBirth      DateTime?
-  gender           Gender?
-  address          String?
-  city             String?
-  state            String?
-  emergencyContact String?
-  bloodGroup       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                 String                    @id @default(uuid())
+  userId             String                    @unique
+  globalPatientId    String                    @unique
+  fullName           String
+  dateOfBirth        DateTime?
+  gender             Gender?
+  address            String?
+  city               String?
+  state              String?
+  pinCode            String?
+  photoUrl           String?
+  emergencyContact   String?
+  bloodGroup         String?
+  profileCompleted   Boolean                   @default(false)
+  accountStatus      PatientAccountStatus      @default(PENDING_PROFILE)
+  registrationSource PatientRegistrationSource @default(DIRECT)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizations PatientOrganization[]
@@ -252,16 +338,22 @@ model Patient {
   bills         Bill[]
   reviews       Review[]
 
+  @@index([globalPatientId])
+  @@index([city, state])
+  @@index([accountStatus])
   @@map("patients")
 }
 
 model PatientOrganization {
-  id             String   @id @default(uuid())
+  id             String                    @id @default(uuid())
   patientId      String
   organizationId String
   patientNumber  String?
+  sourceType     PatientRegistrationSource @default(DIRECT)
+  referralName   String?
+  referralId     String?
   notes          String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime                  @default(now())
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -287,6 +379,8 @@ model Doctor {
   photoUrl           String?
   languages          String[]
   isActive           Boolean  @default(true)
+  verificationStatus VerificationStatus @default(PENDING)
+  accountActivated   Boolean  @default(false)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
   createdAt          DateTime @default(now())
@@ -381,21 +475,33 @@ model AppointmentSlot {
 }
 
 model Appointment {
-  id             String            @id @default(uuid())
-  organizationId String
-  branchId       String?
-  patientId      String
-  doctorId       String
-  departmentId   String?
-  slotId         String?
-  appointmentDate DateTime         @db.Date
-  startTime      String
-  endTime        String?
-  type           String            @default("consultation")
-  status         AppointmentStatus @default(PENDING)
-  notes          String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                String                   @id @default(uuid())
+  appointmentNumber String                   @unique
+  organizationId    String
+  branchId          String?
+  patientId         String
+  doctorId          String
+  departmentId      String?
+  slotId            String?
+  appointmentDate   DateTime                 @db.Date
+  startTime         String
+  endTime           String?
+  type              AppointmentType          @default(IN_PERSON)
+  status            AppointmentStatus        @default(PENDING)
+  paymentStatus     AppointmentPaymentStatus @default(PENDING)
+  notes             String?
+  referralSource    PatientRegistrationSource?
+  referralId        String?
+  referralName      String?
+  advertisementId   String?
+  cancellationReason String?
+  rescheduledFromId String?
+  checkedInAt       DateTime?
+  tokenNumber       String?
+  isEmergency       Boolean                  @default(false)
+  isOnline          Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch?          @relation(fields: [branchId], references: [id])
@@ -408,6 +514,8 @@ model Appointment {
   @@index([organizationId, appointmentDate])
   @@index([doctorId, appointmentDate, status])
   @@index([patientId])
+  @@index([appointmentNumber])
+  @@index([status, appointmentDate])
   @@map("appointments")
 }
 
@@ -453,17 +561,39 @@ model BillItem {
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  billId        String
-  amount        Float
-  method        String
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
+  id                String         @id @default(uuid())
+  paymentNumber     String         @unique
+  billId            String
+  amount            Float
+  method            PaymentMethod  @default(UPI)
+  purpose           PaymentPurpose @default(APPOINTMENT)
+  status            PaymentStatus  @default(PENDING)
+  currency          String         @default("INR")
+  transactionId     String?
+  gateway           String?
+  gatewayOrderId    String?
+  gatewayPaymentId  String?
+  idempotencyKey    String?        @unique
+  platformFee       Float          @default(0)
+  providerShare     Float          @default(0)
+  refundAmount      Float          @default(0)
+  refundReason      String?
+  refundId          String?
+  webhookStatus     String?
+  webhookVerified   Boolean        @default(false)
+  riskLevel         String         @default("LOW")
+  reconciliationStatus String?
+  paidAt            DateTime?
+  capturedAt        DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
+  @@index([paymentNumber])
+  @@index([status, createdAt])
+  @@index([gatewayPaymentId])
   @@map("payments")
 }
 

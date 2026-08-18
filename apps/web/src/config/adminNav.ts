@@ -24,19 +24,46 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Doctor Management',
+    items: [
+      { to: '/admin/doctor-management', icon: Stethoscope, label: 'DM Dashboard' },
+      { to: '/admin/doctor-management/doctors', icon: Stethoscope, label: 'All Doctors' },
+    ],
+  },
+  {
+    title: 'Patient Management',
+    items: [
+      { to: '/admin/patient-management', icon: Users, label: 'PM Dashboard' },
+      { to: '/admin/patient-management/patients', icon: Users, label: 'All Patients' },
+      { to: '/admin/patient-management/duplicates', icon: Users, label: 'Duplicates' },
+    ],
+  },
+  {
     title: 'Healthcare',
     items: [
       { to: '/admin/hospitals', icon: Building2, label: 'Hospitals' },
       { to: '/admin/clinics', icon: Store, label: 'Clinics' },
-      { to: '/admin/doctors', icon: Stethoscope, label: 'Doctors' },
-      { to: '/admin/patients', icon: Users, label: 'Patients' },
+    ],
+  },
+  {
+    title: 'Appointment Management',
+    items: [
+      { to: '/admin/appointment-management', icon: Calendar, label: 'AM Dashboard' },
+      { to: '/admin/appointment-management/appointments', icon: Calendar, label: 'All Appointments' },
+      { to: '/admin/appointment-management/today', icon: Calendar, label: "Today's Appointments" },
+    ],
+  },
+  {
+    title: 'Payment Management',
+    items: [
+      { to: '/admin/payment-management', icon: Receipt, label: 'PM Dashboard' },
+      { to: '/admin/payment-management/payments', icon: CreditCard, label: 'All Payments' },
+      { to: '/admin/payment-management/exceptions', icon: AlertTriangle, label: 'Exceptions' },
     ],
   },
   {
     title: 'Operations',
     items: [
-      { to: '/admin/appointments', icon: Calendar, label: 'Appointments' },
-      { to: '/admin/payments', icon: Receipt, label: 'Payments' },
       { to: '/admin/leads', icon: Target, label: 'Leads' },
       { to: '/admin/reviews', icon: Star, label: 'Reviews' },
     ],

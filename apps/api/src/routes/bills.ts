@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, TransactionClient } from '../lib/prisma';
 import { generateBillNumber } from '../lib/auth';
+import { generatePaymentNumber } from '../lib/payment-management';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
@@ -122,11 +123,13 @@ router.post('/:id/payments', authenticate, requireRoles('HOSPITAL_ADMIN', 'ACCOU
     if (req.body.amount > remaining) throw new AppError('Payment exceeds remaining balance', 400);
 
     const payment = await prisma.$transaction(async (tx: TransactionClient) => {
+      const paymentNumber = await generatePaymentNumber();
       const p = await tx.payment.create({
         data: {
+          paymentNumber,
           billId: bill.id,
           amount: req.body.amount,
-          method: req.body.method,
+          method: (req.body.method || 'CASH') as never,
           transactionId: req.body.transactionId,
           status: 'COMPLETED',
           paidAt: new Date(),
