@@ -19,13 +19,14 @@ import {
 } from '@/pages/crm/CrmPages';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage,
-  AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
+  AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
   DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
   PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
+  AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -85,7 +86,11 @@ export default function App() {
             <Route path="/admin/patient-management/patients/:id" element={<Admin><PatientManagementDetailPage /></Admin>} />
             <Route path="/admin/patient-management/duplicates" element={<Admin><PatientDuplicatesPage /></Admin>} />
             <Route path="/admin/patients" element={<Navigate to="/admin/patient-management/patients" replace />} />
-            <Route path="/admin/appointments" element={<Admin><AdminAppointmentsPage /></Admin>} />
+            <Route path="/admin/appointment-management" element={<Admin><AppointmentManagementDashboardPage /></Admin>} />
+            <Route path="/admin/appointment-management/appointments" element={<Admin><AppointmentManagementListPage /></Admin>} />
+            <Route path="/admin/appointment-management/appointments/:id" element={<Admin><AppointmentManagementDetailPage /></Admin>} />
+            <Route path="/admin/appointment-management/today" element={<Admin><AppointmentManagementListPage todayOnly /></Admin>} />
+            <Route path="/admin/appointments" element={<Navigate to="/admin/appointment-management/appointments" replace />} />
             <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />

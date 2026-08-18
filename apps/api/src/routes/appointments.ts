@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { generateAppointmentNumber, detectAppointmentConflict } from '../lib/appointment-management';
 import { z } from 'zod';
 import { prisma, TransactionClient } from '../lib/prisma';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
@@ -14,13 +15,13 @@ const bookAppointmentSchema = z.object({
   appointmentDate: z.string(),
   startTime: z.string(),
   endTime: z.string().optional(),
-  type: z.string().default('consultation'),
+  type: z.enum(['IN_PERSON', 'VIDEO', 'PHONE', 'FOLLOW_UP', 'EMERGENCY', 'WALK_IN', 'HOME_VISIT', 'DIAGNOSTIC']).default('IN_PERSON'),
   notes: z.string().optional(),
   slotId: z.string().uuid().optional(),
 });
 
 const updateStatusSchema = z.object({
-  status: z.enum(['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_CONSULTATION', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
+  status: z.enum(['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_CONSULTATION', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESCHEDULED', 'REJECTED']),
 });
 
 router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookAppointmentSchema), async (req: AuthRequest, res, next) => {
@@ -33,6 +34,17 @@ router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookApp
       where: { id: data.doctorId, organizationId: data.organizationId, isActive: true },
     });
     if (!doctor) throw new AppError('Doctor not found', 404);
+
+    const conflicts = await detectAppointmentConflict({
+      doctorId: data.doctorId,
+      patientId: patient.id,
+      appointmentDate: new Date(data.appointmentDate),
+      startTime: data.startTime,
+    });
+    if (conflicts.length) throw new AppError(conflicts.join('; '), 409);
+
+    const appointmentNumber = await generateAppointmentNumber();
+    const isOnline = ['VIDEO', 'PHONE'].includes(data.type);
 
     const appointment = await prisma.$transaction(async (tx: TransactionClient) => {
       await tx.patientOrganization.upsert({
@@ -53,6 +65,7 @@ router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookApp
 
       return tx.appointment.create({
         data: {
+          appointmentNumber,
           organizationId: data.organizationId,
           branchId: doctor.branchId,
           patientId: patient.id,
@@ -63,6 +76,7 @@ router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookApp
           startTime: data.startTime,
           endTime: data.endTime,
           type: data.type,
+          isOnline,
           notes: data.notes,
           status: 'PENDING',
         },

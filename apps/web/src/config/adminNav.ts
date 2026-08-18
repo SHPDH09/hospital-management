@@ -46,9 +46,16 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Appointment Management',
+    items: [
+      { to: '/admin/appointment-management', icon: Calendar, label: 'AM Dashboard' },
+      { to: '/admin/appointment-management/appointments', icon: Calendar, label: 'All Appointments' },
+      { to: '/admin/appointment-management/today', icon: Calendar, label: "Today's Appointments" },
+    ],
+  },
+  {
     title: 'Operations',
     items: [
-      { to: '/admin/appointments', icon: Calendar, label: 'Appointments' },
       { to: '/admin/payments', icon: Receipt, label: 'Payments' },
       { to: '/admin/leads', icon: Target, label: 'Leads' },
       { to: '/admin/reviews', icon: Star, label: 'Reviews' },

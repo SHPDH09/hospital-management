@@ -6,6 +6,9 @@ export {
   PatientManagementDashboardPage, PatientManagementListPage, PatientManagementDetailPage, PatientDuplicatesPage,
 } from './AdminPatientManagementPages';
 export {
+  AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
+} from './AdminAppointmentManagementPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';

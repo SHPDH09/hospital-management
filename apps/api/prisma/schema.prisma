@@ -46,6 +46,28 @@ enum AppointmentStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+  RESCHEDULED
+  REJECTED
+}
+
+enum AppointmentPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum AppointmentType {
+  IN_PERSON
+  VIDEO
+  PHONE
+  FOLLOW_UP
+  EMERGENCY
+  WALK_IN
+  HOME_VISIT
+  DIAGNOSTIC
 }
 
 enum BillStatus {
@@ -415,21 +437,33 @@ model AppointmentSlot {
 }
 
 model Appointment {
-  id             String            @id @default(uuid())
-  organizationId String
-  branchId       String?
-  patientId      String
-  doctorId       String
-  departmentId   String?
-  slotId         String?
-  appointmentDate DateTime         @db.Date
-  startTime      String
-  endTime        String?
-  type           String            @default("consultation")
-  status         AppointmentStatus @default(PENDING)
-  notes          String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                String                   @id @default(uuid())
+  appointmentNumber String                   @unique
+  organizationId    String
+  branchId          String?
+  patientId         String
+  doctorId          String
+  departmentId      String?
+  slotId            String?
+  appointmentDate   DateTime                 @db.Date
+  startTime         String
+  endTime           String?
+  type              AppointmentType          @default(IN_PERSON)
+  status            AppointmentStatus        @default(PENDING)
+  paymentStatus     AppointmentPaymentStatus @default(PENDING)
+  notes             String?
+  referralSource    PatientRegistrationSource?
+  referralId        String?
+  referralName      String?
+  advertisementId   String?
+  cancellationReason String?
+  rescheduledFromId String?
+  checkedInAt       DateTime?
+  tokenNumber       String?
+  isEmergency       Boolean                  @default(false)
+  isOnline          Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch?          @relation(fields: [branchId], references: [id])
@@ -442,6 +476,8 @@ model Appointment {
   @@index([organizationId, appointmentDate])
   @@index([doctorId, appointmentDate, status])
   @@index([patientId])
+  @@index([appointmentNumber])
+  @@index([status, appointmentDate])
   @@map("appointments")
 }
 

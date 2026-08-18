@@ -278,6 +278,28 @@ async function main() {
     data: { patientId: patient.id, organizationId: organization.id },
   });
 
+  const demoDoctor = await prisma.doctor.findFirst({ where: { organizationId: organization.id } });
+  if (demoDoctor) {
+    await prisma.appointment.upsert({
+      where: { appointmentNumber: 'APT-00001' },
+      update: {},
+      create: {
+        appointmentNumber: 'APT-00001',
+        organizationId: organization.id,
+        patientId: patient.id,
+        doctorId: demoDoctor.id,
+        departmentId: demoDoctor.departmentId,
+        appointmentDate: new Date(),
+        startTime: '10:30',
+        endTime: '11:00',
+        type: 'IN_PERSON',
+        status: 'CONFIRMED',
+        paymentStatus: 'PAID',
+        referralSource: 'DIRECT',
+      },
+    });
+  }
+
   // Sample Advertisement
   await prisma.advertisement.create({
     data: {
