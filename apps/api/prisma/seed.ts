@@ -192,6 +192,8 @@ async function main() {
         experience: doc.exp,
         consultationFee: doc.fee,
         languages: ['English', 'Hindi'],
+        verificationStatus: 'APPROVED',
+        accountActivated: true,
         averageRating: 4.2 + Math.random() * 0.6,
         reviewCount: Math.floor(Math.random() * 50) + 10,
       },
@@ -258,6 +260,7 @@ async function main() {
     update: {},
     create: {
       userId: patientUser.id,
+      globalPatientId: 'PAT-00000001',
       fullName: 'Rahul Verma',
       dateOfBirth: new Date('1990-05-15'),
       gender: 'MALE',
@@ -265,6 +268,9 @@ async function main() {
       city: 'Mumbai',
       state: 'Maharashtra',
       emergencyContact: '+91-9876543298',
+      profileCompleted: true,
+      accountStatus: 'ACTIVE',
+      registrationSource: 'DIRECT',
     },
   });
 
