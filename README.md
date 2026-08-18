@@ -55,7 +55,30 @@ npm run db:setup
 npm run dev
 ```
 
-### AWS RDS Setup
+### AWS Aurora RDS (EC2 Production)
+
+Full guide: [docs/AWS-AURORA-SETUP.md](docs/AWS-AURORA-SETUP.md)
+
+| Field | Value |
+|-------|-------|
+| Writer | `database-1.cluster-covwo0uikrnc.us-east-1.rds.amazonaws.com` |
+| Username | `postgres` |
+| Database | `postgres` |
+| Port | `5432` |
+
+**On EC2 (password sirf server par):**
+
+```bash
+cp .env.rds.example apps/api/.env
+nano apps/api/.env                    # YOUR_RDS_PASSWORD replace karo
+npm run db:test                       # connection test
+chmod +x scripts/setup-production.sh
+./scripts/setup-production.sh         # schema + seed + docker start
+```
+
+**Do NOT use the `-ro-` reader endpoint for migrations or writes.**
+
+### AWS RDS Setup (manual)
 
 The project is configured for AWS RDS PostgreSQL with a writer and read-replica endpoint:
 
