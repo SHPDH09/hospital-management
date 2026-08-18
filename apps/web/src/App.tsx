@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -18,12 +18,13 @@ import {
   CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage,
 } from '@/pages/crm/CrmPages';
 import {
-  AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
+  AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  DoctorManagementDashboardPage, DoctorManagementListPage, DoctorManagementDetailPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -74,7 +75,10 @@ export default function App() {
             <Route path="/admin/hospitals" element={<Admin><AdminHospitalsPage /></Admin>} />
             <Route path="/admin/clinics" element={<Admin><AdminClinicsPage /></Admin>} />
             <Route path="/admin/organizations" element={<Admin><AdminHospitalsPage /></Admin>} />
-            <Route path="/admin/doctors" element={<Admin><AdminDoctorsPage /></Admin>} />
+            <Route path="/admin/doctor-management" element={<Admin><DoctorManagementDashboardPage /></Admin>} />
+            <Route path="/admin/doctor-management/doctors" element={<Admin><DoctorManagementListPage /></Admin>} />
+            <Route path="/admin/doctor-management/doctors/:id" element={<Admin><DoctorManagementDetailPage /></Admin>} />
+            <Route path="/admin/doctors" element={<Navigate to="/admin/doctor-management/doctors" replace />} />
             <Route path="/admin/patients" element={<Admin><AdminPatientsPage /></Admin>} />
             <Route path="/admin/appointments" element={<Admin><AdminAppointmentsPage /></Admin>} />
             <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />

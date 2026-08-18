@@ -192,6 +192,8 @@ async function main() {
         experience: doc.exp,
         consultationFee: doc.fee,
         languages: ['English', 'Hindi'],
+        verificationStatus: 'APPROVED',
+        accountActivated: true,
         averageRating: 4.2 + Math.random() * 0.6,
         reviewCount: Math.floor(Math.random() * 50) + 10,
       },
