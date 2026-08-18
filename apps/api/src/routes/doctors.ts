@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma, readDb } from '../lib/prisma';
+import { prisma, readDb, TransactionClient } from '../lib/prisma';
 import { hashPassword } from '../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
@@ -148,7 +148,7 @@ router.post('/', authenticate, requireRoles('HOSPITAL_ADMIN', 'BRANCH_ADMIN'), v
 
     const passwordHash = await hashPassword(data.password);
 
-    const doctor = await prisma.$transaction(async (tx) => {
+    const doctor = await prisma.$transaction(async (tx: TransactionClient) => {
       const user = await tx.user.create({
         data: { email: data.email, passwordHash, role: 'DOCTOR' },
       });

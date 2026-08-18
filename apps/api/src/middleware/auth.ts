@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '@prisma/client';
+import { UserRole } from '@healthcare/shared';
 import { verifyAccessToken } from '../lib/auth';
 import { sendError } from '../lib/response';
 import { prisma } from '../lib/prisma';

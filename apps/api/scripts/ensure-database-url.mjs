@@ -12,7 +12,7 @@ const envPath = resolve(__dirname, '../.env');
 
 const DB_USER = process.env.DB_USER || 'postgres';
 const DB_PASSWORD = process.env.DB_PASSWORD;
-const DB_NAME = process.env.DB_NAME || 'healthcare_platform';
+const DB_NAME = process.env.DB_NAME || 'postgres';
 const DB_HOST = process.env.DB_HOST || 'database-1.cluster-covwo0uikrnc.us-east-1.rds.amazonaws.com';
 const DB_HOST_READ = process.env.DB_HOST_READ || 'database-1.cluster-ro-covwo0uikrnc.us-east-1.rds.amazonaws.com';
 const DB_PORT = process.env.DB_PORT || '5432';

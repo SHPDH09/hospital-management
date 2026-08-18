@@ -1,0 +1,41 @@
+# Production — Aurora RDS (no local Postgres)
+# Usage: docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: healthcare-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: healthcare-api
+    restart: unless-stopped
+    env_file:
+      - apps/api/.env
+    ports:
+      - "3001:3001"
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+    container_name: healthcare-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api

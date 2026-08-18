@@ -23,7 +23,7 @@ export function DoctorDetailPage() {
 
   const handleBook = async () => {
     if (!isAuthenticated) {
-      navigate('/login');
+      navigate('/login/patient');
       return;
     }
     if (!selectedSlot || !doctor) return;

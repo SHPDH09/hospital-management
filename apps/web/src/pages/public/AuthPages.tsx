@@ -1,71 +1,95 @@
+import { Navigate } from 'react-router-dom';
+import { User, Stethoscope, Building2, Users, Shield } from 'lucide-react';
+import { RoleLoginPage } from '@/components/auth/RoleLoginPage';
+import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { getPortalPath } from '@/contexts/AuthContext';
+import { apiBaseUrl } from '@/lib/api';
 
-export function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+const publicLoginLinks = [
+  { to: '/login/patient', label: 'Patient' },
+  { to: '/login/doctor', label: 'Doctor' },
+  { to: '/login/hospital', label: 'Hospital' },
+  { to: '/login/staff', label: 'Staff' },
+];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      await login(email, password);
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      navigate(getPortalPath(user.role));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+export function PatientLoginPage() {
   return (
-    <PublicLayout>
-      <div className="flex min-h-[60vh] items-center justify-center px-4 py-12">
-        <div className="card w-full max-w-md p-8">
-          <h1 className="text-2xl font-bold text-center mb-2">Welcome Back</h1>
-          <p className="text-center text-gray-500 text-sm mb-8">Sign in to your account</p>
-
-          {error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-            <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-primary-600 hover:text-primary-700 font-medium">Register</Link>
-          </p>
-
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg text-xs text-gray-500">
-            <p className="font-medium mb-2">Demo accounts:</p>
-            <p>Patient: patient@example.com</p>
-            <p>Hospital Admin: admin@cityhospital.com</p>
-            <p>Super Admin: admin@healthcare.platform</p>
-            <p className="mt-1">Password: Password123!</p>
-          </div>
-        </div>
-      </div>
-    </PublicLayout>
+    <RoleLoginPage
+      config={{
+        title: 'Patient Login',
+        subtitle: 'Sign in to book appointments and manage your health records',
+        allowedRoles: ['PATIENT'],
+        icon: <User className="h-10 w-10 text-primary-600" />,
+        registerLink: { to: '/register', label: 'Create patient account' },
+        alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/patient'),
+        showDemo: true,
+      }}
+    />
   );
+}
+
+export function DoctorLoginPage() {
+  return (
+    <RoleLoginPage
+      config={{
+        title: 'Doctor Login',
+        subtitle: 'Access your schedule, patients, and prescriptions',
+        allowedRoles: ['DOCTOR'],
+        icon: <Stethoscope className="h-10 w-10 text-primary-600" />,
+        alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/doctor'),
+      }}
+    />
+  );
+}
+
+export function HospitalLoginPage() {
+  return (
+    <RoleLoginPage
+      config={{
+        title: 'Hospital / Clinic Login',
+        subtitle: 'Sign in to manage your organization, staff, and operations',
+        allowedRoles: ['HOSPITAL_ADMIN', 'BRANCH_ADMIN'],
+        icon: <Building2 className="h-10 w-10 text-primary-600" />,
+        registerLink: { to: '/register/hospital', label: 'Register your organization' },
+        alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/hospital'),
+      }}
+    />
+  );
+}
+
+export function StaffLoginPage() {
+  return (
+    <RoleLoginPage
+      config={{
+        title: 'Staff Login',
+        subtitle: 'For receptionists, nurses, accountants, pharmacists, and lab staff',
+        allowedRoles: ['RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER'],
+        icon: <Users className="h-10 w-10 text-primary-600" />,
+        alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/staff'),
+      }}
+    />
+  );
+}
+
+/** Admin login — not linked in public footer; direct URL only */
+export function AdminLoginPage() {
+  return (
+    <RoleLoginPage
+      config={{
+        title: 'Platform Admin',
+        subtitle: 'Authorized platform operators only',
+        allowedRoles: ['SUPER_ADMIN', 'PLATFORM_STAFF'],
+        icon: <Shield className="h-10 w-10 text-red-600" />,
+      }}
+    />
+  );
+}
+
+/** Legacy redirect */
+export function LoginPage() {
+  return <Navigate to="/login/patient" replace />;
 }
 
 export function RegisterPage() {
@@ -143,7 +167,7 @@ export function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-gray-500">
             Already have an account?{' '}
-            <Link to="/login" className="text-primary-600 hover:text-primary-700 font-medium">Sign in</Link>
+            <Link to="/login/patient" className="text-primary-600 hover:text-primary-700 font-medium">Patient login</Link>
           </p>
         </div>
       </div>
@@ -164,13 +188,13 @@ export function RegisterHospitalPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/organizations/register', {
+      const res = await fetch(`${apiBaseUrl}/organizations/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Registration failed');
+      const data = await res.json().catch(() => null);
+      if (!data?.success) throw new Error(data?.error || 'Registration failed');
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -187,7 +211,7 @@ export function RegisterHospitalPage() {
             <div className="text-4xl mb-4">✓</div>
             <h2 className="text-xl font-bold mb-2">Registration Submitted!</h2>
             <p className="text-gray-500 mb-6">Your organization registration is pending verification. We'll notify you once approved.</p>
-            <Link to="/login" className="btn-primary">Go to Login</Link>
+            <Link to="/login/hospital" className="btn-primary">Go to Hospital Login</Link>
           </div>
         </div>
       </PublicLayout>
@@ -255,6 +279,11 @@ export function RegisterHospitalPage() {
               {loading ? 'Submitting...' : 'Submit Registration'}
             </button>
           </form>
+
+          <p className="mt-6 text-center text-sm text-gray-500">
+            Already registered?{' '}
+            <Link to="/login/hospital" className="text-primary-600 hover:text-primary-700 font-medium">Hospital login</Link>
+          </p>
         </div>
       </div>
     </PublicLayout>

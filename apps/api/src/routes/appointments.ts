@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/prisma';
+import { prisma, TransactionClient } from '../lib/prisma';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
@@ -34,7 +34,7 @@ router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookApp
     });
     if (!doctor) throw new AppError('Doctor not found', 404);
 
-    const appointment = await prisma.$transaction(async (tx) => {
+    const appointment = await prisma.$transaction(async (tx: TransactionClient) => {
       await tx.patientOrganization.upsert({
         where: {
           patientId_organizationId: { patientId: patient.id, organizationId: data.organizationId },

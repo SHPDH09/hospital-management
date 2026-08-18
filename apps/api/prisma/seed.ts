@@ -42,8 +42,8 @@ async function main() {
     }),
   ]);
 
-  // Super Admin
-  const superAdmin = await prisma.user.upsert({
+  // Super Admin (demo)
+  await prisma.user.upsert({
     where: { email: 'admin@healthcare.platform' },
     update: {},
     create: {
@@ -53,6 +53,28 @@ async function main() {
       emailVerified: true,
     },
   });
+
+  // Production super admin (set ADMIN_EMAIL + ADMIN_PASSWORD in .env)
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    const adminHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
+    await prisma.user.upsert({
+      where: { email: process.env.ADMIN_EMAIL },
+      update: {
+        passwordHash: adminHash,
+        role: 'SUPER_ADMIN',
+        isActive: true,
+        emailVerified: true,
+      },
+      create: {
+        email: process.env.ADMIN_EMAIL,
+        passwordHash: adminHash,
+        role: 'SUPER_ADMIN',
+        isActive: true,
+        emailVerified: true,
+      },
+    });
+    console.log(`  Production Super Admin: ${process.env.ADMIN_EMAIL}`);
+  }
 
   // Demo Hospital
   const hospitalAdmin = await prisma.user.upsert({
