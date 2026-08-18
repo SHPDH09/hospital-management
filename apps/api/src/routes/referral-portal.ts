@@ -6,6 +6,7 @@ import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { buildReferralLink, buildQrCodeUrl } from '../lib/referral';
+import { ORG_BRANDING_SELECT, attachBrandingToOrganization } from '../lib/hospital-branding';
 
 const router = Router();
 
@@ -42,7 +43,7 @@ router.get('/dashboard', async (req: AuthRequest, res, next) => {
 
     const connections = await prisma.referralHospitalConnection.findMany({
       where: { ...filter, status: 'ACTIVE' },
-      include: { organization: { select: { id: true, name: true, slug: true } } },
+      include: { organization: { select: ORG_BRANDING_SELECT } },
     });
 
     sendSuccess(res, {
@@ -60,7 +61,10 @@ router.get('/dashboard', async (req: AuthRequest, res, next) => {
         treatmentCompleted: eventMap.TREATMENT_COMPLETED || 0,
       },
       wallet: wallet || { totalEarned: 0, pending: 0, approved: 0, paid: 0, onHold: 0 },
-      hospitals: connections,
+      hospitals: connections.map((c) => ({
+        ...c,
+        organization: c.organization ? attachBrandingToOrganization(c.organization) : c.organization,
+      })),
     });
   } catch (err) { next(err); }
 });
@@ -92,10 +96,13 @@ router.get('/hospitals', async (req: AuthRequest, res, next) => {
     const filter = profile.asha ? { ashaProfileId: profile.asha.id } : { referralPartnerId: profile.partner!.id };
     const connections = await prisma.referralHospitalConnection.findMany({
       where: filter,
-      include: { organization: { select: { id: true, name: true, slug: true, city: true } }, commissionPlan: true },
+      include: { organization: { select: { ...ORG_BRANDING_SELECT, city: true } }, commissionPlan: true },
       orderBy: { connectionDate: 'desc' },
     });
-    sendSuccess(res, connections);
+    sendSuccess(res, connections.map((c) => ({
+      ...c,
+      organization: attachBrandingToOrganization(c.organization),
+    })));
   } catch (err) { next(err); }
 });
 
@@ -110,7 +117,7 @@ router.get('/patients', async (req: AuthRequest, res, next) => {
     const attributions = await prisma.patientReferralAttribution.findMany({
       where: filter,
       include: {
-        organization: { select: { name: true } },
+        organization: { select: ORG_BRANDING_SELECT },
         patient: { select: { id: true, fullName: true } },
         commissions: { select: { commissionAmount: true, status: true } },
       },
@@ -121,6 +128,7 @@ router.get('/patients', async (req: AuthRequest, res, next) => {
       patientId: a.patient.id,
       patientName: a.patient.fullName,
       hospital: a.organization.name,
+      organization: attachBrandingToOrganization(a.organization),
       registrationDate: a.registrationTouchAt,
       treatmentStatus: a.treatmentStatus,
       commissionStatus: a.commissionStatus,

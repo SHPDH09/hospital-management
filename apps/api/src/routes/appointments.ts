@@ -5,6 +5,10 @@ import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
+import {
+  ORG_BRANDING_SELECT,
+  attachBrandingToOrganization,
+} from '../lib/hospital-branding';
 
 const router = Router();
 
@@ -102,13 +106,19 @@ router.get('/my', authenticate, requireRoles('PATIENT'), async (req: AuthRequest
         orderBy: [{ appointmentDate: 'desc' }, { startTime: 'desc' }],
         include: {
           doctor: { select: { id: true, fullName: true, specialization: true, photoUrl: true } },
-          organization: { select: { id: true, name: true, slug: true, address: true } },
+          organization: { select: { ...ORG_BRANDING_SELECT } },
+          branch: { select: { id: true, name: true, logoUrl: true } },
         },
       }),
       prisma.appointment.count({ where }),
     ]);
 
-    sendPaginated(res, appointments, { page, limit, total });
+    const withBranding = appointments.map((apt) => ({
+      ...apt,
+      organization: attachBrandingToOrganization(apt.organization, apt.branch),
+    }));
+
+    sendPaginated(res, withBranding, { page, limit, total });
   } catch (err) {
     next(err);
   }
@@ -142,13 +152,19 @@ router.get('/', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PLATFOR
         include: {
           patient: { select: { id: true, fullName: true, user: { select: { phone: true } } } },
           doctor: { select: { id: true, fullName: true, specialization: true } },
-          organization: { select: { name: true } },
+          organization: { select: ORG_BRANDING_SELECT },
+          branch: { select: { id: true, name: true, logoUrl: true } },
         },
       }),
       prisma.appointment.count({ where }),
     ]);
 
-    sendPaginated(res, appointments, { page, limit, total });
+    const withBranding = appointments.map((apt) => ({
+      ...apt,
+      organization: attachBrandingToOrganization(apt.organization, apt.branch),
+    }));
+
+    sendPaginated(res, withBranding, { page, limit, total });
   } catch (err) {
     next(err);
   }
@@ -191,7 +207,8 @@ router.get('/:id', authenticate, async (req: AuthRequest, res, next) => {
       include: {
         patient: true,
         doctor: true,
-        organization: true,
+        organization: { select: ORG_BRANDING_SELECT },
+        branch: { select: { id: true, name: true, logoUrl: true } },
         department: true,
         bills: true,
       },
@@ -204,7 +221,10 @@ router.get('/:id', authenticate, async (req: AuthRequest, res, next) => {
       if (patient?.id !== appointment.patientId) throw new AppError('Access denied', 403);
     }
 
-    sendSuccess(res, appointment);
+    sendSuccess(res, {
+      ...appointment,
+      organization: attachBrandingToOrganization(appointment.organization, appointment.branch),
+    });
   } catch (err) {
     next(err);
   }

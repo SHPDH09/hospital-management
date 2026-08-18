@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, MapPin, Star, Building2, Stethoscope, Shield, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
+import { HospitalLogo } from '@/components/HospitalLogo';
 import { api } from '@/lib/api';
 
 export function HomePage() {
@@ -171,6 +172,8 @@ interface Organization {
   reviewCount: number;
   emergencyAvailable: boolean;
   facilities: string[];
+  logoUrl?: string | null;
+  branding?: { displayLogoUrl?: string | null; name?: string };
   _count?: { doctors: number };
 }
 
@@ -189,6 +192,9 @@ interface Doctor {
 export function OrganizationCard({ org }: { org: Organization }) {
   return (
     <Link to={`/organizations/${org.slug}`} className="card p-6 hover:shadow-md transition-shadow">
+      <div className="flex justify-center mb-4">
+        <HospitalLogo organization={org} size="md" />
+      </div>
       <div className="flex items-start justify-between">
         <div>
           <span className="badge bg-primary-100 text-primary-700">{org.type}</span>

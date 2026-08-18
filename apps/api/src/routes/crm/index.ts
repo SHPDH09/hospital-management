@@ -10,10 +10,12 @@ import { validateBody, validateQuery } from '../../middleware/validate';
 import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
 import referralRoutes from './referrals';
+import brandingRoutes from './branding';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
 router.use('/referrals', referralRoutes);
+router.use('/branding', brandingRoutes);
 
 const pagination = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -90,6 +92,7 @@ router.get('/branches', async (req: AuthRequest, res, next) => {
 
 router.post('/branches', validateBody(z.object({
   name: z.string().min(2),
+  logoUrl: z.string().url().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),

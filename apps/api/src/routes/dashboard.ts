@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, PLATFORM_ROLES, resolveOrganizationId } from '../middleware/auth';
+import { ORG_BRANDING_SELECT, attachBrandingToOrganization } from '../lib/hospital-branding';
 
 const router = Router();
 
@@ -158,7 +159,8 @@ router.get('/patient', authenticate, requireRoles('PATIENT'), async (req: AuthRe
         orderBy: [{ appointmentDate: 'asc' }, { startTime: 'asc' }],
         include: {
           doctor: { select: { fullName: true, specialization: true } },
-          organization: { select: { name: true } },
+          organization: { select: ORG_BRANDING_SELECT },
+          branch: { select: { id: true, name: true, logoUrl: true } },
         },
       }),
       prisma.appointment.findMany({
@@ -170,17 +172,64 @@ router.get('/patient', authenticate, requireRoles('PATIENT'), async (req: AuthRe
       prisma.bill.findMany({
         where: { patientId: patient.id, status: { in: ['PENDING', 'PARTIALLY_PAID'] } },
         take: 5,
-        include: { organization: { select: { name: true } } },
+        include: { organization: { select: ORG_BRANDING_SELECT } },
       }),
       [],
     ]);
 
+    const upcomingWithBranding = upcomingAppointments.map((apt) => ({
+      ...apt,
+      organization: attachBrandingToOrganization(apt.organization, apt.branch),
+    }));
+    const billsWithBranding = pendingBills.map((bill) => ({
+      ...bill,
+      organization: attachBrandingToOrganization(bill.organization),
+    }));
+
     sendSuccess(res, {
-      upcomingAppointments,
+      upcomingAppointments: upcomingWithBranding,
       recentAppointments,
-      pendingBills,
+      pendingBills: billsWithBranding,
       recentPrescriptions,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/patient/hospital-history', authenticate, requireRoles('PATIENT'), async (req: AuthRequest, res, next) => {
+  try {
+    const patient = await prisma.patient.findUnique({ where: { userId: req.user!.userId } });
+    if (!patient) return sendSuccess(res, []);
+
+    const orgLinks = await prisma.patientOrganization.findMany({
+      where: { patientId: patient.id },
+      include: {
+        organization: { select: ORG_BRANDING_SELECT },
+      },
+    });
+
+    const history = await Promise.all(orgLinks.map(async (link) => {
+      const [total, completed, upcoming, cancelled] = await Promise.all([
+        prisma.appointment.count({ where: { patientId: patient.id, organizationId: link.organizationId } }),
+        prisma.appointment.count({ where: { patientId: patient.id, organizationId: link.organizationId, status: 'COMPLETED' } }),
+        prisma.appointment.count({
+          where: {
+            patientId: patient.id,
+            organizationId: link.organizationId,
+            status: { in: ['PENDING', 'CONFIRMED'] },
+            appointmentDate: { gte: new Date() },
+          },
+        }),
+        prisma.appointment.count({ where: { patientId: patient.id, organizationId: link.organizationId, status: 'CANCELLED' } }),
+      ]);
+      return {
+        organization: attachBrandingToOrganization(link.organization),
+        stats: { total, completed, upcoming, cancelled },
+      };
+    }));
+
+    sendSuccess(res, history);
   } catch (err) {
     next(err);
   }

@@ -1,9 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Calendar, Stethoscope, LogOut, Heart, Menu,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { HospitalLogo } from '@/components/HospitalLogo';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { adminNavGroups } from '@/config/adminNav';
 import { crmNavGroups } from '@/config/crmNav';
@@ -11,6 +14,7 @@ import { crmNavGroups } from '@/config/crmNav';
 const patientNav = [
   { to: '/patient', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/patient/appointments', icon: Calendar, label: 'Appointments' },
+  { to: '/patient/hospitals', icon: Heart, label: 'Hospital History' },
   { to: '/find/doctors', icon: Stethoscope, label: 'Find Doctor' },
   { to: '/find/hospitals', icon: Heart, label: 'Find Hospital' },
 ];
@@ -25,7 +29,14 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
 
-  const title = portal === 'crm' ? 'Hospital CRM' : portal === 'admin' ? 'Super Admin' : portal === 'referral' ? 'Referral Dashboard' : 'Patient Portal';
+  const { data: crmBranding } = useQuery({
+    queryKey: ['crm-branding-header'],
+    queryFn: () => api.get('/crm/branding'),
+    enabled: portal === 'crm',
+  });
+  const hospitalBranding = (crmBranding?.data as { branding?: { name: string; displayLogoUrl?: string | null } })?.branding;
+
+  const title = portal === 'crm' ? (hospitalBranding?.name || 'Hospital CRM') : portal === 'admin' ? 'Super Admin' : portal === 'referral' ? 'Referral Dashboard' : 'Patient Portal';
 
   const isActive = (path: string) => {
     if (path === '/admin') return location.pathname === '/admin';
@@ -44,8 +55,14 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6 shrink-0">
-          <Heart className="h-6 w-6 fill-primary-600 text-primary-600" />
-          <span className="font-bold text-primary-700">{title}</span>
+          {portal === 'crm' && hospitalBranding ? (
+            <HospitalLogo organization={{ branding: hospitalBranding }} size="xs" showName nameClassName="font-bold text-primary-700 truncate" className="min-w-0" />
+          ) : (
+            <>
+              <Heart className="h-6 w-6 fill-primary-600 text-primary-600 shrink-0" />
+              <span className="font-bold text-primary-700 truncate">{title}</span>
+            </>
+          )}
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-4">

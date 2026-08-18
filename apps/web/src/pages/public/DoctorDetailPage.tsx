@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, Calendar, MapPin } from 'lucide-react';
+import { Star, Calendar } from 'lucide-react';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
+import { HospitalLogo } from '@/components/HospitalLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -83,10 +84,12 @@ export function DoctorDetailPage() {
                 <span>{doctor.experience} years experience</span>
                 <span className="font-medium text-gray-900">₹{doctor.consultationFee} consultation</span>
               </div>
-              <p className="text-sm text-gray-500 flex items-center gap-1 mt-2">
-                <MapPin className="h-4 w-4" />
-                {doctor.organization.name}, {doctor.organization.city}
+              <p className="text-sm text-gray-500 flex items-center gap-2 mt-4">
+                <span className="font-medium text-gray-700">Works at:</span>
               </p>
+              <div className="mt-2">
+                <HospitalLogo organization={doctor.organization} size="sm" showName />
+              </div>
             </div>
           </div>
         </div>
@@ -161,6 +164,6 @@ interface DoctorDetail {
   averageRating: number;
   reviewCount: number;
   bio: string;
-  organization: { id: string; name: string; city: string };
+  organization: { id: string; name: string; city: string; branding?: { displayLogoUrl?: string | null } };
   slots: { id: string; date: string; startTime: string; endTime: string }[];
 }

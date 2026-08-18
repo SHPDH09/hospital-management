@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { MapPin, Star, Phone, Clock, Shield, Calendar } from 'lucide-react';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
+import { HospitalLogo } from '@/components/HospitalLogo';
 import { DoctorCard } from '@/pages/public/HomePage';
 import { api } from '@/lib/api';
 
@@ -23,9 +24,7 @@ export function OrganizationDetailPage() {
       <div className="bg-white border-b border-gray-200">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row gap-6">
-            <div className="h-24 w-24 rounded-xl bg-primary-100 flex items-center justify-center text-primary-700 text-3xl font-bold">
-              {org.name.charAt(0)}
-            </div>
+            <HospitalLogo organization={org} size="xl" />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <span className="badge bg-primary-100 text-primary-700">{org.type}</span>

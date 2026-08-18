@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Calendar, Receipt, Stethoscope, ArrowRight } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
+import { HospitalLogo } from '@/components/HospitalLogo';
 import { api } from '@/lib/api';
 import { formatDate, formatCurrency, getStatusColor } from '@/lib/utils';
 
@@ -55,10 +56,13 @@ export function PatientDashboard() {
               <div className="space-y-3">
                 {dashboard?.upcomingAppointments?.map((apt) => (
                   <div key={apt.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-sm">{apt.doctor.fullName}</p>
-                      <p className="text-xs text-gray-500">{apt.organization.name}</p>
-                      <p className="text-xs text-gray-400 mt-1">{formatDate(apt.appointmentDate)} at {apt.startTime}</p>
+                    <div className="flex items-center gap-3">
+                      <HospitalLogo organization={apt.organization} size="sm" />
+                      <div>
+                        <p className="font-medium text-sm">{apt.doctor.fullName}</p>
+                        <p className="text-xs text-gray-500">{apt.organization.name}</p>
+                        <p className="text-xs text-gray-400 mt-1">{formatDate(apt.appointmentDate)} at {apt.startTime}</p>
+                      </div>
                     </div>
                     <span className={`badge ${getStatusColor(apt.status)}`}>{apt.status}</span>
                   </div>
@@ -112,14 +116,17 @@ export function PatientAppointmentsPage() {
         <div className="space-y-4">
           {(data?.data as Appointment[] | undefined)?.map((apt) => (
             <div key={apt.id} className="card p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold">{apt.doctor.fullName}</h3>
-                  <p className="text-sm text-primary-600">{apt.doctor.specialization}</p>
-                  <p className="text-sm text-gray-500 mt-1">{apt.organization.name}</p>
-                  <p className="text-sm text-gray-400 mt-2">
-                    {formatDate(apt.appointmentDate)} at {apt.startTime}
-                  </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <HospitalLogo organization={apt.organization} size="md" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{apt.organization.name}</p>
+                    <h3 className="font-semibold">{apt.doctor.fullName}</h3>
+                    <p className="text-sm text-primary-600">{apt.doctor.specialization}</p>
+                    <p className="text-sm text-gray-400 mt-2">
+                      {formatDate(apt.appointmentDate)} at {apt.startTime}
+                    </p>
+                  </div>
                 </div>
                 <span className={`badge ${getStatusColor(apt.status)}`}>{apt.status}</span>
               </div>
@@ -133,7 +140,13 @@ export function PatientAppointmentsPage() {
 
 interface PatientDashboardData {
   upcomingAppointments: Appointment[];
-  pendingBills: { id: string; billNumber: string; total: number; organization: { name: string } }[];
+  pendingBills: { id: string; billNumber: string; total: number; organization: OrgWithBranding }[];
+}
+
+interface OrgWithBranding {
+  name: string;
+  logoUrl?: string | null;
+  branding?: { displayLogoUrl?: string | null; name?: string };
 }
 
 interface Appointment {
@@ -142,5 +155,38 @@ interface Appointment {
   startTime: string;
   status: string;
   doctor: { fullName: string; specialization: string };
-  organization: { name: string };
+  organization: OrgWithBranding;
+}
+
+export function PatientHospitalHistoryPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['patient-hospital-history'],
+    queryFn: () => api.get('/dashboard/patient/hospital-history'),
+  });
+  const history = (data?.data as { organization: OrgWithBranding; stats: { total: number; completed: number; upcoming: number; cancelled: number } }[]) || [];
+
+  return (
+    <DashboardLayout portal="patient">
+      <h1 className="text-2xl font-bold mb-6">My Healthcare / Hospital History</h1>
+      {isLoading ? (
+        <div className="text-center py-12 text-gray-500">Loading...</div>
+      ) : history.length === 0 ? (
+        <div className="card p-12 text-center text-gray-500">No hospital visits yet</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {history.map((item) => (
+            <div key={item.organization.name} className="card p-6">
+              <HospitalLogo organization={item.organization} size="md" showName className="mb-4" />
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span>{item.stats.total} Appointments</span>
+                <span>{item.stats.completed} Completed</span>
+                <span>{item.stats.upcoming} Upcoming</span>
+                <span>{item.stats.cancelled} Cancelled</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </DashboardLayout>
+  );
 }

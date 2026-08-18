@@ -20,6 +20,12 @@ import advertisementRoutes from './advertisements';
 import platformStaffRoutes from './platform-staff';
 import permissionsRoutes from './permissions';
 import supportRoutes from './support';
+import {
+  ORG_BRANDING_SELECT,
+  formatHospitalBranding,
+  recordLogoHistory,
+  validateImageUrl,
+} from '../../lib/hospital-branding';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -206,6 +212,90 @@ router.post('/organizations/:id/impersonate', async (req: AuthRequest, res, next
       user: { id: staff.user.id, email: staff.user.email, role: staff.user.role },
       redirectTo: '/crm',
     }, 'Impersonation token issued');
+  } catch (err) { next(err); }
+});
+
+// ─── Organization Branding (Super Admin) ─────────────────────────────────────
+
+router.get('/organizations/:id/branding', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const org = await prisma.organization.findUnique({
+      where: { id },
+      select: { ...ORG_BRANDING_SELECT, galleryUrls: true },
+    });
+    if (!org) throw new AppError('Organization not found', 404);
+    const history = await prisma.organizationLogoHistory.findMany({
+      where: { organizationId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { uploadedBy: { select: { email: true } } },
+    });
+    sendSuccess(res, { branding: formatHospitalBranding(org), galleryUrls: org.galleryUrls, history });
+  } catch (err) { next(err); }
+});
+
+router.patch('/organizations/:id/branding', validateBody(z.object({
+  logoUrl: z.string().url().optional().nullable(),
+  logoLightUrl: z.string().url().optional().nullable(),
+  logoDarkUrl: z.string().url().optional().nullable(),
+  faviconUrl: z.string().url().optional().nullable(),
+  coverImageUrl: z.string().url().optional().nullable(),
+  brandColor: z.string().optional().nullable(),
+  logoApproved: z.boolean().optional(),
+  brandingLocked: z.boolean().optional(),
+  action: z.enum(['approve', 'lock', 'unlock', 'force_default', 'restore_previous']).optional(),
+}).partial()), async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const existing = await prisma.organization.findUnique({
+      where: { id },
+      select: { ...ORG_BRANDING_SELECT },
+    });
+    if (!existing) throw new AppError('Organization not found', 404);
+
+    const { action, ...updates } = req.body;
+    const data: Record<string, unknown> = { ...updates };
+
+    if (action === 'approve') data.logoApproved = true;
+    if (action === 'lock') data.brandingLocked = true;
+    if (action === 'unlock') data.brandingLocked = false;
+    if (action === 'force_default') {
+      if (existing.logoUrl) {
+        data.previousLogoUrl = existing.logoUrl;
+        data.logoUrl = null;
+        await recordLogoHistory(id, existing.logoUrl, 'ADMIN_FORCE_DEFAULT', req.user!.userId, req.user!.email);
+      }
+    }
+    if (action === 'restore_previous' && existing.previousLogoUrl) {
+      data.logoUrl = existing.previousLogoUrl;
+      await recordLogoHistory(id, existing.previousLogoUrl, 'RESTORED', req.user!.userId, req.user!.email);
+    }
+
+    for (const [key, val] of Object.entries(updates)) {
+      if (typeof val === 'string' && key.includes('Url')) await validateImageUrl(val, key);
+    }
+
+    if (updates.logoUrl && updates.logoUrl !== existing.logoUrl) {
+      data.previousLogoUrl = existing.logoUrl;
+      await recordLogoHistory(id, updates.logoUrl, 'ADMIN_REPLACED', req.user!.userId, req.user!.email);
+    }
+
+    const org = await prisma.organization.update({ where: { id }, data });
+    await logAudit(req, 'UPDATE', 'OrganizationBranding', id, { action, ...updates });
+    sendSuccess(res, { branding: formatHospitalBranding(org) }, 'Branding updated');
+  } catch (err) { next(err); }
+});
+
+router.get('/organizations/:id/branding/history', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const history = await prisma.organizationLogoHistory.findMany({
+      where: { organizationId: id },
+      orderBy: { createdAt: 'desc' },
+      include: { uploadedBy: { select: { email: true } } },
+    });
+    sendSuccess(res, history);
   } catch (err) { next(err); }
 });
 

@@ -6,6 +6,10 @@ import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES, CRM_ROLES } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
+import {
+  ORG_BRANDING_SELECT,
+  attachBrandingToOrganization,
+} from '../lib/hospital-branding';
 
 const router = Router();
 
@@ -142,11 +146,8 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
         take: limit,
         orderBy: [{ averageRating: 'desc' }, { name: 'asc' }],
         select: {
-          id: true,
-          name: true,
-          slug: true,
+          ...ORG_BRANDING_SELECT,
           type: true,
-          logoUrl: true,
           city: true,
           state: true,
           address: true,
@@ -160,7 +161,8 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
       db.organization.count({ where }),
     ]);
 
-    sendPaginated(res, organizations, { page, limit, total });
+    const withBranding = organizations.map((org) => attachBrandingToOrganization(org));
+    sendPaginated(res, withBranding, { page, limit, total });
   } catch (err) {
     next(err);
   }
@@ -191,7 +193,7 @@ router.get('/by-id/:id', async (req, res, next) => {
       },
     });
     if (!org) throw new AppError('Organization not found', 404);
-    sendSuccess(res, org);
+    sendSuccess(res, attachBrandingToOrganization(org));
   } catch (err) {
     next(err);
   }
@@ -232,7 +234,7 @@ router.get('/:slug', async (req, res, next) => {
       throw new AppError('Organization not found', 404);
     }
 
-    sendSuccess(res, org);
+    sendSuccess(res, attachBrandingToOrganization(org));
   } catch (err) {
     next(err);
   }

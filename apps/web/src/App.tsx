@@ -16,7 +16,7 @@ import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
 import { ReferralLandingPage } from '@/pages/public/ReferralLandingPage';
-import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
+import { PatientDashboard, PatientAppointmentsPage, PatientHospitalHistoryPage } from '@/pages/patient/PatientPages';
 
 import { CrmDashboard } from '@/pages/crm/CrmDashboard';
 import {
@@ -28,6 +28,7 @@ import {
   CrmCommunicationsPage, CrmSubscriptionPage, CrmSupportPage, CrmAnalyticsPage,
   CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSchedulePage, CrmSettingsPage,
 } from '@/pages/crm/CrmModulePages';
+import { CrmBrandingPage } from '@/pages/crm/CrmBrandingPage';
 import {
   CrmReferralDashboardPage, CrmReferralListPage, CrmAshaCreatePage, CrmPartnerCreatePage,
   CrmReferredPatientsPage, CrmReferralCommissionsPage, CrmReferralLeaderboardPage,
@@ -97,12 +98,14 @@ export default function App() {
 
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
+            <Route path="/patient/hospitals" element={<ProtectedRoute roles={['PATIENT']}><PatientHospitalHistoryPage /></ProtectedRoute>} />
             <Route path="/patient/complete-profile" element={<ProtectedRoute roles={['PATIENT']} allowIncompleteProfile><PatientCompleteProfilePage /></ProtectedRoute>} />
 
             <Route path="/crm" element={<Crm><CrmDashboard /></Crm>} />
             <Route path="/crm/analytics" element={<Crm><CrmAnalyticsPage /></Crm>} />
             <Route path="/crm/notifications" element={<Crm><CrmNotificationsPage /></Crm>} />
             <Route path="/crm/profile" element={<CrmAdmin><CrmProfilePage /></CrmAdmin>} />
+            <Route path="/crm/branding" element={<CrmAdmin><CrmBrandingPage /></CrmAdmin>} />
             <Route path="/crm/branches" element={<CrmAdmin><CrmBranchesPage /></CrmAdmin>} />
             <Route path="/crm/departments" element={<CrmAdmin><CrmDepartmentsPage /></CrmAdmin>} />
             <Route path="/crm/documents" element={<CrmAdmin><CrmDocumentsPage /></CrmAdmin>} />

@@ -256,7 +256,7 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
   storage: {
     provider: 'local',
     maxFileSizeMb: 10,
-    allowedImageTypes: ['jpg', 'jpeg', 'png', 'webp'],
+    allowedImageTypes: ['jpg', 'jpeg', 'png', 'webp', 'svg'],
     allowedDocumentTypes: ['pdf'],
     imageCompression: true,
     documentStoragePath: 'documents',

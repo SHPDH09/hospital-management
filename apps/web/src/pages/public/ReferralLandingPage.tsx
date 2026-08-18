@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
+import { HospitalLogo } from '@/components/HospitalLogo';
 import { api } from '@/lib/api';
 
 export function ReferralLandingPage() {
@@ -53,7 +54,7 @@ export function ReferralLandingPage() {
     );
   }
 
-  const org = data.organization as { name?: string; slug?: string; city?: string; logoUrl?: string; description?: string } | undefined;
+  const org = data.organization as { name?: string; slug?: string; city?: string; logoUrl?: string; branding?: { displayLogoUrl?: string }; description?: string } | undefined;
 
   return (
     <PublicLayout>
@@ -70,8 +71,7 @@ export function ReferralLandingPage() {
 
           {org && (
             <div className="bg-gray-50 rounded-lg p-6 mb-8 text-left">
-              {org.logoUrl && <img src={org.logoUrl} alt="" className="h-12 mb-3" />}
-              <h2 className="font-semibold text-lg">{org.name}</h2>
+              <HospitalLogo organization={org} size="md" showName className="mb-3" />
               {org.city && <p className="text-sm text-gray-500">{org.city}</p>}
               {org.description && <p className="text-sm text-gray-600 mt-2">{org.description}</p>}
             </div>

@@ -6,6 +6,7 @@ import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
+import { ORG_BRANDING_SELECT, attachBrandingToOrganization } from '../lib/hospital-branding';
 
 const router = Router();
 
@@ -64,14 +65,19 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
         take: limit,
         orderBy: [{ averageRating: 'desc' }, { fullName: 'asc' }],
         include: {
-          organization: { select: { id: true, name: true, slug: true, city: true } },
+          organization: { select: ORG_BRANDING_SELECT },
           department: { select: { id: true, name: true } },
         },
       }),
       db.doctor.count({ where }),
     ]);
 
-    sendPaginated(res, doctors, { page, limit, total });
+    const withBranding = doctors.map((doc) => ({
+      ...doc,
+      organization: attachBrandingToOrganization(doc.organization),
+    }));
+
+    sendPaginated(res, withBranding, { page, limit, total });
   } catch (err) {
     next(err);
   }
@@ -83,7 +89,7 @@ router.get('/:id', async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         organization: {
-          select: { id: true, name: true, slug: true, city: true, address: true },
+          select: { ...ORG_BRANDING_SELECT, city: true, address: true },
         },
         department: true,
         slots: {
@@ -101,7 +107,10 @@ router.get('/:id', async (req, res, next) => {
     });
 
     if (!doctor || !doctor.isActive) throw new AppError('Doctor not found', 404);
-    sendSuccess(res, doctor);
+    sendSuccess(res, {
+      ...doctor,
+      organization: attachBrandingToOrganization(doctor.organization),
+    });
   } catch (err) {
     next(err);
   }

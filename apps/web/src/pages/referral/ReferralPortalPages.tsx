@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
+import { HospitalLogo } from '@/components/HospitalLogo';
 import { PageHeader, StatGrid, AdminTable, StatusBadge, LoadingState } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -92,7 +93,10 @@ export function ReferralHospitalsPage() {
     <ReferralLayout title="My Hospitals">
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
-          { key: 'hospital', label: 'Hospital', render: (r) => String((r.organization as { name?: string })?.name) },
+          { key: 'hospital', label: 'Hospital', render: (r) => {
+            const org = r.organization as { name?: string; branding?: { displayLogoUrl?: string } };
+            return <HospitalLogo organization={org} size="sm" showName />;
+          }},
           { key: 'totalPatients', label: 'Patients' },
           { key: 'totalTreatments', label: 'Treatments' },
           { key: 'totalCommission', label: 'Commission', render: (r) => formatCurrency(Number(r.totalCommission)) },

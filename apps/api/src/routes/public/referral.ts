@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../../lib/prisma';
 import { sendSuccess, AppError } from '../../lib/response';
 import { trackReferralEvent } from '../../lib/referral-service';
+import { ORG_BRANDING_SELECT, attachBrandingToOrganization } from '../../lib/hospital-branding';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.get('/:code', async (req, res, next) => {
     const campaign = await prisma.referralCampaign.findFirst({
       where: { referralCode: { equals: code, mode: 'insensitive' }, isActive: true },
       include: {
-        organization: { select: { id: true, name: true, slug: true, city: true, logoUrl: true, description: true } },
+        organization: { select: { ...ORG_BRANDING_SELECT, city: true, description: true } },
         ashaProfile: { select: { ashaId: true, ashaName: true, ashaPhoto: true, status: true } },
         referralPartner: { select: { referralId: true, referralPartnerName: true, referralPhoto: true, status: true } },
       },
@@ -45,7 +46,9 @@ router.get('/:code', async (req, res, next) => {
       ashaProfileId: campaign.ashaProfileId,
       referralPartnerId: campaign.referralPartnerId,
       organizationId: campaign.organizationId,
-      organization: campaign.organization,
+      organization: campaign.organization
+        ? attachBrandingToOrganization(campaign.organization)
+        : null,
       qrCodeUrl: campaign.qrCodeUrl,
     });
   } catch (err) { next(err); }
