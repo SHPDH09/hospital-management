@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
+    "postinstall": "prisma generate",
     "start": "node dist/index.js",
     "db:prepare": "node scripts/ensure-database-url.mjs",
     "db:generate": "npm run db:prepare && prisma generate",

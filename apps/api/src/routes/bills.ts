@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { Payment } from '@prisma/client';
 import { prisma, TransactionClient } from '../lib/prisma';
 import { generateBillNumber } from '../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
@@ -117,8 +116,8 @@ router.post('/:id/payments', authenticate, requireRoles('HOSPITAL_ADMIN', 'ACCOU
     if (!bill) throw new AppError('Bill not found', 404);
 
     const paidAmount = bill.payments
-      .filter((p: Payment) => p.status === 'COMPLETED')
-      .reduce((sum: number, p: Payment) => sum + p.amount, 0);
+      .filter((p: { status: string }) => p.status === 'COMPLETED')
+      .reduce((sum: number, p: { amount: number }) => sum + p.amount, 0);
     const remaining = bill.total - paidAmount;
     if (req.body.amount > remaining) throw new AppError('Payment exceeds remaining balance', 400);
 
