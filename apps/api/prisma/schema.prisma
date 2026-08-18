@@ -164,6 +164,8 @@ model User {
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
   createdTickets     Complaint[] @relation("UserTickets")
+  passwordResetRequests PasswordResetRequest[]
+  passwordHistory    PasswordHistory[]
   platformStaffProfile PlatformStaffProfile?
 
   @@map("users")
@@ -1941,4 +1943,51 @@ model PlatformPermissionRequest {
 
   @@index([status, createdAt])
   @@map("platform_permission_requests")
+}
+
+model PasswordResetRequest {
+  id             String    @id @default(uuid())
+  userId         String
+  identifier     String
+  otpHash        String
+  resetToken     String?   @unique
+  otpAttempts    Int       @default(0)
+  otpExpiresAt   DateTime
+  resetExpiresAt DateTime?
+  verifiedAt     DateTime?
+  usedAt         DateTime?
+  ipAddress      String?
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([identifier, createdAt])
+  @@index([userId, createdAt])
+  @@map("password_reset_requests")
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("password_history")
+}
+
+model PasswordResetRateLimit {
+  id          String    @id @default(uuid())
+  identifier  String
+  ipAddress   String?
+  sendCount   Int       @default(0)
+  windowStart DateTime  @default(now())
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([identifier, ipAddress])
+  @@map("password_reset_rate_limits")
 }

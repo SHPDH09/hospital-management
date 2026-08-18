@@ -6,6 +6,11 @@ import { sendSuccess, sendError, AppError } from '../lib/response';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { logLogin } from '../lib/audit';
+import {
+  sendPasswordResetOtp,
+  verifyPasswordResetOtp,
+  resetPasswordWithToken,
+} from '../lib/password-reset';
 
 const router = Router();
 
@@ -23,7 +28,7 @@ const registerPatientSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(3),
   password: z.string(),
 });
 
@@ -64,33 +69,40 @@ router.post('/register/patient', validateBody(registerPatientSchema), async (req
 
 router.post('/login', validateBody(loginSchema), async (req, res, next) => {
   try {
-    const { email, password } = req.body;
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { patient: true, doctor: true, staff: true },
-    });
+    const { email: identifier, password } = req.body;
+    const { findUserByIdentifier } = await import('../lib/password-reset');
+    const user = await findUserByIdentifier(identifier);
+    if (user) {
+      const fullUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: { patient: true, doctor: true, staff: true },
+      });
+      if (!fullUser || !fullUser.isActive) {
+        await logLogin(identifier, false, undefined, 'Invalid credentials', req);
+        throw new AppError('Invalid credentials', 401);
+      }
+      let valid = false;
+      try {
+        valid = await comparePassword(password, fullUser.passwordHash);
+      } catch {
+        await logLogin(identifier, false, fullUser.id, 'Invalid password hash', req);
+        throw new AppError('Invalid credentials', 401);
+      }
+      if (!valid) {
+        await logLogin(identifier, false, fullUser.id, 'Wrong password', req);
+        throw new AppError('Invalid credentials', 401);
+      }
 
-    if (!user || !user.isActive) {
-      await logLogin(email, false, undefined, 'Invalid credentials', req);
-      throw new AppError('Invalid credentials', 401);
-    }
-    let valid = false;
-    try {
-      valid = await comparePassword(password, user.passwordHash);
-    } catch {
-      await logLogin(email, false, user.id, 'Invalid password hash', req);
-      throw new AppError('Invalid credentials', 401);
-    }
-    if (!valid) {
-      await logLogin(email, false, user.id, 'Wrong password', req);
-      throw new AppError('Invalid credentials', 401);
+      await prisma.user.update({ where: { id: fullUser.id }, data: { lastLoginAt: new Date() } });
+      await logLogin(fullUser.email, true, fullUser.id, undefined, req);
+
+      const tokens = await issueTokens(fullUser.id, fullUser.email, fullUser.role);
+      sendSuccess(res, { user: sanitizeUser(fullUser), ...tokens }, 'Login successful');
+      return;
     }
 
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    await logLogin(email, true, user.id, undefined, req);
-
-    const tokens = await issueTokens(user.id, user.email, user.role);
-    sendSuccess(res, { user: sanitizeUser(user), ...tokens }, 'Login successful');
+    await logLogin(identifier, false, undefined, 'Invalid credentials', req);
+    throw new AppError('Invalid credentials', 401);
   } catch (err) {
     next(err);
   }
@@ -139,6 +151,77 @@ router.get('/me', authenticate, async (req: AuthRequest, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─── Forgot Password ─────────────────────────────────────────────────────────
+
+router.post('/forgot-password/send-otp', validateBody(z.object({
+  identifier: z.string().min(3),
+})), async (req, res, next) => {
+  try {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress;
+    const result = await sendPasswordResetOtp(req.body.identifier, ip);
+    sendSuccess(res, result, result.message);
+  } catch (err) { next(err); }
+});
+
+router.post('/forgot-password/verify-otp', validateBody(z.object({
+  identifier: z.string().min(3),
+  otp: z.string().length(6),
+})), async (req, res, next) => {
+  try {
+    const result = await verifyPasswordResetOtp(req.body.identifier, req.body.otp);
+    sendSuccess(res, result, 'OTP verified');
+  } catch (err) {
+    const code = err instanceof Error ? err.message : 'INVALID';
+    if (code === 'LOCKED') return sendError(res, 'Too many failed attempts. Try again later.', 429);
+    if (code === 'EXPIRED') return sendError(res, 'OTP has expired. Request a new one.', 400);
+    if (code === 'INVALID_OTP') return sendError(res, 'Invalid OTP. Please try again.', 400);
+    return sendError(res, 'Invalid or expired OTP', 400);
+  }
+});
+
+router.post('/forgot-password/reset', validateBody(z.object({
+  identifier: z.string().min(3),
+  resetToken: z.string().min(1),
+  newPassword: z.string().min(8),
+  confirmPassword: z.string().min(8),
+  currentPassword: z.string().optional(),
+})), async (req, res, next) => {
+  try {
+    if (req.body.newPassword !== req.body.confirmPassword) {
+      return sendError(res, 'Passwords do not match', 400);
+    }
+    const result = await resetPasswordWithToken(
+      req.body.identifier,
+      req.body.resetToken,
+      req.body.newPassword,
+      { currentPassword: req.body.currentPassword },
+    );
+    sendSuccess(res, result, result.message);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'RESET_FAILED';
+    if (msg === 'PASSWORD_REUSED') return sendError(res, 'Cannot reuse a recent password', 400);
+    if (msg === 'TOKEN_EXPIRED') return sendError(res, 'Reset token expired. Start again.', 400);
+    if (msg === 'ADMIN_REAUTH_REQUIRED') return sendError(res, 'Super Admin accounts require current password verification', 403);
+    if (msg === 'ADMIN_REAUTH_FAILED') return sendError(res, 'Current password verification failed', 401);
+    if (msg.includes('Password must')) return sendError(res, msg, 400);
+    return sendError(res, 'Password reset failed', 400);
+  }
+});
+
+router.get('/forgot-password/security-hints', async (_req, res, next) => {
+  try {
+    const { getSecuritySettings } = await import('../lib/password-reset');
+    const s = await getSecuritySettings();
+    sendSuccess(res, {
+      minPasswordLength: s.minPasswordLength,
+      requireUppercase: s.requireUppercase,
+      requireNumbers: s.requireNumbers,
+      requireSpecialChars: s.requireSpecialChars,
+      otpExpiryMinutes: s.otpExpiryMinutes,
+    });
+  } catch (err) { next(err); }
 });
 
 async function issueTokens(userId: string, email: string, role: string) {

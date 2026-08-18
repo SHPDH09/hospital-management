@@ -9,6 +9,7 @@ import {
   LoginPage, PatientLoginPage, DoctorLoginPage, HospitalLoginPage,
   StaffLoginPage, AdminLoginPage, RegisterPage, RegisterHospitalPage,
 } from '@/pages/public/AuthPages';
+import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="/login/hospital" element={<HospitalLoginPage />} />
             <Route path="/login/staff" element={<StaffLoginPage />} />
             <Route path="/login/admin" element={<AdminLoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
 
