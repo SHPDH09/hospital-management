@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { generateGlobalPatientId } from '../lib/patient-management';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { hashPassword, comparePassword, signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/auth';
@@ -34,6 +35,7 @@ router.post('/register/patient', validateBody(registerPatientSchema), async (req
     if (existing) throw new AppError('Email already registered', 409);
 
     const passwordHash = await hashPassword(data.password);
+    const globalPatientId = await generateGlobalPatientId();
     const user = await prisma.user.create({
       data: {
         email: data.email,
@@ -42,6 +44,7 @@ router.post('/register/patient', validateBody(registerPatientSchema), async (req
         role: 'PATIENT',
         patient: {
           create: {
+            globalPatientId,
             fullName: data.fullName,
             dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
             gender: data.gender,
