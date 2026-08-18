@@ -15,11 +15,18 @@ import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
-
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
+
+import { CrmDashboard } from '@/pages/crm/CrmDashboard';
 import {
-  CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage,
+  CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage,
 } from '@/pages/crm/CrmPages';
+import {
+  CrmProfilePage, CrmBranchesPage, CrmDepartmentsPage, CrmStaffPage, CrmRolesPage,
+  CrmServicesPage, CrmHealthPackagesPage, CrmLeadsPage, CrmReviewsPage, CrmAdvertisementsPage,
+  CrmCommunicationsPage, CrmSubscriptionPage, CrmSupportPage, CrmAnalyticsPage,
+  CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSchedulePage, CrmSettingsPage,
+} from '@/pages/crm/CrmModulePages';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
@@ -36,6 +43,14 @@ const CRM_ROLES = ['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', '
 
 function Admin({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute roles={[...ADMIN_ROLES]}>{children}</ProtectedRoute>;
+}
+
+function Crm({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute roles={[...CRM_ROLES]}>{children}</ProtectedRoute>;
+}
+
+function CrmAdmin({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}>{children}</ProtectedRoute>;
 }
 
 export default function App() {
@@ -66,12 +81,30 @@ export default function App() {
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
             <Route path="/patient/complete-profile" element={<ProtectedRoute roles={['PATIENT']} allowIncompleteProfile><PatientCompleteProfilePage /></ProtectedRoute>} />
 
-            <Route path="/crm" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmDashboard /></ProtectedRoute>} />
+            <Route path="/crm" element={<Crm><CrmDashboard /></Crm>} />
+            <Route path="/crm/analytics" element={<Crm><CrmAnalyticsPage /></Crm>} />
+            <Route path="/crm/notifications" element={<Crm><CrmNotificationsPage /></Crm>} />
+            <Route path="/crm/profile" element={<CrmAdmin><CrmProfilePage /></CrmAdmin>} />
+            <Route path="/crm/branches" element={<CrmAdmin><CrmBranchesPage /></CrmAdmin>} />
+            <Route path="/crm/departments" element={<CrmAdmin><CrmDepartmentsPage /></CrmAdmin>} />
+            <Route path="/crm/documents" element={<CrmAdmin><CrmDocumentsPage /></CrmAdmin>} />
+            <Route path="/crm/doctors" element={<CrmAdmin><CrmDoctorsPage /></CrmAdmin>} />
+            <Route path="/crm/staff" element={<CrmAdmin><CrmStaffPage /></CrmAdmin>} />
+            <Route path="/crm/roles" element={<CrmAdmin><CrmRolesPage /></CrmAdmin>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />
-            <Route path="/crm/doctors" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><CrmDoctorsPage /></ProtectedRoute>} />
             <Route path="/crm/appointments" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}><CrmAppointmentsPage /></ProtectedRoute>} />
+            <Route path="/crm/schedule" element={<CrmAdmin><CrmSchedulePage /></CrmAdmin>} />
+            <Route path="/crm/services" element={<CrmAdmin><CrmServicesPage /></CrmAdmin>} />
+            <Route path="/crm/health-packages" element={<CrmAdmin><CrmHealthPackagesPage /></CrmAdmin>} />
             <Route path="/crm/billing" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'RECEPTIONIST', 'ACCOUNTANT']}><CrmBillingPage /></ProtectedRoute>} />
-            <Route path="/crm/settings" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><CrmSettingsPage /></ProtectedRoute>} />
+            <Route path="/crm/leads" element={<Crm><CrmLeadsPage /></Crm>} />
+            <Route path="/crm/advertisements" element={<CrmAdmin><CrmAdvertisementsPage /></CrmAdmin>} />
+            <Route path="/crm/reviews" element={<Crm><CrmReviewsPage /></Crm>} />
+            <Route path="/crm/communications" element={<Crm><CrmCommunicationsPage /></Crm>} />
+            <Route path="/crm/subscription" element={<CrmAdmin><CrmSubscriptionPage /></CrmAdmin>} />
+            <Route path="/crm/support" element={<Crm><CrmSupportPage /></Crm>} />
+            <Route path="/crm/settings" element={<CrmAdmin><CrmSettingsPage /></CrmAdmin>} />
+            <Route path="/crm/audit-logs" element={<CrmAdmin><CrmAuditLogsPage /></CrmAdmin>} />
 
             {/* Super Admin — 24 modules */}
             <Route path="/admin" element={<Admin><AdminDashboard /></Admin>} />

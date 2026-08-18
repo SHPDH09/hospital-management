@@ -171,6 +171,7 @@ model User {
   passwordHistory    PasswordHistory[]
   platformStaffProfile PlatformStaffProfile?
   patientPhoneOtps   PatientPhoneOtp[]
+  organizationAuditLogs OrganizationAuditLog[]
 
   @@map("users")
 }
@@ -212,6 +213,11 @@ model Organization {
   facilities         String[]
   ownerName          String?
   registrationNumber String?
+  establishmentYear  Int?
+  emergencyContact   String?
+  country            String?
+  aboutHospital      String?
+  galleryUrls        String[]
   averageRating      Float              @default(0)
   reviewCount        Int                @default(0)
   createdAt          DateTime           @default(now())
@@ -232,6 +238,8 @@ model Organization {
   documents       Document[]
   complaints      Complaint[]
   coupons         Coupon[]
+  healthPackages  HealthPackage[]
+  auditLogs       OrganizationAuditLog[]
   platformStaffAssignments PlatformStaffAssignment[]
 
   @@index([city, state])
@@ -248,6 +256,8 @@ model Branch {
   state          String?
   pinCode        String?
   phone          String?
+  email          String?
+  managerName    String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -257,6 +267,7 @@ model Branch {
   staff        Staff[]
   departments  Department[]
   appointments Appointment[]
+  healthPackages HealthPackage[]
 
   @@index([organizationId])
   @@map("branches")
@@ -376,6 +387,7 @@ model Department {
   branchId       String?
   name           String
   description    String?
+  headDoctorId   String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -392,10 +404,16 @@ model Department {
 model Service {
   id             String   @id @default(uuid())
   organizationId String
+  branchId       String?
+  departmentId   String?
+  doctorId       String?
   name           String
+  category       String?
   description    String?
   price          Float
   duration       Int?
+  isOnline       Boolean  @default(true)
+  isOffline      Boolean  @default(true)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -405,6 +423,46 @@ model Service {
 
   @@index([organizationId])
   @@map("services")
+}
+
+model HealthPackage {
+  id               String   @id @default(uuid())
+  organizationId   String
+  branchId         String?
+  name             String
+  description      String?
+  includedServices String[]
+  originalPrice    Float
+  offerPrice       Float
+  validityDays     Int?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id])
+
+  @@index([organizationId])
+  @@map("health_packages")
+}
+
+model OrganizationAuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String?
+  staffName      String?
+  action         String
+  entityType     String?
+  entityId       String?
+  details        Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@map("organization_audit_logs")
 }
 
 model AppointmentSlot {

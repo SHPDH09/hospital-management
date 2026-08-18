@@ -1,20 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, Calendar, Stethoscope, Receipt, Settings, LogOut, Heart, Menu,
+  LayoutDashboard, Calendar, Stethoscope, LogOut, Heart, Menu,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { adminNavGroups } from '@/config/adminNav';
-
-const crmNav = [
-  { to: '/crm', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/crm/patients', icon: Users, label: 'Patients' },
-  { to: '/crm/doctors', icon: Stethoscope, label: 'Doctors' },
-  { to: '/crm/appointments', icon: Calendar, label: 'Appointments' },
-  { to: '/crm/billing', icon: Receipt, label: 'Billing' },
-  { to: '/crm/settings', icon: Settings, label: 'Settings' },
-];
+import { crmNavGroups } from '@/config/crmNav';
 
 const patientNav = [
   { to: '/patient', icon: LayoutDashboard, label: 'Dashboard' },
@@ -35,8 +27,11 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
 
   const title = portal === 'crm' ? 'Hospital CRM' : portal === 'admin' ? 'Super Admin' : 'Patient Portal';
 
-  const isActive = (path: string) =>
-    path === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(path);
+  const isActive = (path: string) => {
+    if (path === '/admin') return location.pathname === '/admin';
+    if (path === '/crm') return location.pathname === '/crm';
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -70,8 +65,24 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
                 </div>
               </div>
             ))
+          ) : portal === 'crm' ? (
+            crmNavGroups.map((group) => (
+              <div key={group.title}>
+                <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{group.title}</p>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => (
+                    <Link key={item.to} to={item.to} onClick={() => setSidebarOpen(false)}
+                      className={cn('flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        isActive(item.to) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900')}>
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))
           ) : (
-            (portal === 'crm' ? crmNav : patientNav).map((item) => (
+            patientNav.map((item) => (
               <Link key={item.to} to={item.to} onClick={() => setSidebarOpen(false)}
                 className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   location.pathname === item.to ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900')}>
