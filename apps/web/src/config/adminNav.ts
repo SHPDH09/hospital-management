@@ -24,10 +24,17 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
+    title: 'Hospital Management',
+    items: [
+      { to: '/admin/hospital-management', icon: Building2, label: 'HM Dashboard' },
+      { to: '/admin/hospital-management/hospitals', icon: Building2, label: 'All Hospitals' },
+      { to: '/admin/verification', icon: Shield, label: 'Verification Center' },
+      { to: '/admin/verification/applications', icon: FileText, label: 'Applications' },
+    ],
+  },
+  {
     title: 'Healthcare',
     items: [
-      { to: '/admin/verification', icon: Shield, label: 'Verification Center' },
-      { to: '/admin/hospitals', icon: Building2, label: 'Hospitals' },
       { to: '/admin/clinics', icon: Store, label: 'Clinics' },
       { to: '/admin/doctors', icon: Stethoscope, label: 'Doctors' },
       { to: '/admin/patients', icon: Users, label: 'Patients' },

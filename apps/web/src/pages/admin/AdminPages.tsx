@@ -1,5 +1,8 @@
 export { AdminDashboard } from './AdminDashboard';
 export {
+  HospitalManagementDashboardPage, HospitalManagementListPage, HospitalManagementDetailPage,
+} from './AdminHospitalManagementPages';
+export {
   AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';

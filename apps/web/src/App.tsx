@@ -51,6 +51,9 @@ import {
 import {
   AdminVerificationDashboardPage, AdminVerificationApplicationsPage, AdminVerificationDetailPage,
 } from '@/pages/admin/AdminVerificationPages';
+import {
+  HospitalManagementDashboardPage, HospitalManagementListPage, HospitalManagementDetailPage,
+} from '@/pages/admin/AdminHospitalManagementPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
@@ -159,7 +162,10 @@ export default function App() {
             <Route path="/admin/verification/applications" element={<Admin><AdminVerificationApplicationsPage /></Admin>} />
             <Route path="/admin/verification/applications/:id" element={<Admin><AdminVerificationDetailPage /></Admin>} />
             <Route path="/admin/analytics" element={<Admin><AdminAnalyticsPage /></Admin>} />
-            <Route path="/admin/hospitals" element={<Admin><AdminHospitalsPage /></Admin>} />
+            <Route path="/admin/hospital-management" element={<Admin><HospitalManagementDashboardPage /></Admin>} />
+            <Route path="/admin/hospital-management/hospitals" element={<Admin><HospitalManagementListPage /></Admin>} />
+            <Route path="/admin/hospital-management/hospitals/:id" element={<Admin><HospitalManagementDetailPage /></Admin>} />
+            <Route path="/admin/hospitals" element={<Navigate to="/admin/hospital-management/hospitals" replace />} />
             <Route path="/admin/clinics" element={<Admin><AdminClinicsPage /></Admin>} />
             <Route path="/admin/organizations" element={<Admin><AdminHospitalsPage /></Admin>} />
             <Route path="/admin/doctors" element={<Admin><AdminDoctorsPage /></Admin>} />
