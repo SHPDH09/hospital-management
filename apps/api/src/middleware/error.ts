@@ -23,8 +23,8 @@ function getErrorMessage(err: Error): string {
   }
 
   const msg = err.message || '';
-  if (msg.includes('DATABASE_URL is not configured')) {
-    return 'Database not configured. Set DATABASE_URL in Vercel environment variables.';
+  if (msg.includes('DATABASE_URL is not configured') || msg.includes('Database not configured')) {
+    return 'Database not configured. Set DATABASE_URL or DB_PASSWORD in Vercel environment variables.';
   }
   if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('ENOTFOUND')) {
     return 'Cannot reach database. Verify RDS host and security group allows Vercel connections.';
