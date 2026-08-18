@@ -11,6 +11,7 @@ import {
 } from '@/pages/public/AuthPages';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
+import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
 
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 import {
@@ -46,6 +47,8 @@ export default function App() {
             <Route path="/find/doctors" element={<FindDoctorsPage />} />
             <Route path="/organizations/:slug" element={<OrganizationDetailPage />} />
             <Route path="/doctors/:id" element={<DoctorDetailPage />} />
+            <Route path="/book" element={<BookAppointmentPage />} />
+            <Route path="/book/:slug" element={<BookAppointmentPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/login/patient" element={<PatientLoginPage />} />
             <Route path="/login/doctor" element={<DoctorLoginPage />} />

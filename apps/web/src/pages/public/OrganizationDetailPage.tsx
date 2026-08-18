@@ -54,7 +54,7 @@ export function OrganizationDetailPage() {
               </div>
             </div>
             <div>
-              <Link to={`/book?organizationId=${org.id}`} className="btn-primary px-8 py-3">
+              <Link to={`/book/${org.slug}`} className="btn-primary px-8 py-3">
                 <Calendar className="h-5 w-5" /> Book Appointment
               </Link>
             </div>

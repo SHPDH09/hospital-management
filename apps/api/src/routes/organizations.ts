@@ -166,6 +166,37 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
   }
 });
 
+router.get('/by-id/:id', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const org = await prisma.organization.findFirst({
+      where: { id, verificationStatus: 'APPROVED', isActive: true, isPubliclyListed: true },
+      include: {
+        departments: { where: { isActive: true } },
+        services: { where: { isActive: true } },
+        doctors: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            fullName: true,
+            specialization: true,
+            qualification: true,
+            experience: true,
+            consultationFee: true,
+            photoUrl: true,
+            averageRating: true,
+            reviewCount: true,
+          },
+        },
+      },
+    });
+    if (!org) throw new AppError('Organization not found', 404);
+    sendSuccess(res, org);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:slug', async (req, res, next) => {
   try {
     const org = await prisma.organization.findUnique({
