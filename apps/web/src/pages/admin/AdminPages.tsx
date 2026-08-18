@@ -14,6 +14,9 @@ export {
   AdminComplaintsPage, AdminLocationsPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from './AdminPlatformPages';
+export {
+  AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage,
+} from './AdminAiPages';
 
 // Legacy aliases
 export { AdminHospitalsPage as AdminOrganizationsPage } from './AdminResourcePages';

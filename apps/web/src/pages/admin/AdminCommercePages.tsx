@@ -188,21 +188,26 @@ export function AdminCouponsPage() {
 
 export function AdminLeadsPage() {
   const { data, isLoading, refetch } = useList('/admin/leads');
+  const scoreLead = (id: string) => api.post(`/admin/leads/${id}/score`, {}).then(() => refetch());
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Lead Management" subtitle="Track and assign platform leads" />
+      <PageHeader title="Lead Management" subtitle="Track, score, and assign platform leads" />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'name', label: 'Name' },
           { key: 'email', label: 'Email' },
-          { key: 'phone', label: 'Phone' },
           { key: 'source', label: 'Source' },
           { key: 'org', label: 'Hospital', render: (r) => String((r.organization as { name?: string })?.name) },
+          { key: 'score', label: 'Score', render: (r) => String(r.score ?? '-') },
+          { key: 'temp', label: 'Temp', render: (r) => r.temperature ? <StatusBadge status={r.temperature === 'HOT' ? 'URGENT' : r.temperature === 'WARM' ? 'PENDING' : 'NEW'} /> : '-' },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
           { key: 'actions', label: 'Actions', render: (r) => (
-            <select className="text-xs border rounded px-1" value={r.status as string} onChange={(e) => api.patch(`/admin/leads/${r.id}`, { status: e.target.value }).then(() => refetch())}>
-              {['NEW', 'CONTACTED', 'INTERESTED', 'APPOINTMENT_BOOKED', 'CONVERTED', 'LOST'].map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div className="flex gap-2 items-center">
+              <ActionBtn onClick={() => scoreLead(r.id as string)}>Score</ActionBtn>
+              <select className="text-xs border rounded px-1" value={r.status as string} onChange={(e) => api.patch(`/admin/leads/${r.id}`, { status: e.target.value }).then(() => refetch())}>
+                {['NEW', 'CONTACTED', 'INTERESTED', 'APPOINTMENT_BOOKED', 'CONVERTED', 'LOST'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
           )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}
@@ -212,6 +217,7 @@ export function AdminLeadsPage() {
 
 export function AdminReviewsPage() {
   const { data, isLoading, refetch } = useList('/admin/reviews');
+  const analyze = (id: string) => api.post(`/admin/reviews/${id}/analyze`, {}).then(() => refetch());
   return (
     <DashboardLayout portal="admin">
       <PageHeader title="Review Management" subtitle="Moderate hospital and doctor reviews" />
@@ -219,14 +225,17 @@ export function AdminReviewsPage() {
         <AdminTable columns={[
           { key: 'patient', label: 'Patient', render: (r) => String((r.patient as { fullName?: string })?.fullName) },
           { key: 'org', label: 'Hospital', render: (r) => String((r.organization as { name?: string })?.name || '-') },
-          { key: 'doctor', label: 'Doctor', render: (r) => String((r.doctor as { fullName?: string })?.fullName || '-') },
           { key: 'rating', label: 'Rating', render: (r) => '⭐'.repeat(r.rating as number) },
+          { key: 'sentiment', label: 'Sentiment', render: (r) => r.sentiment ? <StatusBadge status={r.sentiment === 'POSITIVE' ? 'ACTIVE' : r.sentiment === 'NEGATIVE' ? 'SUSPENDED' : 'PENDING'} /> : '-' },
           { key: 'comment', label: 'Comment', render: (r) => <span className="max-w-xs truncate block">{String(r.comment || '-')}</span> },
           { key: 'published', label: 'Status', render: (r) => <StatusBadge status={r.isPublished ? 'ACTIVE' : 'SUSPENDED'} /> },
           { key: 'actions', label: 'Actions', render: (r) => (
-            <ActionBtn onClick={() => api.patch(`/admin/reviews/${r.id}`, { isPublished: !r.isPublished }).then(() => refetch())}>
-              {r.isPublished ? 'Hide' : 'Publish'}
-            </ActionBtn>
+            <div className="flex gap-2">
+              <ActionBtn onClick={() => analyze(r.id as string)}>Analyze</ActionBtn>
+              <ActionBtn onClick={() => api.patch(`/admin/reviews/${r.id}`, { isPublished: !r.isPublished }).then(() => refetch())}>
+                {r.isPublished ? 'Hide' : 'Publish'}
+              </ActionBtn>
+            </div>
           )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}

@@ -142,6 +142,9 @@ model User {
   auditLogs     AuditLog[]
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
+  assignedLeads      Lead[]       @relation("AssignedLeads")
+  aiAuditLogs        AiAuditLog[]
+  approvalRequests   ApprovalRequest[] @relation("ApprovalRequester")
 
   @@map("users")
 }
@@ -243,6 +246,8 @@ model Patient {
   state            String?
   emergencyContact String?
   bloodGroup       String?
+  profileCompleted Boolean   @default(false)
+  profileCompletionPercent Int @default(0)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -394,6 +399,9 @@ model Appointment {
   type           String            @default("consultation")
   status         AppointmentStatus @default(PENDING)
   notes          String?
+  noShowRisk     NoShowRisk        @default(LOW)
+  confirmationStatus String        @default("PENDING")
+  reminderSentAt DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -578,12 +586,23 @@ model Lead {
   source         String?
   status         LeadStatus @default(NEW)
   notes          String?
+  score          Int                @default(0)
+  temperature    LeadTemperature    @default(COLD)
+  assignedToId   String?
+  aiSummary      String?
+  nextBestAction String?
+  lastScoredAt   DateTime?
+  specialty      String?
+  lastContactAt  DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedTo   User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  activities   LeadActivity[]
 
   @@index([organizationId, status])
+  @@index([temperature, score])
   @@map("leads")
 }
 
@@ -596,6 +615,10 @@ model Review {
   comment        String?
   response       String?
   isPublished    Boolean  @default(true)
+  sentiment      ReviewSentiment?
+  topics         String[] @default([])
+  riskScore      String   @default("LOW")
+  aiSummary      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -702,6 +725,10 @@ model Complaint {
   complainantPhone String?
   resolution     String?
   internalNotes  String?
+  aiCategory     String?
+  aiPriority     ComplaintPriority?
+  aiSummary      String?
+  suggestedResponse String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -971,4 +998,184 @@ model CommunicationTemplate {
   updatedAt DateTime @updatedAt
 
   @@map("communication_templates")
+}
+
+// ─── AI & Automation ─────────────────────────────────────────────────────────
+
+enum LeadTemperature {
+  HOT
+  WARM
+  COLD
+}
+
+enum NoShowRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD
+}
+
+enum AutomationModule {
+  LEADS
+  APPOINTMENTS
+  PAYMENTS
+  REVIEWS
+  COMPLAINTS
+  SUBSCRIPTIONS
+  VERIFICATION
+  GENERAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AiSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_settings")
+}
+
+model AiAuditLog {
+  id             String   @id @default(uuid())
+  requestId      String   @unique @default(uuid())
+  userId         String?
+  organizationId String?
+  module         String
+  feature        String
+  inputRef       String?
+  outputSummary  String?  @db.Text
+  model          String?
+  status         String
+  error          String?
+  humanApproval  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([module, feature])
+  @@map("ai_audit_logs")
+}
+
+model AiInsight {
+  id             String   @id @default(uuid())
+  entityType     String
+  entityId       String
+  insightType    String
+  content        Json
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([entityType, entityId, insightType])
+  @@index([entityType, entityId])
+  @@map("ai_insights")
+}
+
+model AutomationRule {
+  id          String           @id @default(uuid())
+  name        String
+  module      AutomationModule @default(GENERAL)
+  trigger     String
+  conditions  Json             @default("[]")
+  actions     Json             @default("[]")
+  delayMinutes Int             @default(0)
+  schedule    String?
+  channel     String?
+  audience    String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  executions AutomationExecution[]
+
+  @@index([isActive, trigger])
+  @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id         String   @id @default(uuid())
+  ruleId     String
+  entityType String?
+  entityId   String?
+  status     String
+  result     Json?
+  error      String?
+  ranAt      DateTime @default(now())
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, ranAt])
+  @@map("automation_executions")
+}
+
+model JobQueue {
+  id          String    @id @default(uuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  scheduledAt DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([type, status])
+  @@map("job_queue")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String
+  userId    String?
+  action    String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model ApprovalRequest {
+  id           String         @id @default(uuid())
+  requesterId  String
+  actionType   String
+  entityType   String
+  entityId     String
+  payload      Json?
+  status       ApprovalStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+
+  requester User @relation("ApprovalRequester", fields: [requesterId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("approval_requests")
 }

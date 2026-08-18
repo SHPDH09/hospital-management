@@ -356,7 +356,25 @@ router.patch('/leads/:id', async (req: AuthRequest, res, next) => {
     const id = paramId(req.params.id);
     const lead = await prisma.lead.update({ where: { id }, data: req.body });
     await logAudit(req, 'UPDATE', 'Lead', id, req.body);
+
+    const { enqueueJob } = await import('../../services/jobs/queue');
+    const { emitAutomationEvent } = await import('../../services/automation/engine');
+    enqueueJob('lead_score', { leadId: id }).catch(console.error);
+    emitAutomationEvent('lead.status_changed', 'lead', id, {
+      status: lead.status,
+      temperature: lead.temperature,
+      score: lead.score,
+    }).catch(console.error);
+
     sendSuccess(res, lead);
+  } catch (err) { next(err); }
+});
+
+router.post('/leads/:id/score', async (req: AuthRequest, res, next) => {
+  try {
+    const { scoreLead } = await import('../../services/leads/lead-scoring');
+    const result = await scoreLead(paramId(req.params.id), req.user!.userId);
+    sendSuccess(res, result, 'Lead scored');
   } catch (err) { next(err); }
 });
 
@@ -384,6 +402,14 @@ router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
     const review = await prisma.review.update({ where: { id }, data: req.body });
     await logAudit(req, 'UPDATE', 'Review', id, req.body);
     sendSuccess(res, review);
+  } catch (err) { next(err); }
+});
+
+router.post('/reviews/:id/analyze', async (req: AuthRequest, res, next) => {
+  try {
+    const { analyzeReview } = await import('../../services/reviews/review-analysis');
+    const result = await analyzeReview(paramId(req.params.id), req.user!.userId);
+    sendSuccess(res, result, 'Review analyzed');
   } catch (err) { next(err); }
 });
 
@@ -457,6 +483,15 @@ router.post('/complaints', validateBody(z.object({
   try {
     const ticketId = `TKT-${Date.now().toString(36).toUpperCase()}`;
     const complaint = await prisma.complaint.create({ data: { ...req.body, ticketId } });
+
+    const { enqueueJob } = await import('../../services/jobs/queue');
+    const { emitAutomationEvent } = await import('../../services/automation/engine');
+    enqueueJob('complaint_classify', { complaintId: complaint.id }).catch(console.error);
+    emitAutomationEvent('complaint.created', 'complaint', complaint.id, {
+      priority: complaint.priority,
+      type: complaint.type,
+    }).catch(console.error);
+
     sendSuccess(res, complaint, 'Complaint created', 201);
   } catch (err) { next(err); }
 });

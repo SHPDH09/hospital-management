@@ -14,6 +14,9 @@ import billRoutes from './routes/bills';
 import dashboardRoutes from './routes/dashboard';
 import adminRoutes from './routes/admin/index';
 import publicRoutes from './routes/public';
+import aiRoutes from './routes/ai/index';
+import automationRoutes from './routes/automation/index';
+import jobRoutes from './routes/jobs/internal';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';
 
@@ -76,6 +79,9 @@ app.use('/api/v1/bills', billRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/automation', automationRoutes);
+app.use('/api/v1/internal/jobs', jobRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
