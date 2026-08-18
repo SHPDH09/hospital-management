@@ -54,17 +54,33 @@ router.get('/', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PLATFOR
           }
         : {};
 
+    const patientInclude = {
+      user: { select: { email: true, phone: true } },
+      organizations: orgId ? { where: { organizationId: orgId } } : true,
+      _count: { select: { appointments: true } },
+      ...(orgId ? {
+        referralAttributions: {
+          where: { organizationId: orgId },
+          select: {
+            sourceType: true,
+            referralDisplayName: true,
+            referralDisplayId: true,
+            treatmentStatus: true,
+            commissionStatus: true,
+            ashaProfile: { select: { ashaName: true, ashaId: true } },
+            referralPartner: { select: { referralPartnerName: true, referralId: true } },
+          },
+        },
+      } : {}),
+    };
+
     const [patients, total] = await Promise.all([
       prisma.patient.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          user: { select: { email: true, phone: true } },
-          organizations: orgId ? { where: { organizationId: orgId } } : true,
-          _count: { select: { appointments: true } },
-        },
+        include: patientInclude,
       }),
       prisma.patient.count({ where }),
     ]);

@@ -9,9 +9,11 @@ import { authenticate, requireRoles, AuthRequest, CRM_ROLES, ORG_ADMIN_ROLES } f
 import { validateBody, validateQuery } from '../../middleware/validate';
 import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
+import referralRoutes from './referrals';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
+router.use('/referrals', referralRoutes);
 
 const pagination = z.object({
   page: z.coerce.number().min(1).default(1),

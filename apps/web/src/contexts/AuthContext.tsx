@@ -129,6 +129,8 @@ export function getPortalPath(role: UserRole): string {
     LAB_STAFF: '/crm',
     MANAGER: '/crm',
     PATIENT: '/patient',
+    ASHA: '/referral',
+    REFERRAL_PARTNER: '/referral',
   };
   return map[role] || '/';
 }

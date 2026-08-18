@@ -19,20 +19,32 @@ export function CrmPatientsPage() {
             <thead className="bg-gray-50">
               <tr className="text-left text-gray-500">
                 <th className="px-6 py-3 font-medium">Name</th>
+                <th className="px-6 py-3 font-medium">Source</th>
+                <th className="px-6 py-3 font-medium">Referral</th>
                 <th className="px-6 py-3 font-medium">Email</th>
                 <th className="px-6 py-3 font-medium">Phone</th>
                 <th className="px-6 py-3 font-medium">Appointments</th>
               </tr>
             </thead>
             <tbody>
-              {(data?.data as Patient[] | undefined)?.map((p) => (
+              {(data?.data as Patient[] | undefined)?.map((p) => {
+                const attr = (p as Patient & { referralAttributions?: { sourceType: string; referralDisplayName?: string; ashaProfile?: { ashaName: string }; referralPartner?: { referralPartnerName: string } }[] }).referralAttributions?.[0];
+                const isReferral = attr && ['ASHA', 'REFERRAL_PARTNER', 'CAMPAIGN'].includes(attr.sourceType);
+                const refName = attr?.referralDisplayName || attr?.ashaProfile?.ashaName || attr?.referralPartner?.referralPartnerName;
+                return (
                 <tr key={p.id} className="border-t border-gray-100">
                   <td className="px-6 py-4 font-medium">{p.fullName}</td>
+                  <td className="px-6 py-4">
+                    {isReferral ? <span className="badge bg-green-50 text-green-700">🟢 Referral</span> : <span className="text-gray-400">Direct</span>}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {isReferral ? <>{attr?.sourceType}<br /><span className="text-xs">{refName}</span></> : '—'}
+                  </td>
                   <td className="px-6 py-4 text-gray-500">{p.user?.email}</td>
                   <td className="px-6 py-4 text-gray-500">{p.user?.phone || '-'}</td>
                   <td className="px-6 py-4">{p._count?.appointments || 0}</td>
                 </tr>
-              ))}
+              );})}
             </tbody>
           </table>
         </div>

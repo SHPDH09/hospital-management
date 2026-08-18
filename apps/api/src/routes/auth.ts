@@ -28,6 +28,9 @@ const registerPatientSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   emergencyContact: z.string().optional(),
+  referralCode: z.string().optional(),
+  campaignId: z.string().optional(),
+  organizationId: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -64,6 +67,31 @@ router.post('/register/patient', validateBody(registerPatientSchema), async (req
     });
 
     const tokens = await issueTokens(user.id, user.email, user.role);
+
+    if (data.referralCode && user.patient && data.organizationId) {
+      const campaign = await prisma.referralCampaign.findFirst({
+        where: { referralCode: { equals: data.referralCode, mode: 'insensitive' } },
+      });
+      if (campaign) {
+        const { applyPatientReferralAttribution, detectReferralFraud } = await import('../lib/referral-service');
+        const fraud = await detectReferralFraud(user.patient.id, data.phone, data.email);
+        await applyPatientReferralAttribution({
+          patientId: user.patient.id,
+          organizationId: data.organizationId,
+          ashaProfileId: campaign.ashaProfileId || undefined,
+          referralPartnerId: campaign.referralPartnerId || undefined,
+          campaignId: campaign.id,
+          sourceType: campaign.ashaProfileId ? 'ASHA' : 'REFERRAL_PARTNER',
+        });
+        if (fraud.suspicious) {
+          await prisma.referralCommission.updateMany({
+            where: { patientId: user.patient.id },
+            data: { fraudFlag: true, status: 'ON_HOLD', holdReason: fraud.reason },
+          });
+        }
+      }
+    }
+
     sendSuccess(res, { user: sanitizeUser(user), ...tokens }, 'Registration successful', 201);
   } catch (err) {
     next(err);

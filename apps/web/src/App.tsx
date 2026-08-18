@@ -15,6 +15,7 @@ import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
+import { ReferralLandingPage } from '@/pages/public/ReferralLandingPage';
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 
 import { CrmDashboard } from '@/pages/crm/CrmDashboard';
@@ -27,6 +28,15 @@ import {
   CrmCommunicationsPage, CrmSubscriptionPage, CrmSupportPage, CrmAnalyticsPage,
   CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSchedulePage, CrmSettingsPage,
 } from '@/pages/crm/CrmModulePages';
+import {
+  CrmReferralDashboardPage, CrmReferralListPage, CrmAshaCreatePage, CrmPartnerCreatePage,
+  CrmReferredPatientsPage, CrmReferralCommissionsPage, CrmReferralLeaderboardPage,
+  CrmReferralAnalyticsPage, CrmReferralSettingsPage, CrmReferralCampaignsPage,
+} from '@/pages/crm/CrmReferralPages';
+import {
+  ReferralDashboardPage, ReferralProfilePage, ReferralHospitalsPage, ReferralPatientsPage,
+  ReferralAnalyticsPage, ReferralCommissionsPage, ReferralPayoutsPage, ReferralCampaignsPage,
+} from '@/pages/referral/ReferralPortalPages';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
@@ -41,6 +51,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, sta
 const ADMIN_ROLES = ['SUPER_ADMIN', 'PLATFORM_STAFF'] as const;
 const CRM_ROLES = ['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER'] as const;
 
+const REFERRAL_ROLES = ['ASHA', 'REFERRAL_PARTNER'] as const;
+
 function Admin({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute roles={[...ADMIN_ROLES]}>{children}</ProtectedRoute>;
 }
@@ -51,6 +63,10 @@ function Crm({ children }: { children: React.ReactNode }) {
 
 function CrmAdmin({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}>{children}</ProtectedRoute>;
+}
+
+function Referral({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute roles={[...REFERRAL_ROLES]}>{children}</ProtectedRoute>;
 }
 
 export default function App() {
@@ -76,6 +92,8 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
+
+            <Route path="/ref/:code" element={<ReferralLandingPage />} />
 
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
@@ -105,6 +123,26 @@ export default function App() {
             <Route path="/crm/support" element={<Crm><CrmSupportPage /></Crm>} />
             <Route path="/crm/settings" element={<CrmAdmin><CrmSettingsPage /></CrmAdmin>} />
             <Route path="/crm/audit-logs" element={<CrmAdmin><CrmAuditLogsPage /></CrmAdmin>} />
+
+            <Route path="/crm/referrals" element={<CrmAdmin><CrmReferralDashboardPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/list" element={<CrmAdmin><CrmReferralListPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/asha/new" element={<CrmAdmin><CrmAshaCreatePage /></CrmAdmin>} />
+            <Route path="/crm/referrals/partners/new" element={<CrmAdmin><CrmPartnerCreatePage /></CrmAdmin>} />
+            <Route path="/crm/referrals/patients" element={<CrmAdmin><CrmReferredPatientsPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/commissions" element={<CrmAdmin><CrmReferralCommissionsPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/leaderboard" element={<CrmAdmin><CrmReferralLeaderboardPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/analytics" element={<CrmAdmin><CrmReferralAnalyticsPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/settings" element={<CrmAdmin><CrmReferralSettingsPage /></CrmAdmin>} />
+            <Route path="/crm/referrals/campaigns" element={<CrmAdmin><CrmReferralCampaignsPage /></CrmAdmin>} />
+
+            <Route path="/referral" element={<Referral><ReferralDashboardPage /></Referral>} />
+            <Route path="/referral/profile" element={<Referral><ReferralProfilePage /></Referral>} />
+            <Route path="/referral/hospitals" element={<Referral><ReferralHospitalsPage /></Referral>} />
+            <Route path="/referral/patients" element={<Referral><ReferralPatientsPage /></Referral>} />
+            <Route path="/referral/analytics" element={<Referral><ReferralAnalyticsPage /></Referral>} />
+            <Route path="/referral/commissions" element={<Referral><ReferralCommissionsPage /></Referral>} />
+            <Route path="/referral/payouts" element={<Referral><ReferralPayoutsPage /></Referral>} />
+            <Route path="/referral/campaigns" element={<Referral><ReferralCampaignsPage /></Referral>} />
 
             {/* Super Admin — 24 modules */}
             <Route path="/admin" element={<Admin><AdminDashboard /></Admin>} />

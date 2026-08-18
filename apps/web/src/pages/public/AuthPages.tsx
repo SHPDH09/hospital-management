@@ -2,8 +2,8 @@ import { Navigate } from 'react-router-dom';
 import { Stethoscope, Building2, Users, Shield } from 'lucide-react';
 import { RoleLoginPage } from '@/components/auth/RoleLoginPage';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiBaseUrl } from '@/lib/api';
 
@@ -81,13 +81,30 @@ export function LoginPage() {
 }
 
 export function RegisterPage() {
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     fullName: '', email: '', password: '', phone: '', dateOfBirth: '', gender: '', city: '', state: '',
+    referralCode: searchParams.get('ref') || '',
+    organizationId: searchParams.get('org') || '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const stored = localStorage.getItem('referral_attribution');
+    if (stored && !form.referralCode) {
+      try {
+        const attr = JSON.parse(stored);
+        setForm((f) => ({
+          ...f,
+          referralCode: attr.referralCode || f.referralCode,
+          organizationId: attr.organizationId || f.organizationId,
+        }));
+      } catch { /* ignore */ }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Building2, GitBranch, Layers, Stethoscope, UserCog, Shield,
   Users, Calendar, Clock, Briefcase, Package, Target, Megaphone, Mail,
   Receipt, Star, FileText, Bell, BarChart3, CreditCard, Headphones, Settings,
-  ScrollText,
+  ScrollText, Share2,
 } from 'lucide-react';
 
 export interface CrmNavItem {
@@ -56,6 +56,7 @@ export const crmNavGroups: CrmNavGroup[] = [
     title: 'Revenue & Marketing',
     items: [
       { to: '/crm/billing', icon: Receipt, label: 'Billing & Payments' },
+      { to: '/crm/referrals', icon: Share2, label: 'AASHA / Referrals' },
       { to: '/crm/leads', icon: Target, label: 'Leads' },
       { to: '/crm/advertisements', icon: Megaphone, label: 'Advertisements' },
       { to: '/crm/reviews', icon: Star, label: 'Reviews & Ratings' },

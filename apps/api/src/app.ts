@@ -15,6 +15,8 @@ import billRoutes from './routes/bills';
 import dashboardRoutes from './routes/dashboard';
 import adminRoutes from './routes/admin/index';
 import crmRoutes from './routes/crm';
+import referralPortalRoutes from './routes/referral-portal';
+import publicReferralRoutes from './routes/public/referral';
 import publicRoutes from './routes/public';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';
@@ -79,6 +81,8 @@ app.use('/api/v1/bills', billRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/crm', crmRoutes);
+app.use('/api/v1/referral-portal', referralPortalRoutes);
+app.use('/api/v1/public/referral', publicReferralRoutes);
 app.use('/api/v1/public', publicRoutes);
 
 app.use(notFoundHandler);

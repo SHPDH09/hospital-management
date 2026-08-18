@@ -10,7 +10,9 @@ export type UserRole =
   | 'PHARMACIST'
   | 'LAB_STAFF'
   | 'MANAGER'
-  | 'PATIENT';
+  | 'PATIENT'
+  | 'ASHA'
+  | 'REFERRAL_PARTNER';
 
 export type OrganizationType = 'HOSPITAL' | 'CLINIC' | 'DIAGNOSTIC_CENTER' | 'PHARMACY';
 

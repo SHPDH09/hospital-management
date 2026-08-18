@@ -172,6 +172,11 @@ router.patch('/:id/status', authenticate, requireRoles(...CRM_ROLES), validateBo
       },
     });
 
+    if (req.body.status === 'COMPLETED') {
+      const { processTreatmentCommission } = await import('../lib/referral-service');
+      await processTreatmentCommission(id).catch(() => undefined);
+    }
+
     sendSuccess(res, updated, 'Status updated');
   } catch (err) {
     next(err);
