@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/prisma';
+import { prisma, readDb } from '../lib/prisma';
 import { hashPassword } from '../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
@@ -56,8 +56,9 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
       }),
     };
 
+    const db = readDb();
     const [doctors, total] = await Promise.all([
-      prisma.doctor.findMany({
+      db.doctor.findMany({
         where,
         skip,
         take: limit,
@@ -67,7 +68,7 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
           department: { select: { id: true, name: true } },
         },
       }),
-      prisma.doctor.count({ where }),
+      db.doctor.count({ where }),
     ]);
 
     sendPaginated(res, doctors, { page, limit, total });

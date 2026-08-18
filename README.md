@@ -25,18 +25,18 @@ packages/
 
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, React Query, React Router
 - **Backend:** Node.js, Express, TypeScript, Prisma ORM
-- **Database:** PostgreSQL 16
+- **Database:** PostgreSQL 16 (AWS RDS in production)
 - **Auth:** JWT access + refresh tokens, bcrypt password hashing
-- **Infrastructure:** Docker Compose for local PostgreSQL + Redis
+- **Infrastructure:** AWS RDS PostgreSQL, Docker Compose for local dev
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 20+
-- Docker & Docker Compose
+- Docker & Docker Compose (local dev only)
 
-### Setup
+### Local Setup
 
 ```bash
 # Install dependencies
@@ -54,6 +54,30 @@ npm run db:setup
 # Start development servers (API on :3001, Web on :5173)
 npm run dev
 ```
+
+### AWS RDS Setup
+
+The project is configured for AWS RDS PostgreSQL with a writer and read-replica endpoint:
+
+| Role | Endpoint |
+|------|----------|
+| **Writer** (migrations, writes) | `database-1.cluster-covwo0uikrnc.us-east-1.rds.amazonaws.com` |
+| **Read replica** (read queries) | `database-1.cluster-ro-covwo0uikrnc.us-east-1.rds.amazonaws.com` |
+
+1. Copy the example env file and set your RDS credentials:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+# Edit apps/api/.env — replace YOUR_PASSWORD and adjust DB user/name if needed
+```
+
+2. Run migrations and seed against RDS:
+
+```bash
+npm run db:setup
+```
+
+Connection strings use `sslmode=require` for RDS. The API uses the writer endpoint by default; `DATABASE_URL_READ` is used for read-heavy public search queries when configured.
 
 ### Demo Accounts
 

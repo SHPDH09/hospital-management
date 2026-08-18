@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma } from '../lib/prisma';
+import { prisma, readDb } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 
 const router = Router();
@@ -24,11 +24,12 @@ router.get('/advertisements', async (req, res, next) => {
 
 router.get('/stats', async (_req, res, next) => {
   try {
+    const db = readDb();
     const [hospitals, clinics, doctors, patients] = await Promise.all([
-      prisma.organization.count({ where: { type: 'HOSPITAL', verificationStatus: 'APPROVED', isPubliclyListed: true } }),
-      prisma.organization.count({ where: { type: 'CLINIC', verificationStatus: 'APPROVED', isPubliclyListed: true } }),
-      prisma.doctor.count({ where: { isActive: true, organization: { verificationStatus: 'APPROVED' } } }),
-      prisma.patient.count(),
+      db.organization.count({ where: { type: 'HOSPITAL', verificationStatus: 'APPROVED', isPubliclyListed: true } }),
+      db.organization.count({ where: { type: 'CLINIC', verificationStatus: 'APPROVED', isPubliclyListed: true } }),
+      db.doctor.count({ where: { isActive: true, organization: { verificationStatus: 'APPROVED' } } }),
+      db.patient.count(),
     ]);
 
     sendSuccess(res, { hospitals, clinics, doctors, patients });
