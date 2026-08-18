@@ -12,7 +12,8 @@
     "db:migrate": "npm run db:prepare && prisma migrate dev",
     "db:push": "npm run db:prepare && prisma db push",
     "db:seed": "npm run db:prepare && tsx prisma/seed.ts",
-    "db:test": "npm run db:prepare && prisma db execute --stdin <<< 'SELECT 1'"
+    "db:test": "npm run db:prepare && prisma db execute --stdin <<< 'SELECT 1'",
+    "admin:create": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@healthcare/shared": "*",
