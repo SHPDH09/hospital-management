@@ -9,6 +9,16 @@ async function main() {
   // Subscription plans
   const plans = await Promise.all([
     prisma.subscriptionPlan.upsert({
+      where: { tier: 'FREE' },
+      update: {},
+      create: {
+        tier: 'FREE',
+        name: 'Free',
+        price: 0,
+        features: ['Basic Listing', 'Up to 2 Doctors', 'Basic Dashboard'],
+      },
+    }),
+    prisma.subscriptionPlan.upsert({
       where: { tier: 'STARTER' },
       update: {},
       create: {
@@ -283,6 +293,61 @@ async function main() {
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
+
+  // Specializations (Master Data)
+  const specs = [
+    { name: 'Cardiology', department: 'Cardiology', services: ['ECG', 'Echo', 'Stress Test', 'Cardiac Surgery'] },
+    { name: 'Orthopedics', department: 'Orthopedics', services: ['Joint Replacement', 'Fracture Care', 'Physiotherapy'] },
+    { name: 'General Medicine', department: 'General Medicine', services: ['Consultation', 'Health Checkup'] },
+    { name: 'Pediatrics', department: 'Pediatrics', services: ['Child Vaccination', 'Growth Monitoring'] },
+    { name: 'Dermatology', department: 'Dermatology', services: ['Skin Consultation', 'Laser Treatment'] },
+  ];
+  for (const spec of specs) {
+    await prisma.specialization.upsert({
+      where: { name: spec.name },
+      update: {},
+      create: spec,
+    });
+  }
+
+  // CMS Pages
+  const cmsPages = [
+    { slug: 'about', title: 'About Us', content: 'Healthcare Platform — connecting patients with hospitals and clinics.', isPublished: true },
+    { slug: 'terms', title: 'Terms & Conditions', content: 'Terms and conditions for using the platform.', isPublished: true },
+    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data.', isPublished: true },
+    { slug: 'faq', title: 'FAQ', content: 'Frequently asked questions.', isPublished: true },
+  ];
+  for (const page of cmsPages) {
+    await prisma.cmsPage.upsert({ where: { slug: page.slug }, update: {}, create: page });
+  }
+
+  // Communication Templates
+  const templates = [
+    { name: 'Appointment Confirmation', channel: 'EMAIL', subject: 'Appointment Confirmed', body: 'Your appointment has been confirmed.' },
+    { name: 'Payment Receipt', channel: 'EMAIL', subject: 'Payment Received', body: 'Thank you for your payment.' },
+    { name: 'Welcome Message', channel: 'SMS', body: 'Welcome to Healthcare Platform!' },
+    { name: 'Password Reset', channel: 'EMAIL', subject: 'Reset Password', body: 'Click the link to reset your password.' },
+  ];
+  for (const tpl of templates) {
+    await prisma.communicationTemplate.create({ data: tpl });
+  }
+
+  // Locations
+  const india = await prisma.location.create({ data: { name: 'India', type: 'COUNTRY' } });
+  const mh = await prisma.location.create({ data: { name: 'Maharashtra', type: 'STATE', parentId: india.id } });
+  await prisma.location.create({ data: { name: 'Mumbai', type: 'CITY', parentId: mh.id, pinCode: '400001' } });
+  await prisma.location.create({ data: { name: 'Pune', type: 'CITY', parentId: mh.id, pinCode: '411001' } });
+
+  // Platform Settings
+  const settings = [
+    { key: 'platformName', value: 'Healthcare Platform', category: 'general' },
+    { key: 'currency', value: 'INR', category: 'general' },
+    { key: 'supportEmail', value: 'support@healthcare.platform', category: 'contact' },
+    { key: 'supportPhone', value: '+91-1800-000-000', category: 'contact' },
+  ];
+  for (const s of settings) {
+    await prisma.platformSetting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
+  }
 
   console.log('Seed completed!');
   console.log('\nDemo accounts (password: Password123!):');

@@ -64,6 +64,7 @@ enum PaymentStatus {
 }
 
 enum SubscriptionPlanTier {
+  FREE
   STARTER
   PROFESSIONAL
   ENTERPRISE
@@ -126,6 +127,8 @@ model User {
   staff         Staff?
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  loginHistory  LoginHistory[]
+  assignedComplaints Complaint[] @relation("AssignedComplaints")
 
   @@map("users")
 }
@@ -185,6 +188,8 @@ model Organization {
   reviews         Review[]
   patientOrgs     PatientOrganization[]
   documents       Document[]
+  complaints      Complaint[]
+  coupons         Coupon[]
 
   @@index([city, state])
   @@index([verificationStatus, isActive, isPubliclyListed])
@@ -585,4 +590,164 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+enum ComplaintStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintType {
+  PATIENT
+  HOSPITAL
+  DOCTOR
+  GENERAL
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+enum LocationType {
+  COUNTRY
+  STATE
+  CITY
+  DISTRICT
+  AREA
+}
+
+model Complaint {
+  id             String            @id @default(uuid())
+  ticketId       String            @unique
+  subject        String
+  description    String
+  type           ComplaintType       @default(GENERAL)
+  priority       ComplaintPriority   @default(MEDIUM)
+  status         ComplaintStatus     @default(NEW)
+  assignedToId   String?
+  organizationId String?
+  complainantName  String?
+  complainantEmail String?
+  complainantPhone String?
+  resolution     String?
+  internalNotes  String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  assignedTo   User?         @relation("AssignedComplaints", fields: [assignedToId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([status, priority])
+  @@map("complaints")
+}
+
+model Coupon {
+  id             String       @id @default(uuid())
+  code           String       @unique
+  discountType   DiscountType
+  discountValue  Float
+  minAmount      Float?
+  maxDiscount    Float?
+  usageLimit     Int?
+  usedCount      Int          @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean      @default(true)
+  platformWide   Boolean      @default(true)
+  organizationId String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@map("coupons")
+}
+
+model PlatformSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+model LoginHistory {
+  id            String   @id @default(uuid())
+  userId        String?
+  email         String
+  ipAddress     String?
+  userAgent     String?
+  success       Boolean  @default(true)
+  failureReason String?
+  createdAt     DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([email, createdAt])
+  @@map("login_history")
+}
+
+model CmsPage {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  title       String
+  content     String   @db.Text
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cms_pages")
+}
+
+model Specialization {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  department  String?
+  services    String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("specializations")
+}
+
+model Location {
+  id       String       @id @default(uuid())
+  name     String
+  type     LocationType
+  parentId String?
+  pinCode  String?
+  isActive Boolean      @default(true)
+
+  parent   Location?  @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children Location[] @relation("LocationHierarchy")
+
+  @@index([type, parentId])
+  @@map("locations")
+}
+
+model CommunicationTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  channel   String
+  subject   String?
+  body      String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("communication_templates")
 }

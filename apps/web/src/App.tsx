@@ -6,37 +6,33 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { HomePage } from '@/pages/public/HomePage';
 import { FindHospitalsPage, FindClinicsPage, FindDoctorsPage } from '@/pages/public/SearchPages';
 import {
-  LoginPage,
-  PatientLoginPage,
-  DoctorLoginPage,
-  HospitalLoginPage,
-  StaffLoginPage,
-  AdminLoginPage,
-  RegisterPage,
-  RegisterHospitalPage,
+  LoginPage, PatientLoginPage, DoctorLoginPage, HospitalLoginPage,
+  StaffLoginPage, AdminLoginPage, RegisterPage, RegisterHospitalPage,
 } from '@/pages/public/AuthPages';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 import {
-  CrmDashboard,
-  CrmPatientsPage,
-  CrmDoctorsPage,
-  CrmAppointmentsPage,
-  CrmBillingPage,
-  CrmSettingsPage,
+  CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage,
 } from '@/pages/crm/CrmPages';
 import {
-  AdminDashboard,
-  AdminOrganizationsPage,
-  AdminSubscriptionsPage,
-  AdminAdvertisementsPage,
+  AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
+  AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
+  AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
+  AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
+  AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
+  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from '@/pages/admin/AdminPages';
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
-});
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
+
+const ADMIN_ROLES = ['SUPER_ADMIN', 'PLATFORM_STAFF'] as const;
+const CRM_ROLES = ['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER'] as const;
+
+function Admin({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute roles={[...ADMIN_ROLES]}>{children}</ProtectedRoute>;
+}
 
 export default function App() {
   return (
@@ -44,7 +40,6 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public */}
             <Route path="/" element={<HomePage />} />
             <Route path="/find/hospitals" element={<FindHospitalsPage />} />
             <Route path="/find/clinics" element={<FindClinicsPage />} />
@@ -60,23 +55,42 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
 
-            {/* Patient Portal */}
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
 
-            {/* Hospital CRM */}
-            <Route path="/crm" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER']}><CrmDashboard /></ProtectedRoute>} />
+            <Route path="/crm" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmDashboard /></ProtectedRoute>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />
             <Route path="/crm/doctors" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><CrmDoctorsPage /></ProtectedRoute>} />
             <Route path="/crm/appointments" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}><CrmAppointmentsPage /></ProtectedRoute>} />
             <Route path="/crm/billing" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'RECEPTIONIST', 'ACCOUNTANT']}><CrmBillingPage /></ProtectedRoute>} />
             <Route path="/crm/settings" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><CrmSettingsPage /></ProtectedRoute>} />
 
-            {/* Super Admin */}
-            <Route path="/admin" element={<ProtectedRoute roles={['SUPER_ADMIN', 'PLATFORM_STAFF']}><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/admin/organizations" element={<ProtectedRoute roles={['SUPER_ADMIN', 'PLATFORM_STAFF']}><AdminOrganizationsPage /></ProtectedRoute>} />
-            <Route path="/admin/subscriptions" element={<ProtectedRoute roles={['SUPER_ADMIN', 'PLATFORM_STAFF']}><AdminSubscriptionsPage /></ProtectedRoute>} />
-            <Route path="/admin/advertisements" element={<ProtectedRoute roles={['SUPER_ADMIN', 'PLATFORM_STAFF']}><AdminAdvertisementsPage /></ProtectedRoute>} />
+            {/* Super Admin — 24 modules */}
+            <Route path="/admin" element={<Admin><AdminDashboard /></Admin>} />
+            <Route path="/admin/analytics" element={<Admin><AdminAnalyticsPage /></Admin>} />
+            <Route path="/admin/hospitals" element={<Admin><AdminHospitalsPage /></Admin>} />
+            <Route path="/admin/clinics" element={<Admin><AdminClinicsPage /></Admin>} />
+            <Route path="/admin/organizations" element={<Admin><AdminHospitalsPage /></Admin>} />
+            <Route path="/admin/doctors" element={<Admin><AdminDoctorsPage /></Admin>} />
+            <Route path="/admin/patients" element={<Admin><AdminPatientsPage /></Admin>} />
+            <Route path="/admin/appointments" element={<Admin><AdminAppointmentsPage /></Admin>} />
+            <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
+            <Route path="/admin/subscriptions" element={<Admin><AdminSubscriptionsPage /></Admin>} />
+            <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
+            <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
+            <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
+            <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />
+            <Route path="/admin/staff" element={<Admin><AdminStaffPage /></Admin>} />
+            <Route path="/admin/roles" element={<Admin><AdminRolesPage /></Admin>} />
+            <Route path="/admin/security" element={<Admin><AdminSecurityPage /></Admin>} />
+            <Route path="/admin/audit-logs" element={<Admin><AdminAuditLogsPage /></Admin>} />
+            <Route path="/admin/complaints" element={<Admin><AdminComplaintsPage /></Admin>} />
+            <Route path="/admin/locations" element={<Admin><AdminLocationsPage /></Admin>} />
+            <Route path="/admin/master-data" element={<Admin><AdminMasterDataPage /></Admin>} />
+            <Route path="/admin/communications" element={<Admin><AdminCommunicationsPage /></Admin>} />
+            <Route path="/admin/cms" element={<Admin><AdminCmsPage /></Admin>} />
+            <Route path="/admin/settings" element={<Admin><AdminSettingsPage /></Admin>} />
+            <Route path="/admin/emergency" element={<Admin><AdminEmergencyPage /></Admin>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

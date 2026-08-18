@@ -5,6 +5,7 @@ import { hashPassword, comparePassword, signAccessToken, signRefreshToken, verif
 import { sendSuccess, sendError, AppError } from '../lib/response';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
+import { logLogin } from '../lib/audit';
 
 const router = Router();
 
@@ -69,16 +70,24 @@ router.post('/login', validateBody(loginSchema), async (req, res, next) => {
       include: { patient: true, doctor: true, staff: true },
     });
 
-    if (!user || !user.isActive) throw new AppError('Invalid credentials', 401);
+    if (!user || !user.isActive) {
+      await logLogin(email, false, undefined, 'Invalid credentials', req);
+      throw new AppError('Invalid credentials', 401);
+    }
     let valid = false;
     try {
       valid = await comparePassword(password, user.passwordHash);
     } catch {
+      await logLogin(email, false, user.id, 'Invalid password hash', req);
       throw new AppError('Invalid credentials', 401);
     }
-    if (!valid) throw new AppError('Invalid credentials', 401);
+    if (!valid) {
+      await logLogin(email, false, user.id, 'Wrong password', req);
+      throw new AppError('Invalid credentials', 401);
+    }
 
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await logLogin(email, true, user.id, undefined, req);
 
     const tokens = await issueTokens(user.id, user.email, user.role);
     sendSuccess(res, { user: sanitizeUser(user), ...tokens }, 'Login successful');
