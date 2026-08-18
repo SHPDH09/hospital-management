@@ -17,6 +17,7 @@ import patientManagementRoutes from './patients';
 import appointmentManagementRoutes from './appointments';
 import paymentManagementRoutes from './payments';
 import leadManagementRoutes from './leads';
+import reviewManagementRoutes from './reviews';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -29,6 +30,7 @@ router.use('/patients', patientManagementRoutes);
 router.use('/appointments', appointmentManagementRoutes);
 router.use('/payments', paymentManagementRoutes);
 router.use('/leads', leadManagementRoutes);
+router.use('/reviews', reviewManagementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -227,33 +229,6 @@ router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) =
     const ad = await prisma.advertisement.update({ where: { id }, data: { status } });
     await logAudit(req, 'STATUS_CHANGE', 'Advertisement', id, { status });
     sendSuccess(res, ad);
-  } catch (err) { next(err); }
-});
-
-// ─── Advertisements ──────────────────────────────────────────────────────────
-
-router.get('/reviews', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [reviews, total] = await Promise.all([
-      prisma.review.findMany({
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { patient: { select: { fullName: true } }, organization: { select: { name: true } }, doctor: { select: { fullName: true } } },
-      }),
-      prisma.review.count(),
-    ]);
-    sendPaginated(res, reviews, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const review = await prisma.review.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Review', id, req.body);
-    sendSuccess(res, review);
   } catch (err) { next(err); }
 });
 

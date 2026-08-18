@@ -20,7 +20,7 @@ import {
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage,
   AdminSubscriptionsPage, AdminAdvertisementsPage,
-  AdminCouponsPage, AdminReviewsPage, AdminAnalyticsPage,
+  AdminCouponsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
@@ -29,6 +29,7 @@ import {
   AppointmentManagementDashboardPage, AppointmentManagementListPage, AppointmentManagementDetailPage,
   PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
   LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
+  ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -108,7 +109,13 @@ export default function App() {
             <Route path="/admin/lead-management/unassigned" element={<Admin><LeadManagementListPage unassignedOnly title="Unassigned Leads" /></Admin>} />
             <Route path="/admin/lead-management/hot" element={<Admin><LeadManagementListPage presetTemperature="HOT" title="Hot Leads" /></Admin>} />
             <Route path="/admin/leads" element={<Navigate to="/admin/lead-management/leads" replace />} />
-            <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />
+            <Route path="/admin/review-management" element={<Admin><ReviewManagementDashboardPage /></Admin>} />
+            <Route path="/admin/review-management/reviews" element={<Admin><ReviewManagementListPage /></Admin>} />
+            <Route path="/admin/review-management/reviews/:id" element={<Admin><ReviewManagementDetailPage /></Admin>} />
+            <Route path="/admin/review-management/pending" element={<Admin><ReviewManagementListPage presetStatus="PENDING" title="Pending Moderation" /></Admin>} />
+            <Route path="/admin/review-management/reported" element={<Admin><ReviewManagementListPage reportedOnly title="Reported Reviews" /></Admin>} />
+            <Route path="/admin/review-management/fraud" element={<Admin><ReviewFraudFlagsPage /></Admin>} />
+            <Route path="/admin/reviews" element={<Navigate to="/admin/review-management/reviews" replace />} />
             <Route path="/admin/staff" element={<Admin><AdminStaffPage /></Admin>} />
             <Route path="/admin/roles" element={<Admin><AdminRolesPage /></Admin>} />
             <Route path="/admin/security" element={<Admin><AdminSecurityPage /></Admin>} />

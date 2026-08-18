@@ -72,9 +72,13 @@ export const adminNavGroups: AdminNavGroup[] = [
     ],
   },
   {
-    title: 'Operations',
+    title: 'Review Management',
     items: [
-      { to: '/admin/reviews', icon: Star, label: 'Reviews' },
+      { to: '/admin/review-management', icon: Star, label: 'RM Dashboard' },
+      { to: '/admin/review-management/reviews', icon: Star, label: 'All Reviews' },
+      { to: '/admin/review-management/pending', icon: Star, label: 'Pending Moderation' },
+      { to: '/admin/review-management/reported', icon: AlertTriangle, label: 'Reported' },
+      { to: '/admin/review-management/fraud', icon: Shield, label: 'Fraud Flags' },
     ],
   },
   {

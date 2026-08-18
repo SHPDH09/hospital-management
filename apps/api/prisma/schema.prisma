@@ -225,6 +225,43 @@ enum LeadTemperature {
   COLD
 }
 
+enum ReviewType {
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  SERVICE
+  APPOINTMENT
+}
+
+enum ReviewStatus {
+  PENDING
+  UNDER_MODERATION
+  APPROVED
+  REJECTED
+  HIDDEN
+  REPORTED
+  FLAGGED
+  REMOVED
+  RESTORED
+}
+
+enum ReviewSource {
+  PLATFORM
+  WEBSITE
+  MOBILE_APP
+  APPOINTMENT
+  QR_CODE
+  CAMPAIGN
+  HOSPITAL
+  CLINIC
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
 enum Gender {
   MALE
   FEMALE
@@ -274,6 +311,9 @@ model User {
   assignedLeads      Lead[]      @relation("AssignedLeads")
   leadActivities     LeadActivity[]
   leadFollowUps      LeadFollowUp[] @relation("LeadFollowUps")
+  moderatedReviews   Review[]       @relation("ModeratedReviews")
+  reviewActivities   ReviewActivity[]
+  reviewReports      ReviewReport[] @relation("ReviewReports")
 
   @@map("users")
 }
@@ -506,6 +546,7 @@ model Service {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   billItems    BillItem[]
+  reviews      Review[]
 
   @@index([organizationId])
   @@map("services")
@@ -565,6 +606,7 @@ model Appointment {
   slot         AppointmentSlot? @relation(fields: [slotId], references: [id])
   bills        Bill[]
   leads        Lead[]
+  reviews      Review[]
 
   @@index([organizationId, appointmentDate])
   @@index([doctorId, appointmentDate, status])
@@ -850,22 +892,92 @@ model LeadFollowUp {
 }
 
 model Review {
-  id             String   @id @default(uuid())
-  patientId      String
-  organizationId String?
-  doctorId       String?
-  rating         Int
-  comment        String?
-  response       String?
-  isPublished    Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String           @id @default(uuid())
+  reviewNumber       String           @unique
+  patientId          String
+  organizationId     String?
+  doctorId           String?
+  appointmentId      String?          @unique
+  serviceId          String?
+  type               ReviewType       @default(HOSPITAL)
+  source             ReviewSource     @default(PLATFORM)
+  rating             Int
+  doctorRating       Int?
+  staffRating        Int?
+  cleanlinessRating  Int?
+  waitingRating      Int?
+  facilitiesRating   Int?
+  comment            String?
+  originalComment    String?
+  response           String?
+  responseStatus     String?
+  respondedAt        DateTime?
+  status             ReviewStatus     @default(PENDING)
+  isVerifiedVisit    Boolean          @default(false)
+  isAnonymous        Boolean          @default(false)
+  isPublished        Boolean          @default(false)
+  reportCount        Int              @default(0)
+  helpfulCount       Int              @default(0)
+  riskScore          String           @default("LOW")
+  sentiment          ReviewSentiment?
+  moderationReason   String?
+  moderatedById      String?
+  moderatedAt        DateTime?
+  tags               String[]         @default([])
+  editedAt           DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization? @relation(fields: [organizationId], references: [id])
   doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
+  service      Service?      @relation(fields: [serviceId], references: [id])
+  moderatedBy  User?         @relation("ModeratedReviews", fields: [moderatedById], references: [id])
+  reports      ReviewReport[]
+  activities   ReviewActivity[]
 
+  @@index([reviewNumber])
+  @@index([status, createdAt])
+  @@index([organizationId, status])
+  @@index([doctorId, status])
+  @@index([rating])
   @@map("reviews")
+}
+
+model ReviewReport {
+  id         String    @id @default(uuid())
+  reviewId   String
+  reporterId String?
+  reason     String
+  details    String?
+  status     String    @default("PENDING")
+  decision   String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporter User?  @relation("ReviewReports", fields: [reporterId], references: [id])
+
+  @@index([reviewId])
+  @@map("review_reports")
+}
+
+model ReviewActivity {
+  id        String        @id @default(uuid())
+  reviewId  String
+  userId    String?
+  action    String
+  oldStatus ReviewStatus?
+  newStatus ReviewStatus?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([reviewId, createdAt])
+  @@map("review_activities")
 }
 
 model Document {

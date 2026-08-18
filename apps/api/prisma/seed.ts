@@ -348,6 +348,66 @@ async function main() {
         capturedAt: new Date(),
       },
     });
+
+    const review1 = await prisma.review.upsert({
+      where: { reviewNumber: 'REV-00001' },
+      update: {},
+      create: {
+        reviewNumber: 'REV-00001',
+        patientId: patient.id,
+        organizationId: organization.id,
+        doctorId: demoDoctor.id,
+        appointmentId: demoAppointment.id,
+        type: 'APPOINTMENT',
+        source: 'APPOINTMENT',
+        rating: 5,
+        doctorRating: 5,
+        staffRating: 5,
+        cleanlinessRating: 4,
+        waitingRating: 4,
+        facilitiesRating: 5,
+        comment: 'Excellent service. Dr. Sharma was very professional and the staff was friendly.',
+        status: 'APPROVED',
+        isVerifiedVisit: true,
+        isPublished: true,
+        sentiment: 'POSITIVE',
+        riskScore: 'LOW',
+        tags: ['Great Doctor', 'Friendly Staff', 'Clean Hospital'],
+      },
+    });
+
+    await prisma.review.upsert({
+      where: { reviewNumber: 'REV-00002' },
+      update: {},
+      create: {
+        reviewNumber: 'REV-00002',
+        patientId: patient.id,
+        organizationId: organization.id,
+        doctorId: demoDoctor.id,
+        type: 'DOCTOR',
+        source: 'PLATFORM',
+        rating: 2,
+        doctorRating: 2,
+        staffRating: 3,
+        waitingRating: 1,
+        comment: 'Long waiting time. Had to wait over an hour past appointment time.',
+        status: 'PENDING',
+        isVerifiedVisit: true,
+        sentiment: 'NEGATIVE',
+        riskScore: 'MEDIUM',
+        tags: ['Long Waiting Time'],
+      },
+    });
+
+    await prisma.reviewActivity.create({
+      data: {
+        reviewId: review1.id,
+        userId: superAdmin.id,
+        action: 'REVIEW_APPROVED',
+        newStatus: 'APPROVED',
+        notes: 'Verified visit — auto-approved',
+      },
+    });
   }
 
   // Sample Advertisement
