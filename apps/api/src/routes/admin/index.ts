@@ -16,6 +16,7 @@ import communicationRoutes from './communications';
 import cmsRoutes from './cms';
 import settingsRoutes from './settings';
 import emergencyRoutes from './emergency';
+import advertisementRoutes from './advertisements';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -27,6 +28,7 @@ router.use('/communications', communicationRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/emergency', emergencyRoutes);
+router.use('/advertisements', advertisementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -315,32 +317,6 @@ router.get('/payments', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Advertisements ──────────────────────────────────────────────────────────
-
-router.get('/advertisements', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [ads, total] = await Promise.all([
-      prisma.advertisement.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { organization: { select: { name: true } } } }),
-      prisma.advertisement.count({ where }),
-    ]);
-    sendPaginated(res, ads, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) => {
-  try {
-    const { status } = req.body;
-    const id = paramId(req.params.id);
-    const ad = await prisma.advertisement.update({ where: { id }, data: { status } });
-    await logAudit(req, 'STATUS_CHANGE', 'Advertisement', id, { status });
-    sendSuccess(res, ad);
-  } catch (err) { next(err); }
-});
 
 // ─── Leads ───────────────────────────────────────────────────────────────────
 

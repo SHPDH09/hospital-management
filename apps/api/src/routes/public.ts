@@ -4,6 +4,7 @@ import { sendSuccess } from '../lib/response';
 import { getEmergencyState, computeSystemStatus, getActiveControls } from '../lib/emergency';
 import { mergeWithDefaults, settingsKey } from '../lib/settings';
 import { SettingCategory } from '../lib/settings';
+import { paramId } from '../lib/params';
 
 const router = Router();
 
@@ -82,19 +83,62 @@ router.get('/platform-status', async (_req, res, next) => {
 router.get('/advertisements', async (req, res, next) => {
   try {
     const type = req.query.type as string | undefined;
+    const city = req.query.city as string | undefined;
+    const platform = (req.query.platform as string) || 'website';
+
+    const emergency = await getEmergencyState();
+    const modules = (emergency.modules || {}) as Record<string, boolean>;
+    if (modules.advertisement === false) {
+      sendSuccess(res, []);
+      return;
+    }
+
+    const now = new Date();
     const ads = await prisma.advertisement.findMany({
       where: {
         status: 'ACTIVE',
+        isPaused: false,
+        platforms: { has: platform },
         ...(type && { type: type as never }),
-        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [
+          { OR: [{ startDate: null }, { startDate: { lte: now } }] },
+          { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+          ...(city ? [{ OR: [{ targetCities: { isEmpty: true } }, { targetCities: { has: city } }] }] : []),
+        ],
       },
-      take: 10,
-      orderBy: { createdAt: 'desc' },
+      take: 20,
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      include: { organization: { select: { name: true, slug: true, logoUrl: true } } },
     });
     sendSuccess(res, ads);
   } catch (err) {
     next(err);
   }
+});
+
+router.post('/advertisements/:id/impression', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    await prisma.advertisement.update({
+      where: { id },
+      data: { impressions: { increment: 1 }, uniqueImpressions: { increment: 1 } },
+    });
+    sendSuccess(res, { tracked: true });
+  } catch (err) { next(err); }
+});
+
+router.post('/advertisements/:id/click', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const eventType = (req.body?.eventType as string) || 'click';
+    const data: Record<string, { increment: number }> = { clicks: { increment: 1 } };
+    if (eventType === 'profile_view') data.profileViews = { increment: 1 };
+    if (eventType === 'call') data.callClicks = { increment: 1 };
+    if (eventType === 'whatsapp') data.whatsappClicks = { increment: 1 };
+    if (eventType === 'conversion') data.conversions = { increment: 1 };
+    await prisma.advertisement.update({ where: { id }, data });
+    sendSuccess(res, { tracked: true });
+  } catch (err) { next(err); }
 });
 
 router.get('/stats', async (_req, res, next) => {

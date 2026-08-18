@@ -94,8 +94,11 @@ enum AdvertisementStatus {
   PENDING
   APPROVED
   ACTIVE
+  PAUSED
+  SCHEDULED
   EXPIRED
   REJECTED
+  CHANGES_REQUESTED
 }
 
 enum AdvertisementType {
@@ -104,7 +107,25 @@ enum AdvertisementType {
   FEATURED_HOSPITAL
   FEATURED_DOCTOR
   FEATURED_CLINIC
+  FEATURED_SERVICE
   HEALTH_PACKAGE
+  PROMOTIONAL_CARD
+  SEARCH_AD
+}
+
+enum AdPaymentStatus {
+  UNPAID
+  PAID
+  PARTIALLY_PAID
+  REFUNDED
+}
+
+enum AdPricingModel {
+  FIXED
+  CPM
+  CPC
+  CPA
+  CAMPAIGN
 }
 
 enum LeadStatus {
@@ -299,6 +320,7 @@ model Doctor {
   appointments Appointment[]
   slots        AppointmentSlot[]
   reviews      Review[]
+  advertisements Advertisement[]
 
   @@index([organizationId])
   @@index([specialization])
@@ -549,41 +571,126 @@ model SubscriptionHistory {
 }
 
 model Advertisement {
-  id             String              @id @default(uuid())
-  organizationId String?
-  title          String
-  type           AdvertisementType
-  status         AdvertisementStatus @default(PENDING)
-  imageUrl       String?
-  targetUrl      String?
-  startDate      DateTime?
-  endDate        DateTime?
-  impressions    Int                 @default(0)
-  clicks         Int                 @default(0)
-  budget         Float?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                   String              @id @default(uuid())
+  organizationId       String?
+  doctorId             String?
+  campaignName         String?
+  title                String
+  description          String?
+  category             String?
+  type                 AdvertisementType
+  status               AdvertisementStatus @default(PENDING)
+  imageUrl             String?
+  mobileImageUrl       String?
+  videoUrl             String?
+  logoUrl              String?
+  ctaText              String?
+  targetUrl            String?
+  landingType          String?
+  landingId            String?
+  targetCities         String[]
+  targetStates         String[]
+  targetPinCodes       String[]
+  targetRadiusKm       Float?
+  audienceType         String?
+  healthcareCategories String[]
+  platforms            String[]            @default(["website"])
+  startDate            DateTime?
+  endDate              DateTime?
+  scheduledAt          DateTime?
+  budget               Float?
+  dailyBudget          Float?
+  pricingModel         AdPricingModel      @default(FIXED)
+  adPlanId             String?
+  priority             Int                 @default(0)
+  placement            String?
+  impressions          Int                 @default(0)
+  uniqueImpressions    Int                 @default(0)
+  clicks               Int                 @default(0)
+  leads                Int                 @default(0)
+  appointments         Int                 @default(0)
+  conversions          Int                 @default(0)
+  profileViews         Int                 @default(0)
+  callClicks           Int                 @default(0)
+  whatsappClicks       Int                 @default(0)
+  paidAmount           Float               @default(0)
+  pendingAmount        Float?
+  campaignCost         Float?
+  paymentStatus        AdPaymentStatus     @default(UNPAID)
+  rejectionReason      String?
+  flaggedReason        String?
+  isPaused             Boolean             @default(false)
+  createdByEmail       String?
+  approvedByEmail      String?
+  approvedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id])
+  doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+  adPlan       AdPlan?       @relation(fields: [adPlanId], references: [id])
+  history      AdHistory[]
+  adLeads      Lead[]
 
+  @@index([status, type])
+  @@index([organizationId])
+  @@index([startDate, endDate])
   @@map("advertisements")
 }
 
-model Lead {
-  id             String     @id @default(uuid())
-  organizationId String
-  name           String?
-  email          String?
-  phone          String?
-  source         String?
-  status         LeadStatus @default(NEW)
-  notes          String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+model AdPlan {
+  id                    String            @id @default(uuid())
+  name                  String
+  adType                AdvertisementType
+  price                 Float
+  durationDays          Int
+  pricingModel          AdPricingModel    @default(FIXED)
+  description           String?
+  placement             String?
+  priority              Int               @default(0)
+  recommendedDimensions Json?
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  advertisements Advertisement[]
+
+  @@map("ad_plans")
+}
+
+model AdHistory {
+  id               String   @id @default(uuid())
+  advertisementId  String
+  action           String
+  performedByEmail String?
+  reason           String?
+  details          Json?
+  createdAt        DateTime @default(now())
+
+  advertisement Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+
+  @@index([advertisementId, createdAt])
+  @@map("ad_history")
+}
+
+model Lead {
+  id              String     @id @default(uuid())
+  organizationId  String
+  advertisementId String?
+  name            String?
+  email           String?
+  phone           String?
+  source          String?
+  status          LeadStatus @default(NEW)
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  advertisement Advertisement? @relation(fields: [advertisementId], references: [id])
 
   @@index([organizationId, status])
+  @@index([advertisementId])
   @@map("leads")
 }
 

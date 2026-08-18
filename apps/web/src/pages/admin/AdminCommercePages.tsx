@@ -9,33 +9,6 @@ function useList(endpoint: string) {
   return useQuery({ queryKey: [endpoint], queryFn: () => api.get(endpoint) });
 }
 
-export function AdminAdvertisementsPage() {
-  const { data, isLoading, refetch } = useList('/admin/advertisements');
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Advertisement Management" subtitle="Approve, manage, and track ad campaigns" />
-      {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'title', label: 'Title' },
-          { key: 'type', label: 'Type' },
-          { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name || 'Platform') },
-          { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
-          { key: 'impressions', label: 'Impressions' },
-          { key: 'clicks', label: 'Clicks' },
-          { key: 'budget', label: 'Budget', render: (r) => r.budget ? formatCurrency(r.budget as number) : '-' },
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <div className="flex gap-2">
-              {r.status === 'PENDING' && <ActionBtn variant="success" onClick={() => api.patch(`/admin/advertisements/${r.id}/status`, { status: 'APPROVED' }).then(() => refetch())}>Approve</ActionBtn>}
-              {r.status === 'PENDING' && <ActionBtn variant="danger" onClick={() => api.patch(`/admin/advertisements/${r.id}/status`, { status: 'REJECTED' }).then(() => refetch())}>Reject</ActionBtn>}
-              {r.status === 'APPROVED' && <ActionBtn onClick={() => api.patch(`/admin/advertisements/${r.id}/status`, { status: 'ACTIVE' }).then(() => refetch())}>Activate</ActionBtn>}
-            </div>
-          )},
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-      )}
-    </DashboardLayout>
-  );
-}
-
 const emptyCoupon = {
   code: '',
   discountType: 'PERCENT' as 'PERCENT' | 'FIXED',

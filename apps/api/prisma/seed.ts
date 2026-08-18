@@ -276,14 +276,34 @@ async function main() {
   await prisma.advertisement.create({
     data: {
       organizationId: organization.id,
+      campaignName: 'Health Checkup Camp',
       title: 'Free Health Checkup Camp',
+      description: 'Comprehensive health screening at City General Hospital',
       type: 'HOMEPAGE_BANNER',
       status: 'ACTIVE',
       targetUrl: '/organizations/city-general-hospital',
+      ctaText: 'Book Now',
+      imageUrl: 'https://placehold.co/1200x400/2563eb/white?text=Health+Checkup',
       startDate: new Date(),
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      budget: 4999,
+      paidAmount: 4999,
+      paymentStatus: 'PAID',
+      platforms: ['website', 'android', 'ios'],
+      targetCities: ['Mumbai'],
+      healthcareCategories: ['General Medicine'],
+      impressions: 1250,
+      clicks: 86,
+      leads: 12,
+      appointments: 5,
+      conversions: 5,
+      priority: 2,
+      placement: 'homepage',
     },
   });
+
+  const { seedAdPlans } = await import('./ad-plans-seed');
+  await seedAdPlans(prisma);
 
   // Specializations (Master Data)
   const specs = [
