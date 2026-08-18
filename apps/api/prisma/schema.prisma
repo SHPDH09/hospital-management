@@ -46,6 +46,28 @@ enum AppointmentStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+  RESCHEDULED
+  REJECTED
+}
+
+enum AppointmentPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum AppointmentType {
+  IN_PERSON
+  VIDEO
+  PHONE
+  FOLLOW_UP
+  EMERGENCY
+  WALK_IN
+  HOME_VISIT
+  DIAGNOSTIC
 }
 
 enum BillStatus {
@@ -57,10 +79,48 @@ enum BillStatus {
 }
 
 enum PaymentStatus {
+  INITIATED
+  PROCESSING
+  AUTHORIZED
   PENDING
+  CAPTURED
   COMPLETED
   FAILED
+  CANCELLED
+  EXPIRED
   REFUNDED
+  PARTIAL_REFUND
+  DISPUTED
+}
+
+enum PaymentPurpose {
+  APPOINTMENT
+  CONSULTATION
+  FOLLOW_UP
+  ONLINE_CONSULTATION
+  EMERGENCY
+  HOME_VISIT
+  SERVICE
+  DIAGNOSTIC
+  HEALTH_PACKAGE
+  PROCEDURE
+  TREATMENT
+  SUBSCRIPTION
+  ADVERTISEMENT
+  REFERRAL_COMMISSION
+  OTHER
+}
+
+enum PaymentMethod {
+  UPI
+  CREDIT_CARD
+  DEBIT_CARD
+  NET_BANKING
+  WALLET
+  PAYMENT_LINK
+  CASH
+  POS
+  BANK_TRANSFER
 }
 
 enum SubscriptionPlanTier {
@@ -111,15 +171,121 @@ enum LeadStatus {
   NEW
   CONTACTED
   INTERESTED
+  QUALIFIED
+  FOLLOW_UP
   APPOINTMENT_BOOKED
+  VISITED
+  TREATMENT_STARTED
   CONVERTED
+  NOT_INTERESTED
+  WRONG_NUMBER
+  DUPLICATE
   LOST
+  INVALID
+}
+
+enum LeadType {
+  PATIENT
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  REFERRAL
+  ADVERTISEMENT
+  PARTNER
+}
+
+enum LeadSource {
+  WEBSITE
+  MOBILE_APP
+  GOOGLE
+  SOCIAL_MEDIA
+  ADVERTISEMENT
+  REFERRAL
+  AASHA
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  PARTNER
+  CALL
+  WHATSAPP
+  EMAIL
+  MANUAL_ENTRY
+  API
+}
+
+enum LeadPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum LeadTemperature {
+  HOT
+  WARM
+  COLD
+}
+
+enum ReviewType {
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  SERVICE
+  APPOINTMENT
+}
+
+enum ReviewStatus {
+  PENDING
+  UNDER_MODERATION
+  APPROVED
+  REJECTED
+  HIDDEN
+  REPORTED
+  FLAGGED
+  REMOVED
+  RESTORED
+}
+
+enum ReviewSource {
+  PLATFORM
+  WEBSITE
+  MOBILE_APP
+  APPOINTMENT
+  QR_CODE
+  CAMPAIGN
+  HOSPITAL
+  CLINIC
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
 }
 
 enum Gender {
   MALE
   FEMALE
   OTHER
+}
+
+enum PatientAccountStatus {
+  ACTIVE
+  PENDING_PROFILE
+  UNVERIFIED
+  SUSPENDED
+  BLOCKED
+  DEACTIVATED
+}
+
+enum PatientRegistrationSource {
+  DIRECT
+  REFERRAL
+  AASHA
+  ADVERTISEMENT
+  GOOGLE
+  WEBSITE
+  CAMPAIGN
+  DOCTOR_REFERRAL
 }
 
 model User {
@@ -142,6 +308,12 @@ model User {
   auditLogs     AuditLog[]
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
+  assignedLeads      Lead[]      @relation("AssignedLeads")
+  leadActivities     LeadActivity[]
+  leadFollowUps      LeadFollowUp[] @relation("LeadFollowUps")
+  moderatedReviews   Review[]       @relation("ModeratedReviews")
+  reviewActivities   ReviewActivity[]
+  reviewReports      ReviewReport[] @relation("ReviewReports")
 
   @@map("users")
 }
@@ -233,35 +405,48 @@ model Branch {
 }
 
 model Patient {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  fullName         String
-  dateOfBirth      DateTime?
-  gender           Gender?
-  address          String?
-  city             String?
-  state            String?
-  emergencyContact String?
-  bloodGroup       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                 String                    @id @default(uuid())
+  userId             String                    @unique
+  globalPatientId    String                    @unique
+  fullName           String
+  dateOfBirth        DateTime?
+  gender             Gender?
+  address            String?
+  city               String?
+  state              String?
+  pinCode            String?
+  photoUrl           String?
+  emergencyContact   String?
+  bloodGroup         String?
+  profileCompleted   Boolean                   @default(false)
+  accountStatus      PatientAccountStatus      @default(PENDING_PROFILE)
+  registrationSource PatientRegistrationSource @default(DIRECT)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizations PatientOrganization[]
   appointments  Appointment[]
   bills         Bill[]
   reviews       Review[]
+  leads         Lead[]
 
+  @@index([globalPatientId])
+  @@index([city, state])
+  @@index([accountStatus])
   @@map("patients")
 }
 
 model PatientOrganization {
-  id             String   @id @default(uuid())
+  id             String                    @id @default(uuid())
   patientId      String
   organizationId String
   patientNumber  String?
+  sourceType     PatientRegistrationSource @default(DIRECT)
+  referralName   String?
+  referralId     String?
   notes          String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime                  @default(now())
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -287,6 +472,8 @@ model Doctor {
   photoUrl           String?
   languages          String[]
   isActive           Boolean  @default(true)
+  verificationStatus VerificationStatus @default(PENDING)
+  accountActivated   Boolean  @default(false)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
   createdAt          DateTime @default(now())
@@ -299,6 +486,7 @@ model Doctor {
   appointments Appointment[]
   slots        AppointmentSlot[]
   reviews      Review[]
+  leads        Lead[]
 
   @@index([organizationId])
   @@index([specialization])
@@ -358,6 +546,7 @@ model Service {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   billItems    BillItem[]
+  reviews      Review[]
 
   @@index([organizationId])
   @@map("services")
@@ -381,21 +570,33 @@ model AppointmentSlot {
 }
 
 model Appointment {
-  id             String            @id @default(uuid())
-  organizationId String
-  branchId       String?
-  patientId      String
-  doctorId       String
-  departmentId   String?
-  slotId         String?
-  appointmentDate DateTime         @db.Date
-  startTime      String
-  endTime        String?
-  type           String            @default("consultation")
-  status         AppointmentStatus @default(PENDING)
-  notes          String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                String                   @id @default(uuid())
+  appointmentNumber String                   @unique
+  organizationId    String
+  branchId          String?
+  patientId         String
+  doctorId          String
+  departmentId      String?
+  slotId            String?
+  appointmentDate   DateTime                 @db.Date
+  startTime         String
+  endTime           String?
+  type              AppointmentType          @default(IN_PERSON)
+  status            AppointmentStatus        @default(PENDING)
+  paymentStatus     AppointmentPaymentStatus @default(PENDING)
+  notes             String?
+  referralSource    PatientRegistrationSource?
+  referralId        String?
+  referralName      String?
+  advertisementId   String?
+  cancellationReason String?
+  rescheduledFromId String?
+  checkedInAt       DateTime?
+  tokenNumber       String?
+  isEmergency       Boolean                  @default(false)
+  isOnline          Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch?          @relation(fields: [branchId], references: [id])
@@ -404,10 +605,14 @@ model Appointment {
   department   Department?      @relation(fields: [departmentId], references: [id])
   slot         AppointmentSlot? @relation(fields: [slotId], references: [id])
   bills        Bill[]
+  leads        Lead[]
+  reviews      Review[]
 
   @@index([organizationId, appointmentDate])
   @@index([doctorId, appointmentDate, status])
   @@index([patientId])
+  @@index([appointmentNumber])
+  @@index([status, appointmentDate])
   @@map("appointments")
 }
 
@@ -453,17 +658,39 @@ model BillItem {
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  billId        String
-  amount        Float
-  method        String
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
+  id                String         @id @default(uuid())
+  paymentNumber     String         @unique
+  billId            String
+  amount            Float
+  method            PaymentMethod  @default(UPI)
+  purpose           PaymentPurpose @default(APPOINTMENT)
+  status            PaymentStatus  @default(PENDING)
+  currency          String         @default("INR")
+  transactionId     String?
+  gateway           String?
+  gatewayOrderId    String?
+  gatewayPaymentId  String?
+  idempotencyKey    String?        @unique
+  platformFee       Float          @default(0)
+  providerShare     Float          @default(0)
+  refundAmount      Float          @default(0)
+  refundReason      String?
+  refundId          String?
+  webhookStatus     String?
+  webhookVerified   Boolean        @default(false)
+  riskLevel         String         @default("LOW")
+  reconciliationStatus String?
+  paidAt            DateTime?
+  capturedAt        DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
+  @@index([paymentNumber])
+  @@index([status, createdAt])
+  @@index([gatewayPaymentId])
   @@map("payments")
 }
 
@@ -565,45 +792,192 @@ model Advertisement {
   updatedAt      DateTime            @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id])
+  leads        Lead[]
 
   @@map("advertisements")
 }
 
 model Lead {
-  id             String     @id @default(uuid())
-  organizationId String
-  name           String?
-  email          String?
-  phone          String?
-  source         String?
-  status         LeadStatus @default(NEW)
-  notes          String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                  String           @id @default(uuid())
+  leadNumber          String           @unique
+  organizationId      String?
+  type                LeadType         @default(PATIENT)
+  name                String?
+  email               String?
+  phone               String?
+  city                String?
+  state               String?
+  source              LeadSource       @default(WEBSITE)
+  campaign            String?
+  referralName        String?
+  referralType        String?
+  specialty           String?
+  service             String?
+  preferredDate       DateTime?
+  preferredTime       String?
+  status              LeadStatus       @default(NEW)
+  priority            LeadPriority     @default(MEDIUM)
+  temperature         LeadTemperature  @default(COLD)
+  score               Int              @default(0)
+  assignedToId        String?
+  assignedAt          DateTime?
+  interestedDoctorId  String?
+  patientId           String?
+  appointmentId       String?
+  advertisementId     String?
+  phoneVerified       Boolean          @default(false)
+  emailVerified       Boolean          @default(false)
+  nextFollowUpAt      DateTime?
+  lastContactAt       DateTime?
+  lostReason          String?
+  isDuplicate         Boolean          @default(false)
+  mergedIntoId        String?
+  tags                String[]         @default([])
+  notes               String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  assignedTo       User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  interestedDoctor Doctor?        @relation(fields: [interestedDoctorId], references: [id])
+  patient          Patient?       @relation(fields: [patientId], references: [id])
+  appointment      Appointment?   @relation(fields: [appointmentId], references: [id])
+  advertisement    Advertisement? @relation(fields: [advertisementId], references: [id])
+  activities       LeadActivity[]
+  followUps        LeadFollowUp[]
 
-  @@index([organizationId, status])
+  @@index([leadNumber])
+  @@index([status, createdAt])
+  @@index([assignedToId])
+  @@index([source, type])
+  @@index([phone])
   @@map("leads")
 }
 
+model LeadActivity {
+  id        String      @id @default(uuid())
+  leadId    String
+  userId    String?
+  action    String
+  oldStatus LeadStatus?
+  newStatus LeadStatus?
+  notes     String?
+  createdAt DateTime    @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model LeadFollowUp {
+  id           String    @id @default(uuid())
+  leadId       String
+  assignedToId String?
+  scheduledAt  DateTime
+  reason       String?
+  status       String    @default("PENDING")
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("LeadFollowUps", fields: [assignedToId], references: [id])
+
+  @@index([leadId, scheduledAt])
+  @@index([assignedToId, scheduledAt])
+  @@map("lead_follow_ups")
+}
+
 model Review {
-  id             String   @id @default(uuid())
-  patientId      String
-  organizationId String?
-  doctorId       String?
-  rating         Int
-  comment        String?
-  response       String?
-  isPublished    Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String           @id @default(uuid())
+  reviewNumber       String           @unique
+  patientId          String
+  organizationId     String?
+  doctorId           String?
+  appointmentId      String?          @unique
+  serviceId          String?
+  type               ReviewType       @default(HOSPITAL)
+  source             ReviewSource     @default(PLATFORM)
+  rating             Int
+  doctorRating       Int?
+  staffRating        Int?
+  cleanlinessRating  Int?
+  waitingRating      Int?
+  facilitiesRating   Int?
+  comment            String?
+  originalComment    String?
+  response           String?
+  responseStatus     String?
+  respondedAt        DateTime?
+  status             ReviewStatus     @default(PENDING)
+  isVerifiedVisit    Boolean          @default(false)
+  isAnonymous        Boolean          @default(false)
+  isPublished        Boolean          @default(false)
+  reportCount        Int              @default(0)
+  helpfulCount       Int              @default(0)
+  riskScore          String           @default("LOW")
+  sentiment          ReviewSentiment?
+  moderationReason   String?
+  moderatedById      String?
+  moderatedAt        DateTime?
+  tags               String[]         @default([])
+  editedAt           DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization? @relation(fields: [organizationId], references: [id])
   doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
+  service      Service?      @relation(fields: [serviceId], references: [id])
+  moderatedBy  User?         @relation("ModeratedReviews", fields: [moderatedById], references: [id])
+  reports      ReviewReport[]
+  activities   ReviewActivity[]
 
+  @@index([reviewNumber])
+  @@index([status, createdAt])
+  @@index([organizationId, status])
+  @@index([doctorId, status])
+  @@index([rating])
   @@map("reviews")
+}
+
+model ReviewReport {
+  id         String    @id @default(uuid())
+  reviewId   String
+  reporterId String?
+  reason     String
+  details    String?
+  status     String    @default("PENDING")
+  decision   String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporter User?  @relation("ReviewReports", fields: [reporterId], references: [id])
+
+  @@index([reviewId])
+  @@map("review_reports")
+}
+
+model ReviewActivity {
+  id        String        @id @default(uuid())
+  reviewId  String
+  userId    String?
+  action    String
+  oldStatus ReviewStatus?
+  newStatus ReviewStatus?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([reviewId, createdAt])
+  @@map("review_activities")
 }
 
 model Document {

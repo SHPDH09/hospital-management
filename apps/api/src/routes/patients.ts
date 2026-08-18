@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { generateGlobalPatientId } from '../lib/patient-management';
 import { z } from 'zod';
 import { prisma, TransactionClient } from '../lib/prisma';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
@@ -101,6 +102,7 @@ router.post('/', authenticate, requireRoles(...CRM_ROLES), validateBody(createPa
           patientRecord = await tx.patient.create({
             data: {
               userId: user.id,
+              globalPatientId: await generateGlobalPatientId(),
               fullName: data.fullName,
               dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
               gender: data.gender,
@@ -125,6 +127,7 @@ router.post('/', authenticate, requireRoles(...CRM_ROLES), validateBody(createPa
         patientRecord = await tx.patient.create({
           data: {
             userId: user.id,
+            globalPatientId: await generateGlobalPatientId(),
             fullName: data.fullName,
             dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
             gender: data.gender,

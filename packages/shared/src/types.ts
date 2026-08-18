@@ -27,7 +27,9 @@ export type AppointmentStatus =
 
 export type BillStatus = 'DRAFT' | 'PENDING' | 'PAID' | 'PARTIALLY_PAID' | 'CANCELLED';
 
-export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+export type PaymentStatus =
+  | 'INITIATED' | 'PROCESSING' | 'AUTHORIZED' | 'PENDING' | 'CAPTURED' | 'COMPLETED'
+  | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'REFUNDED' | 'PARTIAL_REFUND' | 'DISPUTED';
 
 export type SubscriptionPlanTier = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
 

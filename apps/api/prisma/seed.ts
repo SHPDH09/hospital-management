@@ -28,7 +28,7 @@ async function main() {
   ));
 
   // Super Admin (demo)
-  await prisma.user.upsert({
+  const superAdmin = await prisma.user.upsert({
     where: { email: 'admin@healthcare.platform' },
     update: {},
     create: {
@@ -192,6 +192,8 @@ async function main() {
         experience: doc.exp,
         consultationFee: doc.fee,
         languages: ['English', 'Hindi'],
+        verificationStatus: 'APPROVED',
+        accountActivated: true,
         averageRating: 4.2 + Math.random() * 0.6,
         reviewCount: Math.floor(Math.random() * 50) + 10,
       },
@@ -258,6 +260,7 @@ async function main() {
     update: {},
     create: {
       userId: patientUser.id,
+      globalPatientId: 'PAT-00000001',
       fullName: 'Rahul Verma',
       dateOfBirth: new Date('1990-05-15'),
       gender: 'MALE',
@@ -265,6 +268,9 @@ async function main() {
       city: 'Mumbai',
       state: 'Maharashtra',
       emergencyContact: '+91-9876543298',
+      profileCompleted: true,
+      accountStatus: 'ACTIVE',
+      registrationSource: 'DIRECT',
     },
   });
 
@@ -272,8 +278,140 @@ async function main() {
     data: { patientId: patient.id, organizationId: organization.id },
   });
 
+  const demoDoctor = await prisma.doctor.findFirst({ where: { organizationId: organization.id } });
+  if (demoDoctor) {
+    const demoAppointment = await prisma.appointment.upsert({
+      where: { appointmentNumber: 'APT-00001' },
+      update: {},
+      create: {
+        appointmentNumber: 'APT-00001',
+        organizationId: organization.id,
+        patientId: patient.id,
+        doctorId: demoDoctor.id,
+        departmentId: demoDoctor.departmentId,
+        appointmentDate: new Date(),
+        startTime: '10:30',
+        endTime: '11:00',
+        type: 'IN_PERSON',
+        status: 'CONFIRMED',
+        paymentStatus: 'PAID',
+        referralSource: 'DIRECT',
+      },
+    });
+
+    const bill = await prisma.bill.upsert({
+      where: { organizationId_billNumber: { organizationId: organization.id, billNumber: 'INV-00001' } },
+      update: {},
+      create: {
+        organizationId: organization.id,
+        patientId: patient.id,
+        appointmentId: demoAppointment.id,
+        billNumber: 'INV-00001',
+        subtotal: 800,
+        tax: 0,
+        discount: 0,
+        total: 800,
+        status: 'PAID',
+        items: {
+          create: {
+            description: 'Consultation Fee',
+            quantity: 1,
+            unitPrice: 800,
+            total: 800,
+          },
+        },
+      },
+    });
+
+    await prisma.payment.upsert({
+      where: { paymentNumber: 'PAY-00001' },
+      update: {},
+      create: {
+        paymentNumber: 'PAY-00001',
+        billId: bill.id,
+        amount: 800,
+        method: 'UPI',
+        purpose: 'APPOINTMENT',
+        status: 'COMPLETED',
+        currency: 'INR',
+        transactionId: 'TXN-DEMO-10245',
+        gateway: 'Razorpay',
+        gatewayOrderId: 'order_demo_001',
+        gatewayPaymentId: 'pay_demo_001',
+        platformFee: 80,
+        providerShare: 720,
+        webhookStatus: 'VERIFIED',
+        webhookVerified: true,
+        riskLevel: 'LOW',
+        reconciliationStatus: 'MATCHED',
+        paidAt: new Date(),
+        capturedAt: new Date(),
+      },
+    });
+
+    const review1 = await prisma.review.upsert({
+      where: { reviewNumber: 'REV-00001' },
+      update: {},
+      create: {
+        reviewNumber: 'REV-00001',
+        patientId: patient.id,
+        organizationId: organization.id,
+        doctorId: demoDoctor.id,
+        appointmentId: demoAppointment.id,
+        type: 'APPOINTMENT',
+        source: 'APPOINTMENT',
+        rating: 5,
+        doctorRating: 5,
+        staffRating: 5,
+        cleanlinessRating: 4,
+        waitingRating: 4,
+        facilitiesRating: 5,
+        comment: 'Excellent service. Dr. Sharma was very professional and the staff was friendly.',
+        status: 'APPROVED',
+        isVerifiedVisit: true,
+        isPublished: true,
+        sentiment: 'POSITIVE',
+        riskScore: 'LOW',
+        tags: ['Great Doctor', 'Friendly Staff', 'Clean Hospital'],
+      },
+    });
+
+    await prisma.review.upsert({
+      where: { reviewNumber: 'REV-00002' },
+      update: {},
+      create: {
+        reviewNumber: 'REV-00002',
+        patientId: patient.id,
+        organizationId: organization.id,
+        doctorId: demoDoctor.id,
+        type: 'DOCTOR',
+        source: 'PLATFORM',
+        rating: 2,
+        doctorRating: 2,
+        staffRating: 3,
+        waitingRating: 1,
+        comment: 'Long waiting time. Had to wait over an hour past appointment time.',
+        status: 'PENDING',
+        isVerifiedVisit: true,
+        sentiment: 'NEGATIVE',
+        riskScore: 'MEDIUM',
+        tags: ['Long Waiting Time'],
+      },
+    });
+
+    await prisma.reviewActivity.create({
+      data: {
+        reviewId: review1.id,
+        userId: superAdmin.id,
+        action: 'REVIEW_APPROVED',
+        newStatus: 'APPROVED',
+        notes: 'Verified visit — auto-approved',
+      },
+    });
+  }
+
   // Sample Advertisement
-  await prisma.advertisement.create({
+  const ad = await prisma.advertisement.create({
     data: {
       organizationId: organization.id,
       title: 'Free Health Checkup Camp',
@@ -282,6 +420,108 @@ async function main() {
       targetUrl: '/organizations/city-general-hospital',
       startDate: new Date(),
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const demoDoctorForLeads = await prisma.doctor.findFirst({ where: { organizationId: organization.id } });
+  const tomorrowFollowUp = new Date();
+  tomorrowFollowUp.setDate(tomorrowFollowUp.getDate() + 1);
+  tomorrowFollowUp.setHours(11, 0, 0, 0);
+
+  const lead1 = await prisma.lead.upsert({
+    where: { leadNumber: 'LD-00001' },
+    update: {},
+    create: {
+      leadNumber: 'LD-00001',
+      organizationId: organization.id,
+      type: 'PATIENT',
+      name: 'Rahul Kumar',
+      email: 'rahul.kumar@example.com',
+      phone: '+91-9876543201',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      source: 'REFERRAL',
+      campaign: 'Patna Healthcare Campaign',
+      referralName: 'Sita Devi',
+      referralType: 'AASHA',
+      specialty: 'Cardiology',
+      service: 'Consultation',
+      status: 'FOLLOW_UP',
+      priority: 'HIGH',
+      temperature: 'HOT',
+      score: 75,
+      assignedToId: superAdmin.id,
+      assignedAt: new Date(),
+      interestedDoctorId: demoDoctorForLeads?.id,
+      phoneVerified: true,
+      nextFollowUpAt: tomorrowFollowUp,
+      lastContactAt: new Date(),
+      tags: ['VIP', 'Referral', 'AASHA'],
+      notes: 'Patient wants cardiologist appointment after 6 PM.',
+    },
+  });
+
+  await prisma.lead.upsert({
+    where: { leadNumber: 'LD-00002' },
+    update: {},
+    create: {
+      leadNumber: 'LD-00002',
+      organizationId: organization.id,
+      type: 'PATIENT',
+      name: 'Amit Sharma',
+      phone: '+91-9876543202',
+      city: 'Pune',
+      state: 'Maharashtra',
+      source: 'ADVERTISEMENT',
+      campaign: 'Diabetes Checkup',
+      advertisementId: ad.id,
+      status: 'NEW',
+      priority: 'MEDIUM',
+      temperature: 'WARM',
+      score: 35,
+      tags: ['Follow-up'],
+    },
+  });
+
+  await prisma.lead.upsert({
+    where: { leadNumber: 'LD-00003' },
+    update: {},
+    create: {
+      leadNumber: 'LD-00003',
+      type: 'HOSPITAL',
+      name: 'Metro Care Hospital',
+      email: 'contact@metrocare.com',
+      phone: '+91-9876543203',
+      city: 'Delhi',
+      state: 'Delhi',
+      source: 'WEBSITE',
+      status: 'CONTACTED',
+      priority: 'HIGH',
+      temperature: 'WARM',
+      score: 40,
+      assignedToId: superAdmin.id,
+      assignedAt: new Date(),
+      lastContactAt: new Date(),
+    },
+  });
+
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead1.id,
+      userId: superAdmin.id,
+      action: 'LEAD_CREATED',
+      newStatus: 'NEW',
+      notes: 'Lead captured via referral form',
+    },
+  });
+
+  await prisma.leadFollowUp.create({
+    data: {
+      leadId: lead1.id,
+      assignedToId: superAdmin.id,
+      scheduledAt: tomorrowFollowUp,
+      reason: 'Appointment Confirmation',
+      status: 'PENDING',
     },
   });
 
