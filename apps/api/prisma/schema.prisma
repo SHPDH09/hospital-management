@@ -40,6 +40,40 @@ enum VerificationStatus {
   CORRECTION_REQUESTED
 }
 
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  DOCUMENTS_REQUIRED
+  VERIFICATION_IN_PROGRESS
+  APPROVED
+  REJECTED
+  SUSPENDED
+  EXPIRED
+  RE_VERIFICATION_REQUIRED
+}
+
+enum VerificationApplicationType {
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  AASHA
+  REFERRAL_PARTNER
+}
+
+enum DocumentVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REUPLOAD_REQUIRED
+}
+
+enum VerificationRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum AppointmentStatus {
   PENDING
   CONFIRMED
@@ -177,6 +211,10 @@ model User {
   ashaProfile         AshaProfile?
   referralPartner     ReferralPartner?
   logoHistoryUploads  OrganizationLogoHistory[]
+  verificationAssignments VerificationApplication[] @relation("VerifierAssignments")
+  verificationAudits      VerificationAuditLog[]
+  verifiedDocuments         VerificationDocument[]
+  submittedApplications   VerificationApplication[] @relation("SubmittedApplications")
 
   @@map("users")
 }
@@ -218,7 +256,8 @@ model Organization {
   latitude           Float?
   longitude          Float?
   verificationStatus VerificationStatus @default(PENDING)
-  isActive           Boolean            @default(true)
+  accountActivated     Boolean            @default(false)
+  isActive             Boolean            @default(true)
   isPubliclyListed   Boolean            @default(false)
   emergencyAvailable Boolean            @default(false)
   openingHours       Json?
@@ -260,6 +299,7 @@ model Organization {
   referralCommissionPlans ReferralCommissionPlan[]
   platformStaffAssignments PlatformStaffAssignment[]
   logoHistory              OrganizationLogoHistory[]
+  verificationApplication  VerificationApplication?
 
   @@index([city, state])
   @@index([verificationStatus, isActive, isPubliclyListed])
@@ -365,6 +405,8 @@ model Doctor {
   photoUrl           String?
   languages          String[]
   isActive           Boolean  @default(true)
+  verificationStatus VerificationStatus @default(PENDING)
+  accountActivated   Boolean  @default(false)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
   createdAt          DateTime @default(now())
@@ -378,6 +420,7 @@ model Doctor {
   slots        AppointmentSlot[]
   reviews      Review[]
   advertisements Advertisement[]
+  verificationApplication VerificationApplication?
 
   @@index([organizationId])
   @@index([specialization])
@@ -503,6 +546,96 @@ model OrganizationLogoHistory {
 
   @@index([organizationId, createdAt])
   @@map("organization_logo_history")
+}
+
+model VerificationApplication {
+  id                    String                      @id @default(uuid())
+  applicationNumber     String                      @unique
+  type                  VerificationApplicationType
+  status                ApplicationStatus           @default(DRAFT)
+  riskScore             Int                         @default(0)
+  riskLevel             VerificationRiskLevel       @default(LOW)
+  organizationId        String?                     @unique
+  doctorId              String?                     @unique
+  ashaProfileId         String?                     @unique
+  referralPartnerId     String?                     @unique
+  submittedByUserId     String?
+  assignedVerifierId    String?
+  assignedAt            DateTime?
+  submittedAt           DateTime?
+  reviewedAt            DateTime?
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  rejectionReason       String?
+  profileData           Json?
+  checklist             Json?
+  duplicateFlags        Json?
+  slaDueAt              DateTime?
+  slaBreached           Boolean                     @default(false)
+  isReVerification      Boolean                     @default(false)
+  previousApplicationId String?
+  accountActivated      Boolean                     @default(false)
+  approvalLevel         Int                         @default(1)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  doctor          Doctor?          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  ashaProfile     AshaProfile?     @relation(fields: [ashaProfileId], references: [id], onDelete: Cascade)
+  referralPartner ReferralPartner? @relation(fields: [referralPartnerId], references: [id], onDelete: Cascade)
+  submittedBy     User?            @relation("SubmittedApplications", fields: [submittedByUserId], references: [id])
+  assignedVerifier User?           @relation("VerifierAssignments", fields: [assignedVerifierId], references: [id])
+  documents       VerificationDocument[]
+  auditLogs       VerificationAuditLog[]
+
+  @@index([status, type])
+  @@index([assignedVerifierId])
+  @@index([submittedAt])
+  @@map("verification_applications")
+}
+
+model VerificationDocument {
+  id                 String                     @id @default(uuid())
+  applicationId      String
+  documentType       String
+  fileName           String
+  fileUrl            String
+  mimeType           String?
+  fileSize           Int?
+  status             DocumentVerificationStatus @default(PENDING)
+  rejectionReason    String?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  expiryDate         DateTime?
+  version            Int                        @default(1)
+  previousDocumentId String?
+  uploadedById       String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  application VerificationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  verifiedBy    User?                   @relation(fields: [verifiedById], references: [id])
+
+  @@index([applicationId])
+  @@index([status])
+  @@map("verification_documents")
+}
+
+model VerificationAuditLog {
+  id            String   @id @default(uuid())
+  applicationId String
+  action        String
+  actorUserId   String?
+  actorName     String?
+  details       Json?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  application VerificationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?                   @relation(fields: [actorUserId], references: [id])
+
+  @@index([applicationId, createdAt])
+  @@map("verification_audit_logs")
 }
 
 model AppointmentSlot {
@@ -2228,6 +2361,7 @@ model AshaProfile {
   attributions PatientReferralAttribution[] @relation("AshaAttributions")
   commissions  ReferralCommission[]       @relation("AshaCommissions")
   wallet       ReferralWallet?            @relation("AshaWallet")
+  verificationApplication VerificationApplication?
 
   @@index([status])
   @@map("asha_profiles")
@@ -2260,6 +2394,7 @@ model ReferralPartner {
   attributions PatientReferralAttribution[] @relation("PartnerAttributions")
   commissions  ReferralCommission[]       @relation("PartnerCommissions")
   wallet       ReferralWallet?            @relation("PartnerWallet")
+  verificationApplication VerificationApplication?
 
   @@index([status])
   @@index([referralCode])

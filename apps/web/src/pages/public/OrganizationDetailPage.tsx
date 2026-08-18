@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { MapPin, Star, Phone, Clock, Shield, Calendar } from 'lucide-react';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { HospitalLogo } from '@/components/HospitalLogo';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { DoctorCard } from '@/pages/public/HomePage';
 import { api } from '@/lib/api';
 
@@ -35,7 +36,10 @@ export function OrganizationDetailPage() {
                 )}
                 {org.emergencyAvailable && <span className="badge bg-red-100 text-red-700">24/7 Emergency</span>}
               </div>
-              <h1 className="text-3xl font-bold text-gray-900">{org.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+                {org.name}
+                <VerifiedBadge verified={org.verificationStatus === 'APPROVED'} label="Verified Hospital" size="md" />
+              </h1>
               <p className="text-gray-500 flex items-center gap-1 mt-2">
                 <MapPin className="h-4 w-4" /> {org.address}, {org.city}, {org.state}
               </p>

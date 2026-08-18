@@ -26,6 +26,7 @@ export const adminNavGroups: AdminNavGroup[] = [
   {
     title: 'Healthcare',
     items: [
+      { to: '/admin/verification', icon: Shield, label: 'Verification Center' },
       { to: '/admin/hospitals', icon: Building2, label: 'Hospitals' },
       { to: '/admin/clinics', icon: Store, label: 'Clinics' },
       { to: '/admin/doctors', icon: Stethoscope, label: 'Doctors' },

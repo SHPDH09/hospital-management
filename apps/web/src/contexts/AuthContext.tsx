@@ -7,6 +7,11 @@ interface User {
   email: string;
   role: UserRole;
   profileCompleted?: boolean;
+  accountActivated?: boolean;
+  verificationApplication?: {
+    applicationNumber: string;
+    status: string;
+  } | null;
   patient?: { id: string; fullName: string; profileCompleted?: boolean };
   doctor?: { id: string; fullName: string; organizationId: string };
   staff?: { id: string; fullName: string; organizationId: string };
@@ -38,7 +43,11 @@ function resolveProfileCompleted(user: User, explicit?: boolean): boolean {
 
 function withProfileCompleted(user: User, explicit?: boolean): User {
   const profileCompleted = resolveProfileCompleted(user, explicit);
-  return { ...user, profileCompleted };
+  return {
+    ...user,
+    profileCompleted,
+    accountActivated: user.accountActivated ?? true,
+  };
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);

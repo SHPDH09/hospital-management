@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest } from '../middleware/auth';
+import { requireActivatedAccount } from '../middleware/verification';
 import { validateBody } from '../middleware/validate';
 import { buildReferralLink, buildQrCodeUrl } from '../lib/referral';
 import { ORG_BRANDING_SELECT, attachBrandingToOrganization } from '../lib/hospital-branding';
@@ -21,6 +22,7 @@ async function resolveReferralProfile(userId: string) {
 }
 
 router.use(authenticate, requireRoles(...REFERRAL_ROLES));
+router.use(requireActivatedAccount);
 
 // ─── Overview Dashboard ──────────────────────────────────────────────────────
 

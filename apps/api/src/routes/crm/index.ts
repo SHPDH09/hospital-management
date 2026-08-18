@@ -11,9 +11,11 @@ import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
 import referralRoutes from './referrals';
 import brandingRoutes from './branding';
+import { requireActivatedAccount } from '../../middleware/verification';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
+router.use(requireActivatedAccount);
 router.use('/referrals', referralRoutes);
 router.use('/branding', brandingRoutes);
 

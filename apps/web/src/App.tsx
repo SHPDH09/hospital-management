@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { VerificationGate } from '@/components/VerificationGate';
+import { VerificationPendingPage } from '@/pages/verification/VerificationPendingPage';
 
 import { HomePage } from '@/pages/public/HomePage';
 import { FindHospitalsPage, FindClinicsPage, FindDoctorsPage } from '@/pages/public/SearchPages';
@@ -46,6 +48,9 @@ import {
   AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from '@/pages/admin/AdminPages';
+import {
+  AdminVerificationDashboardPage, AdminVerificationApplicationsPage, AdminVerificationDetailPage,
+} from '@/pages/admin/AdminVerificationPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
@@ -59,15 +64,15 @@ function Admin({ children }: { children: React.ReactNode }) {
 }
 
 function Crm({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute roles={[...CRM_ROLES]}>{children}</ProtectedRoute>;
+  return <ProtectedRoute roles={[...CRM_ROLES]}><VerificationGate>{children}</VerificationGate></ProtectedRoute>;
 }
 
 function CrmAdmin({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}>{children}</ProtectedRoute>;
+  return <ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><VerificationGate>{children}</VerificationGate></ProtectedRoute>;
 }
 
 function Referral({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute roles={[...REFERRAL_ROLES]}>{children}</ProtectedRoute>;
+  return <ProtectedRoute roles={[...REFERRAL_ROLES]}><VerificationGate>{children}</VerificationGate></ProtectedRoute>;
 }
 
 export default function App() {
@@ -93,6 +98,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
+            <Route path="/verification/pending" element={<ProtectedRoute roles={[...CRM_ROLES, ...REFERRAL_ROLES]}><VerificationPendingPage /></ProtectedRoute>} />
 
             <Route path="/ref/:code" element={<ReferralLandingPage />} />
 
@@ -149,6 +155,9 @@ export default function App() {
 
             {/* Super Admin — 24 modules */}
             <Route path="/admin" element={<Admin><AdminDashboard /></Admin>} />
+            <Route path="/admin/verification" element={<Admin><AdminVerificationDashboardPage /></Admin>} />
+            <Route path="/admin/verification/applications" element={<Admin><AdminVerificationApplicationsPage /></Admin>} />
+            <Route path="/admin/verification/applications/:id" element={<Admin><AdminVerificationDetailPage /></Admin>} />
             <Route path="/admin/analytics" element={<Admin><AdminAnalyticsPage /></Admin>} />
             <Route path="/admin/hospitals" element={<Admin><AdminHospitalsPage /></Admin>} />
             <Route path="/admin/clinics" element={<Admin><AdminClinicsPage /></Admin>} />

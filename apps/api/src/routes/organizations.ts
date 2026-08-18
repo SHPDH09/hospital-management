@@ -7,6 +7,10 @@ import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES, CRM_ROLES } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
 import {
+  createOrganizationApplication,
+  detectDuplicates,
+} from '../lib/verification-service';
+import {
   ORG_BRANDING_SELECT,
   attachBrandingToOrganization,
 } from '../lib/hospital-branding';
@@ -19,6 +23,7 @@ const registerOrgSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   ownerName: z.string().min(2),
+  designation: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
@@ -26,6 +31,13 @@ const registerOrgSchema = z.object({
   pinCode: z.string().optional(),
   description: z.string().optional(),
   registrationNumber: z.string().optional(),
+  establishmentYear: z.coerce.number().optional(),
+  website: z.string().optional(),
+  documents: z.array(z.object({
+    documentType: z.string(),
+    fileName: z.string(),
+    fileUrl: z.string().url(),
+  })).optional(),
 });
 
 const searchQuerySchema = z.object({
@@ -72,7 +84,10 @@ router.post('/register', validateBody(registerOrgSchema), async (req, res, next)
           description: data.description,
           ownerName: data.ownerName,
           registrationNumber: data.registrationNumber,
+          establishmentYear: data.establishmentYear,
+          website: data.website,
           verificationStatus: 'PENDING',
+          accountActivated: false,
           isPubliclyListed: false,
         },
       });
@@ -110,7 +125,50 @@ router.post('/register', validateBody(registerOrgSchema), async (req, res, next)
       return { user, organization };
     });
 
-    sendSuccess(res, result, 'Organization registered. Awaiting verification.', 201);
+    const profileData = {
+      name: data.name,
+      type: data.type,
+      email: data.email,
+      phone: data.phone,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      pinCode: data.pinCode,
+      registrationNumber: data.registrationNumber,
+      establishmentYear: data.establishmentYear,
+      website: data.website,
+      authorizedPerson: {
+        name: data.ownerName,
+        designation: data.designation,
+        email: data.email,
+        phone: data.phone,
+      },
+    };
+
+    const duplicates = await detectDuplicates(
+      data.type === 'CLINIC' ? 'CLINIC' : 'HOSPITAL',
+      profileData,
+      result.organization.id,
+    );
+
+    const application = await createOrganizationApplication(
+      result.organization.id,
+      result.user.id,
+      profileData,
+    );
+
+    if (data.documents?.length) {
+      const { addApplicationDocument } = await import('../lib/verification-service');
+      for (const doc of data.documents) {
+        await addApplicationDocument(application.id, doc, result.user.id);
+      }
+    }
+
+    sendSuccess(res, {
+      ...result,
+      application: { id: application.id, applicationNumber: application.applicationNumber, status: application.status },
+      duplicateWarning: duplicates.length ? duplicates : undefined,
+    }, 'Organization registered. Application submitted for verification.', 201);
   } catch (err) {
     next(err);
   }
@@ -155,6 +213,7 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
           reviewCount: true,
           emergencyAvailable: true,
           facilities: true,
+          verificationStatus: true,
           _count: { select: { doctors: true } },
         },
       }),

@@ -4,6 +4,7 @@ import { Search, MapPin, Star, Building2, Stethoscope, Shield, ArrowRight } from
 import { useState } from 'react';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { HospitalLogo } from '@/components/HospitalLogo';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { api } from '@/lib/api';
 
 export function HomePage() {
@@ -173,6 +174,7 @@ interface Organization {
   emergencyAvailable: boolean;
   facilities: string[];
   logoUrl?: string | null;
+  verificationStatus?: string;
   branding?: { displayLogoUrl?: string | null; name?: string };
   _count?: { doctors: number };
 }
@@ -208,7 +210,10 @@ export function OrganizationCard({ org }: { org: Organization }) {
           <span className="text-gray-400">({org.reviewCount})</span>
         </div>
       </div>
-      <h3 className="mt-3 text-lg font-semibold text-gray-900">{org.name}</h3>
+      <h3 className="mt-3 text-lg font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
+        {org.name}
+        <VerifiedBadge verified={org.verificationStatus === 'APPROVED'} label="Verified" />
+      </h3>
       <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
         <MapPin className="h-4 w-4" />
         {org.city}, {org.state}

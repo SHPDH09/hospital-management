@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '@healthcare/shared';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { useAuth, getPortalPath } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 
 export interface LoginPortalConfig {
   title: string;
@@ -45,11 +46,19 @@ export function RoleLoginPage({ config }: { config: LoginPortalConfig }) {
       } else {
         localStorage.removeItem(storageKey);
       }
-      const user = JSON.parse(localStorage.getItem('user') || '{}') as { role: UserRole };
+      const meRes = await api.get<{ role: UserRole; accountActivated?: boolean }>('/auth/me');
+      const user = meRes.data || JSON.parse(localStorage.getItem('user') || '{}') as { role: UserRole; accountActivated?: boolean };
 
       if (!config.allowedRoles.includes(user.role)) {
         logout();
         throw new Error(`This account is not authorized for ${config.title}. Please use the correct login page.`);
+      }
+
+      const providerRoles: UserRole[] = ['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'ASHA', 'REFERRAL_PARTNER',
+        'RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER'];
+      if (providerRoles.includes(user.role) && user.accountActivated === false) {
+        navigate('/verification/pending');
+        return;
       }
 
       navigate(getPortalPath(user.role));

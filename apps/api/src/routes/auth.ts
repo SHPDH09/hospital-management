@@ -14,6 +14,7 @@ import {
 } from '../lib/password-reset';
 import { verifyGoogleIdToken, isGoogleAuthConfigured } from '../lib/google-auth';
 import { computeProfileCompletion, profileToResponse } from '../lib/patient-profile';
+import { isAccountActivated, getApplicationForUser } from '../lib/verification-service';
 
 const router = Router();
 
@@ -197,6 +198,22 @@ router.get('/me', authenticate, async (req: AuthRequest, res, next) => {
       (safe as Record<string, unknown>).patient = profile;
       (safe as Record<string, unknown>).profileCompleted = profile.profileCompleted;
     }
+
+    const accountActivated = await isAccountActivated(req.user!.userId, user.role);
+    const verificationApplication = accountActivated ? null : await getApplicationForUser(req.user!.userId, user.role);
+    (safe as Record<string, unknown>).accountActivated = accountActivated;
+    (safe as Record<string, unknown>).verificationApplication = verificationApplication
+      ? {
+          id: verificationApplication.id,
+          applicationNumber: verificationApplication.applicationNumber,
+          status: verificationApplication.status,
+          submittedAt: verificationApplication.submittedAt,
+          rejectionReason: verificationApplication.rejectionReason,
+          riskScore: verificationApplication.riskScore,
+          riskLevel: verificationApplication.riskLevel,
+        }
+      : null;
+
     sendSuccess(res, safe);
   } catch (err) {
     next(err);

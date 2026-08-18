@@ -205,6 +205,12 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
     documentVerificationRequired: true,
     autoApproval: false,
     organizationListingVisibility: 'public',
+    verificationSlaHours: 48,
+    highPrioritySlaHours: 24,
+    reVerificationSlaHours: 24,
+    autoAssignVerifier: false,
+    requireManagerApproval: true,
+    highRiskThreshold: 70,
   },
   doctor: {
     verificationRequired: true,
