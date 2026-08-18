@@ -70,7 +70,12 @@ router.post('/login', validateBody(loginSchema), async (req, res, next) => {
     });
 
     if (!user || !user.isActive) throw new AppError('Invalid credentials', 401);
-    const valid = await comparePassword(password, user.passwordHash);
+    let valid = false;
+    try {
+      valid = await comparePassword(password, user.passwordHash);
+    } catch {
+      throw new AppError('Invalid credentials', 401);
+    }
     if (!valid) throw new AppError('Invalid credentials', 401);
 
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });

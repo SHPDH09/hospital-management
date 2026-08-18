@@ -14,8 +14,12 @@ import dashboardRoutes from './routes/dashboard';
 import adminRoutes from './routes/admin';
 import publicRoutes from './routes/public';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { checkDatabaseConnection } from './lib/prisma';
 
 const app = express();
+const isVercel = process.env.VERCEL === '1';
+
+app.set('trust proxy', 1);
 
 function getAllowedOrigins(): string[] | boolean {
   const origins = [
@@ -29,23 +33,37 @@ function getAllowedOrigins(): string[] | boolean {
   return origins;
 }
 
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+if (!isVercel) {
+  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+}
 app.use(express.json({ limit: '10mb' }));
 
-app.use(
-  '/api/v1',
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500,
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+if (!isVercel) {
+  app.use(
+    '/api/v1',
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 500,
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+  );
+}
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  try {
+    await checkDatabaseConnection();
+    res.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({
+      status: 'error',
+      database: 'disconnected',
+      message: err instanceof Error ? err.message : 'Database unavailable',
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 app.use('/api/v1/auth', authRoutes);
