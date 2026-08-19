@@ -3,6 +3,7 @@ import { UserRole } from '@healthcare/shared';
 import { verifyAccessToken } from '../lib/auth';
 import { sendError } from '../lib/response';
 import { prisma } from '../lib/prisma';
+import type { ResolvedAccess } from './permissions';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -12,6 +13,7 @@ export interface AuthRequest extends Request {
     organizationId?: string;
     branchId?: string;
   };
+  userAccess?: ResolvedAccess;
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {

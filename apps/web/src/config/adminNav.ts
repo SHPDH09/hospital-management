@@ -55,8 +55,8 @@ export const adminNavGroups: AdminNavGroup[] = [
   {
     title: 'Platform',
     items: [
-      { to: '/admin/staff', icon: UserCog, label: 'Staff' },
-      { to: '/admin/roles', icon: Shield, label: 'Roles & Permissions' },
+      { to: '/admin/staff', icon: UserCog, label: 'Platform Staff' },
+      { to: '/admin/permissions', icon: Shield, label: 'Roles & Permissions' },
       { to: '/admin/security', icon: Shield, label: 'Security Center' },
       { to: '/admin/audit-logs', icon: FileText, label: 'Audit Logs' },
     ],
@@ -64,7 +64,7 @@ export const adminNavGroups: AdminNavGroup[] = [
   {
     title: 'Support',
     items: [
-      { to: '/admin/complaints', icon: Headphones, label: 'Complaints' },
+      { to: '/admin/support', icon: Headphones, label: 'Support & Complaints' },
     ],
   },
   {

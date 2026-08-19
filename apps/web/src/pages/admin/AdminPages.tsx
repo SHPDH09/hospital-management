@@ -9,13 +9,17 @@ export {
 } from './AdminCommercePages';
 export { AdminSubscriptionsPage } from './AdminSubscriptionPages';
 export { AdminMasterDataPage } from './AdminMasterDataPages';
-export {
-  AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
-  AdminComplaintsPage, AdminLocationsPage,
-  AdminCommunicationsPage, AdminCmsPage,
-} from './AdminPlatformPages';
+export { AdminCommunicationsPage } from './AdminCommunicationPages';
+export { AdminCmsPage } from './AdminCmsPages';
 export { AdminSettingsPage } from './AdminSettingsPages';
 export { AdminEmergencyPage } from './AdminEmergencyPages';
+export { AdminStaffPage } from './AdminPlatformStaffPages';
+export { AdminPermissionsPage } from './AdminPermissionsPages';
+export { AdminSupportPage } from './AdminSupportPages';
+export {
+  AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
+  AdminComplaintsPage, AdminLocationsPage,
+} from './AdminPlatformPages';
 export {
   AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage, AdminApprovalsPage,
 } from './AdminAiPages';

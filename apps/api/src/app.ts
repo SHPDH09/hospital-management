@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 
+import patientProfileRoutes from './routes/patient-profile';
 import authRoutes from './routes/auth';
 import organizationRoutes from './routes/organizations';
 import doctorRoutes from './routes/doctors';
@@ -70,6 +71,7 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+app.use('/api/v1/patients/me', patientProfileRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/organizations', organizationRoutes);
 app.use('/api/v1/doctors', doctorRoutes);
