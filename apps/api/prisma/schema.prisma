@@ -1179,3 +1179,96 @@ model ApprovalRequest {
   @@index([status, createdAt])
   @@map("approval_requests")
 }
+
+enum EmergencySuspensionType {
+  ORGANIZATION
+  DOCTOR
+  USER
+}
+
+enum EmergencySuspensionReason {
+  SECURITY_ISSUE
+  VERIFICATION_ISSUE
+  POLICY_VIOLATION
+  FRAUD_SUSPICION
+  TECHNICAL_ISSUE
+  OTHER
+}
+
+enum EmergencyAnnouncementSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model EmergencyActionLog {
+  id               String   @id @default(uuid())
+  action           String
+  performedById    String?
+  performedByEmail String?
+  reason           String
+  details          Json?
+  affectedScope    String?
+  ipAddress        String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("emergency_action_logs")
+}
+
+model EmergencyAnnouncement {
+  id               String                        @id @default(uuid())
+  title            String
+  message          String                        @db.Text
+  severity         EmergencyAnnouncementSeverity @default(WARNING)
+  affectedServices String[]
+  displayLocations String[]
+  startsAt         DateTime                      @default(now())
+  endsAt           DateTime?
+  isActive         Boolean                       @default(true)
+  createdByEmail   String?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  @@map("emergency_announcements")
+}
+
+model ScheduledMaintenance {
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  maintenanceType String   @default("full")
+  affectedModules String[]
+  startAt         DateTime
+  endAt           DateTime
+  isActive        Boolean  @default(true)
+  autoActivate    Boolean  @default(true)
+  createdByEmail  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([startAt, endAt])
+  @@map("scheduled_maintenances")
+}
+
+model EmergencySuspension {
+  id                    String                    @id @default(uuid())
+  type                  EmergencySuspensionType
+  targetId              String
+  targetName            String?
+  reason                EmergencySuspensionReason
+  reasonNotes           String?
+  effects               Json?
+  isActive              Boolean                   @default(true)
+  suspendedById         String?
+  suspendedByEmail      String?
+  suspendedAt           DateTime                  @default(now())
+  liftedAt              DateTime?
+  liftedByEmail         String?
+  appointmentResolution String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([type, targetId, isActive])
+  @@map("emergency_suspensions")
+}

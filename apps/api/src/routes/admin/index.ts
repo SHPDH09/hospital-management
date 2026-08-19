@@ -12,6 +12,8 @@ import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
 import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
+import settingsRoutes from './settings';
+import emergencyRoutes from './emergency';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -19,6 +21,8 @@ router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
+router.use('/settings', settingsRoutes);
+router.use('/emergency', emergencyRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -621,50 +625,6 @@ router.post('/communications', validateBody(z.object({
   try {
     const tpl = await prisma.communicationTemplate.create({ data: req.body });
     sendSuccess(res, tpl, 'Template created', 201);
-  } catch (err) { next(err); }
-});
-
-// ─── Settings & Emergency ────────────────────────────────────────────────────
-
-router.get('/settings', async (_req, res, next) => {
-  try {
-    const settings = await prisma.platformSetting.findMany({ orderBy: { category: 'asc' } });
-    sendSuccess(res, settings);
-  } catch (err) { next(err); }
-});
-
-router.put('/settings', validateBody(z.object({ key: z.string(), value: z.unknown(), category: z.string().optional() })), async (req: AuthRequest, res, next) => {
-  try {
-    const { key, value, category } = req.body;
-    const setting = await prisma.platformSetting.upsert({
-      where: { key },
-      update: { value: value as Prisma.InputJsonValue, category },
-      create: { key, value: value as Prisma.InputJsonValue, category: category || 'general' },
-    });
-    await logAudit(req, 'UPDATE', 'PlatformSetting', key);
-    sendSuccess(res, setting);
-  } catch (err) { next(err); }
-});
-
-router.get('/emergency', async (_req, res, next) => {
-  try {
-    const settings = await prisma.platformSetting.findMany({ where: { category: 'emergency' } });
-    const flags = Object.fromEntries(settings.map((s) => [s.key, s.value]));
-    sendSuccess(res, flags);
-  } catch (err) { next(err); }
-});
-
-router.put('/emergency', async (req: AuthRequest, res, next) => {
-  try {
-    for (const [key, value] of Object.entries(req.body)) {
-      await prisma.platformSetting.upsert({
-        where: { key },
-        update: { value: value as Prisma.InputJsonValue },
-        create: { key, value: value as Prisma.InputJsonValue, category: 'emergency' },
-      });
-    }
-    await logAudit(req, 'EMERGENCY_UPDATE', 'Platform', undefined, req.body as Prisma.InputJsonValue);
-    sendSuccess(res, req.body, 'Emergency settings updated');
   } catch (err) { next(err); }
 });
 

@@ -12,8 +12,10 @@ export { AdminMasterDataPage } from './AdminMasterDataPages';
 export {
   AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCommunicationsPage, AdminCmsPage,
 } from './AdminPlatformPages';
+export { AdminSettingsPage } from './AdminSettingsPages';
+export { AdminEmergencyPage } from './AdminEmergencyPages';
 export {
   AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage, AdminApprovalsPage,
 } from './AdminAiPages';

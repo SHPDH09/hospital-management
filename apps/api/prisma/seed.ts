@@ -351,6 +351,9 @@ async function main() {
 
   await seedMasterData(prisma);
 
+  const { seedPlatformSettings } = await import('../prisma/settings-seed');
+  await seedPlatformSettings(prisma);
+
   // AI settings & default automations
   await prisma.aiSetting.upsert({
     where: { key: 'global' },
