@@ -21,6 +21,7 @@ export function AdminDashboard() {
   const { data, isLoading } = useQuery({ queryKey: ['admin-stats'], queryFn: () => api.get<Stats>('/admin/stats') });
   const { data: growth } = useQuery({ queryKey: ['admin-growth'], queryFn: () => api.get('/admin/analytics/growth') });
   const { data: orgs } = useQuery({ queryKey: ['admin-orgs-pending'], queryFn: () => api.get('/admin/organizations?status=PENDING&limit=10') });
+  const { data: aiSummary } = useQuery({ queryKey: ['ai-summary'], queryFn: () => api.get<{ summary: string }>('/ai/summary') });
 
   const s = data?.data;
   const stats = s ? [
@@ -50,6 +51,13 @@ export function AdminDashboard() {
       {isLoading ? <LoadingState /> : (
         <>
           <StatGrid stats={stats} />
+
+          {aiSummary?.data?.summary && (
+            <div className="card p-6 mb-8 border-l-4 border-primary-500">
+              <h2 className="font-semibold mb-2 flex items-center gap-2">AI Daily Summary</h2>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap">{aiSummary.data.summary}</pre>
+            </div>
+          )}
 
           {growthData.length > 0 && (
             <div className="card p-6 mb-8">

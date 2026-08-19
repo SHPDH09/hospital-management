@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 
+import patientProfileRoutes from './routes/patient-profile';
 import authRoutes from './routes/auth';
 import organizationRoutes from './routes/organizations';
 import doctorRoutes from './routes/doctors';
@@ -14,6 +15,9 @@ import billRoutes from './routes/bills';
 import dashboardRoutes from './routes/dashboard';
 import adminRoutes from './routes/admin/index';
 import publicRoutes from './routes/public';
+import aiRoutes from './routes/ai/index';
+import automationRoutes from './routes/automation/index';
+import jobRoutes from './routes/jobs/internal';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';
 
@@ -67,6 +71,7 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+app.use('/api/v1/patients/me', patientProfileRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/organizations', organizationRoutes);
 app.use('/api/v1/doctors', doctorRoutes);
@@ -76,6 +81,9 @@ app.use('/api/v1/bills', billRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/automation', automationRoutes);
+app.use('/api/v1/internal/jobs', jobRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

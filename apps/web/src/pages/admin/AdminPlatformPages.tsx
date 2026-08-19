@@ -298,9 +298,48 @@ export function AdminLocationsPage() {
 
 export function AdminCommunicationsPage() {
   const { data, isLoading } = useList('/admin/communications');
+  const [draftForm, setDraftForm] = useState({ subject: '', body: '', tone: 'professional' as const });
+  const [draftResult, setDraftResult] = useState<string | null>(null);
+  const [translateText, setTranslateText] = useState('');
+  const [translateLang, setTranslateLang] = useState('Hindi');
+  const [translated, setTranslated] = useState<string | null>(null);
+
+  const draft = async () => {
+    const res = await api.post<{ draft: string; disclaimer?: string }>('/ai/communications/draft', draftForm);
+    setDraftResult(`${res.data?.draft}\n\n— ${res.data?.disclaimer || ''}`);
+  };
+
+  const translate = async () => {
+    const res = await api.post<{ translated: string }>('/ai/communications/translate', { text: translateText, targetLanguage: translateLang });
+    setTranslated(res.data?.translated || null);
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Communication Center" subtitle="Email, SMS, WhatsApp templates" />
+      <PageHeader title="Communication Center" subtitle="Templates plus AI reply drafts and translation" />
+
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="card p-5 space-y-3">
+          <h3 className="font-medium">AI Reply Draft</h3>
+          <input className="input w-full" placeholder="Subject" value={draftForm.subject} onChange={(e) => setDraftForm({ ...draftForm, subject: e.target.value })} />
+          <textarea className="input w-full min-h-[100px]" placeholder="Incoming message..." value={draftForm.body} onChange={(e) => setDraftForm({ ...draftForm, body: e.target.value })} />
+          <select className="input w-full" value={draftForm.tone} onChange={(e) => setDraftForm({ ...draftForm, tone: e.target.value as 'professional' })}>
+            <option value="professional">Professional</option>
+            <option value="empathetic">Empathetic</option>
+            <option value="concise">Concise</option>
+          </select>
+          <button type="button" className="btn-primary" onClick={draft} disabled={!draftForm.subject || !draftForm.body}>Generate Draft</button>
+          {draftResult && <pre className="text-sm bg-gray-50 p-3 rounded whitespace-pre-wrap">{draftResult}</pre>}
+        </div>
+        <div className="card p-5 space-y-3">
+          <h3 className="font-medium">AI Translation</h3>
+          <textarea className="input w-full min-h-[100px]" placeholder="Text to translate..." value={translateText} onChange={(e) => setTranslateText(e.target.value)} />
+          <input className="input w-full" placeholder="Target language" value={translateLang} onChange={(e) => setTranslateLang(e.target.value)} />
+          <button type="button" className="btn-primary" onClick={translate} disabled={!translateText}>Translate</button>
+          {translated && <pre className="text-sm bg-gray-50 p-3 rounded whitespace-pre-wrap">{translated}</pre>}
+        </div>
+      </div>
+
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'name', label: 'Template' },
@@ -326,70 +365,6 @@ export function AdminCmsPage() {
           { key: 'updatedAt', label: 'Updated', render: (r) => formatDate(r.updatedAt as string) },
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}
-    </DashboardLayout>
-  );
-}
-
-export function AdminSettingsPage() {
-  const { data, isLoading } = useList('/admin/settings');
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Global Settings" subtitle="Platform name, contact, currency, integrations" />
-      {isLoading ? <LoadingState /> : (
-        <div className="space-y-4">
-          {(data?.data as { key: string; value: unknown; category: string }[])?.length === 0 ? (
-            <div className="card p-8 text-center text-gray-500">
-              <p>No settings configured yet.</p>
-              <p className="text-sm mt-2">Settings like platform name, logo, SMTP, payment gateway can be added here.</p>
-            </div>
-          ) : (
-            <AdminTable columns={[
-              { key: 'key', label: 'Setting' },
-              { key: 'category', label: 'Category' },
-              { key: 'value', label: 'Value', render: (r) => <span className="text-xs font-mono">{JSON.stringify(r.value)}</span> },
-            ]} rows={(data?.data as Record<string, unknown>[]) || []} />
-          )}
-        </div>
-      )}
-    </DashboardLayout>
-  );
-}
-
-export function AdminEmergencyPage() {
-  const { data, refetch } = useList('/admin/emergency');
-  const flags = (data?.data || {}) as Record<string, boolean>;
-
-  const toggle = async (key: string, value: boolean) => {
-    await api.put('/admin/emergency', { [key]: value });
-    refetch();
-  };
-
-  const controls = [
-    { key: 'maintenanceMode', label: 'Maintenance Mode', desc: 'Disable public website access' },
-    { key: 'registrationDisabled', label: 'Disable Registration', desc: 'Block new user signups' },
-    { key: 'paymentDisabled', label: 'Disable Payments', desc: 'Stop all payment processing' },
-    { key: 'advertisementsDisabled', label: 'Stop Advertisements', desc: 'Pause all ad campaigns' },
-  ];
-
-  return (
-    <DashboardLayout portal="admin">
-      <PageHeader title="Emergency Control" subtitle="Platform-wide emergency actions" />
-      <div className="space-y-4">
-        {controls.map((c) => (
-          <div key={c.key} className="card p-6 flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-red-700">{c.label}</h3>
-              <p className="text-sm text-gray-500">{c.desc}</p>
-            </div>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${flags[c.key] ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-              onClick={() => toggle(c.key, !flags[c.key])}
-            >
-              {flags[c.key] ? 'ON — Click to Disable' : 'OFF — Click to Enable'}
-            </button>
-          </div>
-        ))}
-      </div>
     </DashboardLayout>
   );
 }

@@ -1,0 +1,32 @@
+export {
+  type ModulePermission,
+  type StaffPermissions,
+  type PermissionAction,
+  type OrganizationScopeType,
+  type LocationScope,
+  type FieldPermissions,
+  type PlatformRoleType,
+  PLATFORM_MODULES,
+  RESTRICTED_MODULES,
+  PERMISSION_ACTIONS,
+  DEFAULT_ROLE_TEMPLATES,
+  ORG_ROLES,
+  ROLE_HIERARCHY,
+  DEFAULT_FIELD_PERMISSIONS,
+  emptyPermissions,
+  fullPermissions,
+  mergePermissions,
+  hasPermission,
+  getMatrixSummary,
+  buildPermissionMatrix,
+  verificationStaffPermissions,
+  financeStaffPermissions,
+  supportStaffPermissions,
+  marketingStaffPermissions,
+} from './permissions';
+
+export const DEFAULT_DEPARTMENTS = [
+  'Operations', 'Hospital Onboarding', 'Doctor Verification', 'Customer Support',
+  'Sales', 'Marketing', 'Advertisement', 'Finance', 'Subscription',
+  'Technical Support', 'Content/CMS', 'Compliance',
+];

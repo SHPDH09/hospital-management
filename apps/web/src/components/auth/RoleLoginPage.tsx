@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '@healthcare/shared';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
@@ -12,15 +12,27 @@ export interface LoginPortalConfig {
   registerLink?: { to: string; label: string };
   alternateLinks?: { to: string; label: string }[];
   showDemo?: boolean;
+  portalKey?: string;
 }
 
 export function RoleLoginPage({ config }: { config: LoginPortalConfig }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, logout } = useAuth();
   const navigate = useNavigate();
+
+  const storageKey = `remember_${config.portalKey || 'default'}`;
+
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      setEmail(saved);
+      setRememberMe(true);
+    }
+  }, [storageKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +40,11 @@ export function RoleLoginPage({ config }: { config: LoginPortalConfig }) {
     setLoading(true);
     try {
       await login(email, password);
+      if (rememberMe) {
+        localStorage.setItem(storageKey, email);
+      } else {
+        localStorage.removeItem(storageKey);
+      }
       const user = JSON.parse(localStorage.getItem('user') || '{}') as { role: UserRole };
 
       if (!config.allowedRoles.includes(user.role)) {
@@ -55,18 +72,27 @@ export function RoleLoginPage({ config }: { config: LoginPortalConfig }) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email / Phone</label>
               <input
-                type="email"
+                type="text"
                 className="input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
+                placeholder="Email or phone number"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <Link
+                  to={`/forgot-password?portal=${config.portalKey || 'patient'}`}
+                  className="text-xs text-primary-600 hover:text-primary-700"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
               <input
                 type="password"
                 className="input"
@@ -76,6 +102,15 @@ export function RoleLoginPage({ config }: { config: LoginPortalConfig }) {
                 autoComplete="current-password"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Remember Me
+            </label>
             <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

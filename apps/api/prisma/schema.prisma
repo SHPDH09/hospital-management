@@ -123,17 +123,20 @@ enum Gender {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  phone         String?   @unique
-  passwordHash  String
-  role          UserRole
-  isActive      Boolean   @default(true)
-  emailVerified Boolean   @default(false)
-  phoneVerified Boolean   @default(false)
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  email            String    @unique
+  phone            String?   @unique
+  passwordHash     String
+  role             UserRole
+  authProvider     String    @default("local")
+  googleId         String?   @unique
+  profilePhotoUrl  String?
+  isActive         Boolean   @default(true)
+  emailVerified    Boolean   @default(false)
+  phoneVerified    Boolean   @default(false)
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   patient       Patient?
   doctor        Doctor?
@@ -142,6 +145,14 @@ model User {
   auditLogs     AuditLog[]
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
+  createdTickets     Complaint[] @relation("UserTickets")
+  assignedLeads      Lead[]       @relation("AssignedLeads")
+  aiAuditLogs        AiAuditLog[]
+  approvalRequests   ApprovalRequest[] @relation("ApprovalRequester")
+  passwordResetRequests PasswordResetRequest[]
+  patientPhoneOtps   PatientPhoneOtp[]
+  platformStaffProfile PlatformStaffProfile?
+  passwordHistory    PasswordHistory[]
 
   @@map("users")
 }
@@ -203,6 +214,7 @@ model Organization {
   documents       Document[]
   complaints      Complaint[]
   coupons         Coupon[]
+  platformStaffAssignments PlatformStaffAssignment[]
 
   @@index([city, state])
   @@index([verificationStatus, isActive, isPubliclyListed])
@@ -233,18 +245,31 @@ model Branch {
 }
 
 model Patient {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  fullName         String
-  dateOfBirth      DateTime?
-  gender           Gender?
-  address          String?
-  city             String?
-  state            String?
-  emergencyContact String?
-  bloodGroup       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                       String    @id @default(uuid())
+  userId                   String    @unique
+  fullName                 String
+  profilePhoto             String?
+  dateOfBirth              DateTime?
+  gender                   Gender?
+  address                  String?
+  city                     String?
+  state                    String?
+  country                  String?
+  pinCode                  String?
+  alternatePhone           String?
+  emergencyContact         String?
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  bloodGroup               String?
+  profileCompleted         Boolean   @default(false)
+  profileCompletionStep    String?
+  profileCompletionPercent Int       @default(0)
+  termsAcceptedAt          DateTime?
+  privacyAcceptedAt        DateTime?
+  healthConsentAt          DateTime?
+  profileCompletedAt       DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizations PatientOrganization[]
@@ -394,6 +419,9 @@ model Appointment {
   type           String            @default("consultation")
   status         AppointmentStatus @default(PENDING)
   notes          String?
+  noShowRisk     NoShowRisk        @default(LOW)
+  confirmationStatus String        @default("PENDING")
+  reminderSentAt DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -578,12 +606,23 @@ model Lead {
   source         String?
   status         LeadStatus @default(NEW)
   notes          String?
+  score          Int                @default(0)
+  temperature    LeadTemperature    @default(COLD)
+  assignedToId   String?
+  aiSummary      String?
+  nextBestAction String?
+  lastScoredAt   DateTime?
+  specialty      String?
+  lastContactAt  DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedTo   User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  activities   LeadActivity[]
 
   @@index([organizationId, status])
+  @@index([temperature, score])
   @@map("leads")
 }
 
@@ -596,6 +635,10 @@ model Review {
   comment        String?
   response       String?
   isPublished    Boolean  @default(true)
+  sentiment      ReviewSentiment?
+  topics         String[] @default([])
+  riskScore      String   @default("LOW")
+  aiSummary      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -654,10 +697,14 @@ model Notification {
 
 enum ComplaintStatus {
   NEW
+  OPEN
   ASSIGNED
   IN_PROGRESS
+  WAITING_FOR_USER
   RESOLVED
   CLOSED
+  ESCALATED
+  REOPENED
 }
 
 enum ComplaintPriority {
@@ -665,6 +712,7 @@ enum ComplaintPriority {
   MEDIUM
   HIGH
   URGENT
+  CRITICAL
 }
 
 enum ComplaintType {
@@ -672,6 +720,19 @@ enum ComplaintType {
   HOSPITAL
   DOCTOR
   GENERAL
+}
+
+enum TicketKind {
+  SUPPORT_REQUEST
+  COMPLAINT
+}
+
+enum ComplainantType {
+  PATIENT
+  HOSPITAL
+  DOCTOR
+  PLATFORM_STAFF
+  GUEST
 }
 
 enum DiscountType {
@@ -688,28 +749,189 @@ enum LocationType {
 }
 
 model Complaint {
-  id             String            @id @default(uuid())
-  ticketId       String            @unique
-  subject        String
-  description    String
-  type           ComplaintType       @default(GENERAL)
-  priority       ComplaintPriority   @default(MEDIUM)
-  status         ComplaintStatus     @default(NEW)
-  assignedToId   String?
-  organizationId String?
+  id               String            @id @default(uuid())
+  ticketId         String            @unique
+  kind             TicketKind        @default(SUPPORT_REQUEST)
+  subject          String
+  description      String
+  type             ComplaintType     @default(GENERAL)
+  complainantType  ComplainantType   @default(GUEST)
+  categoryId       String?
+  priority         ComplaintPriority @default(MEDIUM)
+  status           ComplaintStatus   @default(NEW)
+  userId           String?
+  assignedToId     String?
+  department       String?
+  organizationId   String?
   complainantName  String?
   complainantEmail String?
   complainantPhone String?
-  resolution     String?
-  internalNotes  String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  resolution       String?
+  internalNotes    String?
+  firstResponseAt  DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  escalatedAt      DateTime?
+  escalatedTo      String?
+  slaResponseDue   DateTime?
+  slaResolutionDue DateTime?
+  csatRating       Int?
+  csatFeedback     String?
+  reopenReason     String?
+  isArchived       Boolean           @default(false)
+  aiCategory       String?
+  aiPriority       ComplaintPriority?
+  aiSummary        String?
+  suggestedResponse String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  assignedTo   User?         @relation("AssignedComplaints", fields: [assignedToId], references: [id])
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  category     SupportCategory?        @relation(fields: [categoryId], references: [id])
+  user         User?                   @relation("UserTickets", fields: [userId], references: [id])
+  assignedTo   User?                   @relation("AssignedComplaints", fields: [assignedToId], references: [id])
+  organization Organization?           @relation(fields: [organizationId], references: [id])
+  messages     SupportTicketMessage[]
+  history      SupportTicketHistory[]
+  transfers    SupportTicketTransfer[]
 
   @@index([status, priority])
+  @@index([kind, status])
+  @@index([assignedToId])
   @@map("complaints")
+}
+
+model SupportCategory {
+  id              String            @id @default(uuid())
+  name            String            @unique
+  slug            String            @unique
+  description     String?
+  userTypes       String[]          @default([])
+  defaultPriority ComplaintPriority @default(MEDIUM)
+  department      String?
+  isActive        Boolean           @default(true)
+  sortOrder       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  complaints Complaint[]
+
+  @@map("support_categories")
+}
+
+model SupportSlaRule {
+  id                String            @id @default(uuid())
+  name              String
+  priority          ComplaintPriority @unique
+  responseMinutes   Int
+  resolutionMinutes Int
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("support_sla_rules")
+}
+
+model SupportTeam {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  department  String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("support_teams")
+}
+
+model SupportTicketMessage {
+  id          String   @id @default(uuid())
+  complaintId String
+  senderId    String?
+  senderName  String?
+  senderType  String   @default("staff")
+  body        String   @db.Text
+  isInternal  Boolean  @default(false)
+  attachments Json?
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+  @@map("support_ticket_messages")
+}
+
+model SupportTicketHistory {
+  id               String   @id @default(uuid())
+  complaintId      String
+  action           String
+  fromValue        String?
+  toValue          String?
+  performedByEmail String?
+  details          Json?
+  createdAt        DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+  @@map("support_ticket_history")
+}
+
+model SupportTicketTransfer {
+  id                 String   @id @default(uuid())
+  complaintId        String
+  fromStaffId        String?
+  toStaffId          String?
+  toDepartment       String?
+  reason             String?
+  transferredByEmail String?
+  createdAt          DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+  @@map("support_ticket_transfers")
+}
+
+model SupportAssignmentRule {
+  id              String             @id @default(uuid())
+  name            String
+  categorySlug    String?
+  keywordPattern  String?
+  department      String
+  teamName        String?
+  defaultPriority ComplaintPriority?
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@map("support_assignment_rules")
+}
+
+model SupportCannedResponse {
+  id        String   @id @default(uuid())
+  title     String
+  body      String   @db.Text
+  category  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("support_canned_responses")
+}
+
+model SupportKnowledgeArticle {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  content     String   @db.Text
+  category    String?
+  tags        String[] @default([])
+  isPublished Boolean  @default(false)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("support_knowledge_articles")
 }
 
 model Coupon {
@@ -760,15 +982,246 @@ model LoginHistory {
 }
 
 model CmsPage {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  title       String
-  content     String   @db.Text
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String           @id @default(uuid())
+  slug            String           @unique
+  title           String
+  content         String           @db.Text
+  pageType        CmsPageType      @default(STATIC)
+  status          CmsContentStatus @default(DRAFT)
+  isPublished     Boolean          @default(false)
+  metaTitle       String?
+  metaDescription String?
+  keywords        String?
+  canonicalUrl    String?
+  ogTitle         String?
+  ogDescription   String?
+  ogImageUrl      String?
+  robots          String?          @default("index,follow")
+  publishAt       DateTime?
+  unpublishAt     DateTime?
+  version         Int              @default(1)
+  authorEmail     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@map("cms_pages")
+}
+
+enum CmsContentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CmsPageType {
+  STATIC
+  LEGAL
+  LOCATION
+}
+
+model CmsBlog {
+  id              String           @id @default(uuid())
+  title           String
+  slug            String           @unique
+  coverImageUrl   String?
+  content         String           @db.Text
+  author          String?
+  category        String?
+  tags            String[]
+  metaTitle       String?
+  metaDescription String?
+  keywords        String?
+  status          CmsContentStatus @default(DRAFT)
+  publishAt       DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("cms_blogs")
+}
+
+model CmsBanner {
+  id          String           @id @default(uuid())
+  title       String
+  bannerType  String           @default("HOMEPAGE")
+  imageUrl    String?
+  mobileImageUrl String?
+  description String?
+  ctaText     String?
+  ctaLink     String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      CmsContentStatus @default(DRAFT)
+  sortOrder   Int              @default(0)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("cms_banners")
+}
+
+model CmsFaq {
+  id        String           @id @default(uuid())
+  question  String
+  answer    String           @db.Text
+  category  String           @default("General")
+  status    CmsContentStatus @default(PUBLISHED)
+  sortOrder Int              @default(0)
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("cms_faqs")
+}
+
+model CmsTestimonial {
+  id        String           @id @default(uuid())
+  name      String
+  imageUrl  String?
+  role      String?
+  content   String           @db.Text
+  rating    Int              @default(5)
+  status    CmsContentStatus @default(DRAFT)
+  isActive  Boolean          @default(true)
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("cms_testimonials")
+}
+
+model CmsPromotion {
+  id          String           @id @default(uuid())
+  title       String
+  description String?
+  imageUrl    String?
+  ctaText     String?
+  ctaLink     String?
+  promoType   String           @default("OFFER")
+  startDate   DateTime?
+  endDate     DateTime?
+  status      CmsContentStatus @default(DRAFT)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("cms_promotions")
+}
+
+model CmsMedia {
+  id        String   @id @default(uuid())
+  filename  String
+  url       String
+  mimeType  String?
+  size      Int?
+  folder    String?  @default("general")
+  altText   String?
+  createdAt DateTime @default(now())
+
+  @@map("cms_media")
+}
+
+model CmsMenuItem {
+  id        String   @id @default(uuid())
+  label     String
+  url       String
+  parentId  String?
+  target    String?  @default("_self")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   CmsMenuItem?  @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children CmsMenuItem[] @relation("MenuHierarchy")
+
+  @@map("cms_menu_items")
+}
+
+model CmsFooterLink {
+  id        String   @id @default(uuid())
+  section   String
+  label     String
+  url       String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("cms_footer_links")
+}
+
+model CmsHomepageSection {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  title     String
+  content   Json?
+  isVisible Boolean  @default(true)
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("cms_homepage_sections")
+}
+
+model CmsFeaturedItem {
+  id        String   @id @default(uuid())
+  itemType  String
+  refId     String?
+  refName   String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([itemType, isActive])
+  @@map("cms_featured_items")
+}
+
+model CmsHealthArticle {
+  id              String           @id @default(uuid())
+  title           String
+  slug            String           @unique
+  category        String?
+  content         String           @db.Text
+  coverImageUrl   String?
+  metaTitle       String?
+  metaDescription String?
+  status          CmsContentStatus @default(DRAFT)
+  publishAt       DateTime?
+  authorEmail     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("cms_health_articles")
+}
+
+model CmsLocationPage {
+  id              String           @id @default(uuid())
+  city            String
+  state           String?
+  slug            String           @unique
+  title           String
+  content         String           @db.Text
+  metaTitle       String?
+  metaDescription String?
+  status          CmsContentStatus @default(DRAFT)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("cms_location_pages")
+}
+
+model CmsVersion {
+  id          String   @id @default(uuid())
+  entityType  String
+  entityId    String
+  version     Int
+  data        Json
+  changedBy   String?
+  changeNote  String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@map("cms_versions")
 }
 
 model Specialization {
@@ -797,9 +1250,13 @@ model PlatformDepartment {
   name        String   @unique
   description String?
   isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  staff PlatformStaffProfile[]
+  roles PlatformStaffRole[]
 
   @@map("platform_departments")
 }
@@ -960,15 +1417,700 @@ model Location {
   @@map("locations")
 }
 
+enum CommunicationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum CommunicationStatus {
+  PENDING
+  SCHEDULED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum AnnouncementType {
+  INFORMATION
+  WARNING
+  MAINTENANCE
+  EMERGENCY
+}
+
 model CommunicationTemplate {
-  id        String   @id @default(uuid())
+  id        String               @id @default(uuid())
   name      String
-  channel   String
+  channel   CommunicationChannel
+  category  String?
   subject   String?
-  body      String   @db.Text
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  body      String               @db.Text
+  variables String[]             @default([])
+  isActive  Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  messages CommunicationMessage[]
 
   @@map("communication_templates")
+}
+
+model CommunicationMessage {
+  id             String                @id @default(uuid())
+  channel        CommunicationChannel
+  status         CommunicationStatus   @default(PENDING)
+  recipientType  String?
+  recipientId    String?
+  recipientEmail String?
+  recipientPhone String?
+  recipientName  String?
+  subject        String?
+  body           String                @db.Text
+  templateId     String?
+  campaignId     String?
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  failureReason  String?
+  cost           Float?
+  metadata       Json?
+  createdById    String?
+  createdByEmail String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  template CommunicationTemplate? @relation(fields: [templateId], references: [id])
+  campaign CommunicationCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([channel, status, createdAt])
+  @@index([recipientId])
+  @@index([scheduledAt])
+  @@map("communication_messages")
+}
+
+model CommunicationCampaign {
+  id          String                @id @default(uuid())
+  name        String
+  description String?
+  channels    CommunicationChannel[]
+  audience    Json?
+  subject     String?
+  body        String                @db.Text
+  status      String                @default("DRAFT")
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  stats       Json?
+  createdById String?
+  createdByEmail String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  messages CommunicationMessage[]
+
+  @@map("communication_campaigns")
+}
+
+model ScheduledCommunication {
+  id          String               @id @default(uuid())
+  name        String
+  channel     CommunicationChannel
+  cronExpr    String?
+  runAt       DateTime?
+  templateId  String?
+  audience    Json?
+  isActive    Boolean              @default(true)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@map("scheduled_communications")
+}
+
+model SystemAnnouncement {
+  id        String           @id @default(uuid())
+  title     String
+  message   String           @db.Text
+  type      AnnouncementType @default(INFORMATION)
+  audience  String[]
+  isActive  Boolean          @default(true)
+  startsAt  DateTime         @default(now())
+  endsAt    DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("system_announcements")
+}
+
+// ─── AI & Automation ─────────────────────────────────────────────────────────
+
+enum LeadTemperature {
+  HOT
+  WARM
+  COLD
+}
+
+enum NoShowRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD
+}
+
+enum AutomationModule {
+  LEADS
+  APPOINTMENTS
+  PAYMENTS
+  REVIEWS
+  COMPLAINTS
+  SUBSCRIPTIONS
+  VERIFICATION
+  GENERAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AiSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_settings")
+}
+
+model AiAuditLog {
+  id             String   @id @default(uuid())
+  requestId      String   @unique @default(uuid())
+  userId         String?
+  organizationId String?
+  module         String
+  feature        String
+  inputRef       String?
+  outputSummary  String?  @db.Text
+  model          String?
+  status         String
+  error          String?
+  humanApproval  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([module, feature])
+  @@map("ai_audit_logs")
+}
+
+model AiInsight {
+  id             String   @id @default(uuid())
+  entityType     String
+  entityId       String
+  insightType    String
+  content        Json
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([entityType, entityId, insightType])
+  @@index([entityType, entityId])
+  @@map("ai_insights")
+}
+
+model AutomationRule {
+  id          String           @id @default(uuid())
+  name        String
+  module      AutomationModule @default(GENERAL)
+  trigger     String
+  conditions  Json             @default("[]")
+  actions     Json             @default("[]")
+  delayMinutes Int             @default(0)
+  schedule    String?
+  channel     String?
+  audience    String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  executions AutomationExecution[]
+
+  @@index([isActive, trigger])
+  @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id         String   @id @default(uuid())
+  ruleId     String
+  entityType String?
+  entityId   String?
+  status     String
+  result     Json?
+  error      String?
+  ranAt      DateTime @default(now())
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, ranAt])
+  @@map("automation_executions")
+}
+
+model JobQueue {
+  id          String    @id @default(uuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  scheduledAt DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([type, status])
+  @@map("job_queue")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String
+  userId    String?
+  action    String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model ApprovalRequest {
+  id           String         @id @default(uuid())
+  requesterId  String
+  actionType   String
+  entityType   String
+  entityId     String
+  payload      Json?
+  status       ApprovalStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+
+  requester User @relation("ApprovalRequester", fields: [requesterId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("approval_requests")
+}
+
+enum EmergencySuspensionType {
+  ORGANIZATION
+  DOCTOR
+  USER
+}
+
+enum EmergencySuspensionReason {
+  SECURITY_ISSUE
+  VERIFICATION_ISSUE
+  POLICY_VIOLATION
+  FRAUD_SUSPICION
+  TECHNICAL_ISSUE
+  OTHER
+}
+
+enum EmergencyAnnouncementSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model EmergencyActionLog {
+  id               String   @id @default(uuid())
+  action           String
+  performedById    String?
+  performedByEmail String?
+  reason           String
+  details          Json?
+  affectedScope    String?
+  ipAddress        String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("emergency_action_logs")
+}
+
+model EmergencyAnnouncement {
+  id               String                        @id @default(uuid())
+  title            String
+  message          String                        @db.Text
+  severity         EmergencyAnnouncementSeverity @default(WARNING)
+  affectedServices String[]
+  displayLocations String[]
+  startsAt         DateTime                      @default(now())
+  endsAt           DateTime?
+  isActive         Boolean                       @default(true)
+  createdByEmail   String?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  @@map("emergency_announcements")
+}
+
+model ScheduledMaintenance {
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  maintenanceType String   @default("full")
+  affectedModules String[]
+  startAt         DateTime
+  endAt           DateTime
+  isActive        Boolean  @default(true)
+  autoActivate    Boolean  @default(true)
+  createdByEmail  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([startAt, endAt])
+  @@map("scheduled_maintenances")
+}
+
+model EmergencySuspension {
+  id                    String                    @id @default(uuid())
+  type                  EmergencySuspensionType
+  targetId              String
+  targetName            String?
+  reason                EmergencySuspensionReason
+  reasonNotes           String?
+  effects               Json?
+  isActive              Boolean                   @default(true)
+  suspendedById         String?
+  suspendedByEmail      String?
+  suspendedAt           DateTime                  @default(now())
+  liftedAt              DateTime?
+  liftedByEmail         String?
+  appointmentResolution String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([type, targetId, isActive])
+  @@map("emergency_suspensions")
+}
+enum PlatformStaffStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PlatformRoleType {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  DEPARTMENT_MANAGER
+  PLATFORM_STAFF
+}
+
+enum OrganizationScope {
+  ALL_ORGANIZATIONS
+  ASSIGNED_ORGANIZATIONS
+  OWN_DEPARTMENT
+  OWN_RECORDS
+}
+
+enum PermissionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum PlatformTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PlatformTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model PlatformStaffRole {
+  id                  String             @id @default(uuid())
+  name                String             @unique
+  code                String?            @unique
+  description         String?
+  roleType            PlatformRoleType   @default(PLATFORM_STAFF)
+  level               Int                @default(3)
+  permissions         Json
+  deniedPermissions   Json?
+  fieldPermissions    Json?
+  organizationScope   OrganizationScope  @default(ASSIGNED_ORGANIZATIONS)
+  locationScope       Json?
+  departmentId        String?
+  parentRoleId        String?
+  isSystem            Boolean            @default(false)
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  department   PlatformDepartment?  @relation(fields: [departmentId], references: [id])
+  parentRole   PlatformStaffRole?   @relation("RoleHierarchy", fields: [parentRoleId], references: [id])
+  childRoles   PlatformStaffRole[]  @relation("RoleHierarchy")
+  staff        PlatformStaffProfile[]
+
+  @@map("platform_staff_roles")
+}
+
+model PlatformStaffProfile {
+  id                  String              @id @default(uuid())
+  userId              String              @unique
+  fullName            String
+  profilePhoto        String?
+  phone               String?
+  employeeId          String?             @unique
+  departmentId        String?
+  designation         String?
+  platformRoleId      String?
+  joiningDate         DateTime?
+  status              PlatformStaffStatus @default(ACTIVE)
+  customPermissions   Json?
+  permissionDenials   Json?
+  fieldPermissions    Json?
+  organizationScope   OrganizationScope?
+  assignedLocations   String[]
+  twoFactorEnabled    Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  user         User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   PlatformDepartment?          @relation(fields: [departmentId], references: [id])
+  platformRole PlatformStaffRole?           @relation(fields: [platformRoleId], references: [id])
+  tasks        PlatformStaffTask[]          @relation("AssignedTasks")
+  assignments  PlatformStaffAssignment[]
+  activities   PlatformStaffActivity[]
+  attendance   PlatformStaffAttendance[]
+  tempPermissions PlatformTemporaryPermission[]
+  permissionRequests PlatformPermissionRequest[] @relation("Requester")
+  permissionHistory PlatformPermissionHistory[]
+
+  @@map("platform_staff_profiles")
+}
+
+model PlatformStaffTask {
+  id              String               @id @default(uuid())
+  title           String
+  description     String?
+  assignedToId    String
+  assignedByEmail String?
+  priority        PlatformTaskPriority @default(MEDIUM)
+  status          PlatformTaskStatus   @default(PENDING)
+  dueDate         DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  assignedTo PlatformStaffProfile @relation("AssignedTasks", fields: [assignedToId], references: [id])
+
+  @@index([assignedToId, status])
+  @@map("platform_staff_tasks")
+}
+
+model PlatformStaffAssignment {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  organizationId String?
+  locationName   String?
+  stateName      String?
+  assignmentType String   @default("organization")
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  organization Organization?        @relation(fields: [organizationId], references: [id])
+
+  @@index([staffProfileId])
+  @@map("platform_staff_assignments")
+}
+
+model PlatformStaffActivity {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  action         String
+  entityType     String?
+  entityId       String?
+  entityName     String?
+  details        Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, createdAt])
+  @@map("platform_staff_activities")
+}
+
+model PlatformStaffAttendance {
+  id             String    @id @default(uuid())
+  staffProfileId String
+  checkInAt      DateTime  @default(now())
+  checkOutAt     DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, checkInAt])
+  @@map("platform_staff_attendance")
+}
+
+model PlatformStaffAnnouncement {
+  id             String   @id @default(uuid())
+  title          String
+  message        String   @db.Text
+  audience       String[] @default(["all"])
+  isActive       Boolean  @default(true)
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("platform_staff_announcements")
+}
+
+model PlatformPermissionHistory {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  module         String
+  action         String
+  previousValue  String?
+  newValue       String?
+  changedByEmail String?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, createdAt])
+  @@map("platform_permission_history")
+}
+
+model PlatformTemporaryPermission {
+  id             String   @id @default(uuid())
+  staffProfileId String
+  module         String
+  action         String
+  reason         String?
+  startsAt       DateTime @default(now())
+  expiresAt      DateTime
+  grantedByEmail String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  staffProfile PlatformStaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, expiresAt])
+  @@map("platform_temporary_permissions")
+}
+
+model PlatformPermissionRequest {
+  id             String                  @id @default(uuid())
+  staffProfileId String
+  module         String
+  action         String
+  reason         String
+  status         PermissionRequestStatus @default(PENDING)
+  reviewedByEmail String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  staffProfile PlatformStaffProfile @relation("Requester", fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("platform_permission_requests")
+}
+
+model PasswordResetRequest {
+  id             String    @id @default(uuid())
+  userId         String
+  identifier     String
+  otpHash        String
+  resetToken     String?   @unique
+  otpAttempts    Int       @default(0)
+  otpExpiresAt   DateTime
+  resetExpiresAt DateTime?
+  verifiedAt     DateTime?
+  usedAt         DateTime?
+  ipAddress      String?
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([identifier, createdAt])
+  @@index([userId, createdAt])
+  @@map("password_reset_requests")
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("password_history")
+}
+
+model PasswordResetRateLimit {
+  id          String    @id @default(uuid())
+  identifier  String
+  ipAddress   String?
+  sendCount   Int       @default(0)
+  windowStart DateTime  @default(now())
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([identifier, ipAddress])
+  @@map("password_reset_rate_limits")
+}
+
+model PatientPhoneOtp {
+  id         String    @id @default(uuid())
+  userId     String
+  phone      String
+  otpHash    String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, phone])
+  @@map("patient_phone_otps")
 }

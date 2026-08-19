@@ -351,6 +351,48 @@ async function main() {
 
   await seedMasterData(prisma);
 
+  const { seedPlatformSettings } = await import('../prisma/settings-seed');
+  await seedPlatformSettings(prisma);
+
+  // AI settings & default automations
+  await prisma.aiSetting.upsert({
+    where: { key: 'global' },
+    update: {},
+    create: {
+      key: 'global',
+      value: {
+        enabled: true,
+        provider: 'builtin',
+        model: 'healthcare-builtin-v1',
+        maxTokens: 1024,
+        temperature: 0.3,
+        features: {
+          copilot: true,
+          leadScoring: true,
+          leadSummary: true,
+          reviewSentiment: true,
+          ticketClassification: true,
+          appointmentReminders: true,
+          documentVerification: true,
+          patientTimeline: true,
+          fraudDetection: true,
+          communicationAi: true,
+        },
+        leadScoringWeights: {
+          source: 15,
+          verifiedContact: 20,
+          appointmentIntent: 25,
+          interestedStatus: 20,
+          recentActivity: 10,
+          followUpDue: 10,
+        },
+      },
+    },
+  });
+
+  const { seedDefaultAutomations } = await import('../src/services/automation/engine');
+  await seedDefaultAutomations();
+
   console.log('Seed completed!');
   console.log('\nDemo accounts (password: Password123!):');
   console.log('  Super Admin: admin@healthcare.platform');
