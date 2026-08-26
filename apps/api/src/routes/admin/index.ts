@@ -20,6 +20,7 @@ import advertisementRoutes from './advertisements';
 import platformStaffRoutes from './platform-staff';
 import permissionsRoutes from './permissions';
 import supportRoutes from './support';
+import paymentConsoleRoutes from './payment-console';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -35,6 +36,7 @@ router.use('/advertisements', advertisementRoutes);
 router.use('/platform-staff', platformStaffRoutes);
 router.use('/permissions', permissionsRoutes);
 router.use('/support', supportRoutes);
+router.use('/payment-console', paymentConsoleRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 

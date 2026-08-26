@@ -31,6 +31,17 @@ export function verifyRefreshToken(token: string): { userId: string } {
   return jwt.verify(token, JWT_REFRESH_SECRET) as { userId: string };
 }
 
+// Short-lived token granting access to the PIN-protected admin Payment console.
+export function signPaymentAccessToken(userId: string): string {
+  return jwt.sign({ userId, scope: 'payment-console' }, JWT_SECRET, { expiresIn: '30m' });
+}
+
+export function verifyPaymentAccessToken(token: string): { userId: string; scope: string } {
+  const payload = jwt.verify(token, JWT_SECRET) as { userId: string; scope?: string };
+  if (payload.scope !== 'payment-console') throw new Error('Invalid payment access token');
+  return { userId: payload.userId, scope: 'payment-console' };
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

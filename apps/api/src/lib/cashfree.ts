@@ -88,6 +88,33 @@ export async function getCashfreeOrder(orderId: string): Promise<{ orderStatus: 
   return { orderStatus: String(data.order_status ?? 'UNKNOWN'), raw: data };
 }
 
+export async function getCashfreeOrderPayments(orderId: string): Promise<Record<string, unknown>[]> {
+  const { appId, secretKey, baseUrl } = getCashfreeConfig();
+  if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
+  const res = await fetch(`${baseUrl}/orders/${encodeURIComponent(orderId)}/payments`, {
+    headers: { 'x-client-id': appId, 'x-client-secret': secretKey, 'x-api-version': API_VERSION },
+  });
+  const data = (await res.json().catch(() => [])) as unknown;
+  if (!res.ok) throw new AppError('Failed to fetch order payments', 502);
+  return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+}
+
+export interface RefundInput { orderId: string; amount: number; refundId?: string; note?: string }
+
+export async function createCashfreeRefund(input: RefundInput): Promise<Record<string, unknown>> {
+  const { appId, secretKey, baseUrl } = getCashfreeConfig();
+  if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
+  const refundId = input.refundId || `rf_${Date.now()}`;
+  const res = await fetch(`${baseUrl}/orders/${encodeURIComponent(input.orderId)}/refunds`, {
+    method: 'POST',
+    headers: { 'x-client-id': appId, 'x-client-secret': secretKey, 'x-api-version': API_VERSION, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refund_amount: Number(input.amount.toFixed(2)), refund_id: refundId, refund_note: input.note || 'Admin initiated refund' }),
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new AppError((data.message as string) || 'Refund failed', 502);
+  return data;
+}
+
 // Verify a Cashfree webhook: signature = base64(HMAC_SHA256(timestamp + rawBody, secretKey)).
 export function verifyCashfreeWebhook(rawBody: string, signature?: string, timestamp?: string): boolean {
   const { secretKey } = getCashfreeConfig();
