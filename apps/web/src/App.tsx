@@ -19,8 +19,9 @@ import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/Patie
 
 import { CrmDashboard } from '@/pages/crm/CrmDashboard';
 import {
-  CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage,
+  CrmPatientsPage, CrmAppointmentsPage, CrmBillingPage,
 } from '@/pages/crm/CrmPages';
+import { CrmDoctorsPage, CrmDoctorProfilePage } from '@/pages/crm/CrmDoctorsModule';
 import {
   CrmProfilePage, CrmBranchesPage, CrmDepartmentsPage, CrmStaffPage, CrmRolesPage,
   CrmServicesPage, CrmHealthPackagesPage, CrmLeadsPage, CrmReviewsPage, CrmAdvertisementsPage,
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="/crm/departments" element={<CrmAdmin><CrmDepartmentsPage /></CrmAdmin>} />
             <Route path="/crm/documents" element={<CrmAdmin><CrmDocumentsPage /></CrmAdmin>} />
             <Route path="/crm/doctors" element={<CrmAdmin><CrmDoctorsPage /></CrmAdmin>} />
+            <Route path="/crm/doctors/:id" element={<CrmAdmin><CrmDoctorProfilePage /></CrmAdmin>} />
             <Route path="/crm/staff" element={<CrmAdmin><CrmStaffPage /></CrmAdmin>} />
             <Route path="/crm/roles" element={<CrmAdmin><CrmRolesPage /></CrmAdmin>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />

@@ -41,35 +41,6 @@ export function CrmPatientsPage() {
   );
 }
 
-export function CrmDoctorsPage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['crm-doctors'],
-    queryFn: () => api.get('/doctors'),
-  });
-
-  return (
-    <DashboardLayout portal="crm">
-      <PageHeader title="Doctors" subtitle="Manage doctors in your hospital" />
-      {isLoading ? <LoadingState /> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(data?.data as Doctor[] | undefined)?.map((doc) => (
-            <div key={doc.id} className="card p-6">
-              <h3 className="font-semibold">{doc.fullName}</h3>
-              <p className="text-sm text-primary-600">{doc.specialization}</p>
-              <p className="text-xs text-gray-500 mt-1">{doc.qualification}</p>
-              <div className="mt-3 flex justify-between text-sm">
-                <span className="text-gray-500">{doc.experience} yrs</span>
-                <span className="font-medium">₹{doc.consultationFee}</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-2">{doc._count?.appointments || 0} appointments</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </DashboardLayout>
-  );
-}
-
 export function CrmAppointmentsPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['crm-appointments'],
@@ -179,16 +150,6 @@ interface Patient {
   id: string;
   fullName: string;
   user?: { email: string; phone: string };
-  _count?: { appointments: number };
-}
-
-interface Doctor {
-  id: string;
-  fullName: string;
-  specialization: string;
-  qualification: string;
-  experience: number;
-  consultationFee: number;
   _count?: { appointments: number };
 }
 
