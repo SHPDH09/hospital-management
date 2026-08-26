@@ -3,6 +3,7 @@ import { prisma, readDb } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 import { getEmergencyState, computeSystemStatus, getActiveControls } from '../lib/emergency';
 import { mergeWithDefaults, settingsKey, SettingCategory } from '../lib/settings';
+import { paramId } from '../lib/params';
 
 const router = Router();
 
@@ -43,25 +44,31 @@ router.get('/platform-status', async (_req, res, next) => {
       announcements = [];
     }
 
+    const websiteSettings = website as Record<string, unknown>;
+    const platformSettings = platform as Record<string, unknown>;
+    const brandingSettings = branding as Record<string, unknown>;
+    const mobileSettings = mobile as Record<string, unknown>;
+    const securitySettings = (synced.security || {}) as Record<string, unknown>;
+
     sendSuccess(res, {
       systemStatus: status,
-      platformName: (platform as { platformName?: string }).platformName,
-      tagline: (platform as { tagline?: string }).tagline,
-      logo: (branding as { primaryLogo?: string }).primaryLogo || (platform as { logo?: string }).logo,
-      favicon: (branding as { favicon?: string }).favicon || (platform as { favicon?: string }).favicon,
+      platformName: platformSettings.platformName,
+      tagline: platformSettings.tagline,
+      logo: brandingSettings.primaryLogo || platformSettings.logo,
+      favicon: brandingSettings.favicon || platformSettings.favicon,
       maintenanceMode,
-      maintenanceMessage: synced.maintenanceMessage || (website as { maintenanceMessage?: string }).maintenanceMessage || 'We are currently performing scheduled maintenance.',
+      maintenanceMessage: synced.maintenanceMessage || websiteSettings.maintenanceMessage || 'We are currently performing scheduled maintenance.',
       maintenanceType: synced.maintenanceType,
       readOnlyMode: synced.readOnlyMode,
       emergencyModeActive: synced.emergencyModeActive,
       activeControls: getActiveControls(synced),
-      registrationEnabled: (website as { registrationEnabled?: boolean }).registrationEnabled !== false && modules.patientRegistration !== false,
-      patientRegistration: (website as { patientRegistration?: boolean }).patientRegistration !== false && modules.patientRegistration !== false,
-      hospitalRegistration: (website as { hospitalRegistration?: boolean }).hospitalRegistration !== false && modules.hospitalRegistration !== false,
-      clinicRegistration: (website as { clinicRegistration?: boolean }).clinicRegistration !== false && modules.clinicRegistration !== false,
-      doctorRegistration: (website as { doctorRegistration?: boolean }).doctorRegistration !== false && modules.doctorRegistration !== false,
-      searchEnabled: (website as { searchEnabled?: boolean }).searchEnabled !== false && modules.publicSearch !== false,
-      appointmentBookingEnabled: (website as { appointmentBookingEnabled?: boolean }).appointmentBookingEnabled !== false && modules.appointmentBooking !== false,
+      registrationEnabled: websiteSettings.registrationEnabled !== false && modules.patientRegistration !== false && !securitySettings.disableNewRegistrations,
+      patientRegistration: websiteSettings.patientRegistration !== false && modules.patientRegistration !== false,
+      hospitalRegistration: websiteSettings.hospitalRegistration !== false && modules.hospitalRegistration !== false,
+      clinicRegistration: websiteSettings.clinicRegistration !== false && modules.clinicRegistration !== false,
+      doctorRegistration: websiteSettings.doctorRegistration !== false && modules.doctorRegistration !== false,
+      searchEnabled: websiteSettings.searchEnabled !== false && modules.publicSearch !== false,
+      appointmentBookingEnabled: websiteSettings.appointmentBookingEnabled !== false && modules.appointmentBooking !== false,
       paymentsEnabled: modules.onlinePayment !== false,
       advertisementsEnabled: modules.advertisement !== false,
       communicationEnabled: modules.messaging !== false,
@@ -69,14 +76,14 @@ router.get('/platform-status', async (_req, res, next) => {
       emergencyAnnouncements: announcements,
       emergencyAnnouncement: announcements[0]?.message || (synced.emergencyAnnouncementActive ? synced.emergencyAnnouncement : null),
       mobile: {
-        appName: (mobile as { appName?: string }).appName,
-        minimumSupportedVersion: (mobile as { minimumSupportedVersion?: string }).minimumSupportedVersion,
-        latestVersion: (mobile as { latestVersion?: string }).latestVersion,
-        forceUpdate: (mobile as { forceUpdate?: boolean }).forceUpdate,
-        maintenanceMode: (mobile as { maintenanceMode?: boolean }).maintenanceMode || maintenanceMode,
-        maintenanceMessage: (mobile as { maintenanceMessage?: string }).maintenanceMessage,
-        androidAppLink: (mobile as { androidAppLink?: string }).androidAppLink,
-        iosAppLink: (mobile as { iosAppLink?: string }).iosAppLink,
+        appName: mobileSettings.appName,
+        minimumSupportedVersion: mobileSettings.minimumSupportedVersion,
+        latestVersion: mobileSettings.latestVersion,
+        forceUpdate: mobileSettings.forceUpdate,
+        maintenanceMode: mobileSettings.maintenanceMode || maintenanceMode,
+        maintenanceMessage: mobileSettings.maintenanceMessage,
+        androidAppLink: mobileSettings.androidAppLink,
+        iosAppLink: mobileSettings.iosAppLink,
       },
     });
   } catch (err) {
@@ -87,19 +94,62 @@ router.get('/platform-status', async (_req, res, next) => {
 router.get('/advertisements', async (req, res, next) => {
   try {
     const type = req.query.type as string | undefined;
+    const city = req.query.city as string | undefined;
+    const platform = (req.query.platform as string) || 'website';
+
+    const emergency = await getEmergencyState();
+    const modules = (emergency.modules || {}) as Record<string, boolean>;
+    if (modules.advertisement === false) {
+      sendSuccess(res, []);
+      return;
+    }
+
+    const now = new Date();
     const ads = await prisma.advertisement.findMany({
       where: {
         status: 'ACTIVE',
+        isPaused: false,
+        platforms: { has: platform },
         ...(type && { type: type as never }),
-        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+        AND: [
+          { OR: [{ startDate: null }, { startDate: { lte: now } }] },
+          { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+          ...(city ? [{ OR: [{ targetCities: { isEmpty: true } }, { targetCities: { has: city } }] }] : []),
+        ],
       },
-      take: 10,
-      orderBy: { createdAt: 'desc' },
+      take: 20,
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      include: { organization: { select: { name: true, slug: true, logoUrl: true } } },
     });
     sendSuccess(res, ads);
   } catch (err) {
     next(err);
   }
+});
+
+router.post('/advertisements/:id/impression', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    await prisma.advertisement.update({
+      where: { id },
+      data: { impressions: { increment: 1 }, uniqueImpressions: { increment: 1 } },
+    });
+    sendSuccess(res, { tracked: true });
+  } catch (err) { next(err); }
+});
+
+router.post('/advertisements/:id/click', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const eventType = (req.body?.eventType as string) || 'click';
+    const data: Record<string, { increment: number }> = { clicks: { increment: 1 } };
+    if (eventType === 'profile_view') data.profileViews = { increment: 1 };
+    if (eventType === 'call') data.callClicks = { increment: 1 };
+    if (eventType === 'whatsapp') data.whatsappClicks = { increment: 1 };
+    if (eventType === 'conversion') data.conversions = { increment: 1 };
+    await prisma.advertisement.update({ where: { id }, data });
+    sendSuccess(res, { tracked: true });
+  } catch (err) { next(err); }
 });
 
 router.get('/stats', async (_req, res, next) => {

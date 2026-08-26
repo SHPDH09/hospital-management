@@ -96,8 +96,11 @@ enum AdvertisementStatus {
   PENDING
   APPROVED
   ACTIVE
+  PAUSED
+  SCHEDULED
   EXPIRED
   REJECTED
+  CHANGES_REQUESTED
 }
 
 enum AdPaymentStatus {

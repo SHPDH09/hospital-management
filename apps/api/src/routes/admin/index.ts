@@ -19,6 +19,7 @@ import supportRoutes from './support';
 import cmsRoutes from './cms';
 import permissionsRoutes from './permissions';
 import platformStaffRoutes from './platform-staff';
+import advertisementRoutes from './advertisements';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -33,6 +34,7 @@ router.use('/support', supportRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/permissions', permissionsRoutes);
 router.use('/platform-staff', platformStaffRoutes);
+router.use('/advertisements', advertisementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -321,32 +323,6 @@ router.get('/payments', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Advertisements ──────────────────────────────────────────────────────────
-
-router.get('/advertisements', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [ads, total] = await Promise.all([
-      prisma.advertisement.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { organization: { select: { name: true } } } }),
-      prisma.advertisement.count({ where }),
-    ]);
-    sendPaginated(res, ads, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) => {
-  try {
-    const { status } = req.body;
-    const id = paramId(req.params.id);
-    const ad = await prisma.advertisement.update({ where: { id }, data: { status } });
-    await logAudit(req, 'STATUS_CHANGE', 'Advertisement', id, { status });
-    sendSuccess(res, ad);
-  } catch (err) { next(err); }
-});
 
 // ─── Leads ───────────────────────────────────────────────────────────────────
 
@@ -427,6 +403,47 @@ router.post('/reviews/:id/analyze', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Legacy complaints routes (backward compatible)
+router.get('/complaints', async (req, res, next) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const status = req.query.status as string | undefined;
+    const where = status ? { status: status as never, isArchived: false } : { isArchived: false };
+    const [complaints, total] = await Promise.all([
+      prisma.complaint.findMany({
+        where, skip, take: limit, orderBy: { createdAt: 'desc' },
+        include: { assignedTo: { select: { email: true } }, organization: { select: { name: true } }, category: true },
+      }),
+      prisma.complaint.count({ where }),
+    ]);
+    sendPaginated(res, complaints, { page, limit, total });
+  } catch (err) { next(err); }
+});
+
+router.post('/complaints', validateBody(z.object({
+  subject: z.string(), description: z.string(), type: z.string().optional(),
+  priority: z.string().optional(), complainantName: z.string().optional(),
+  complainantEmail: z.string().optional(), organizationId: z.string().optional(),
+})), async (req: AuthRequest, res, next) => {
+  try {
+    const { generateTicketId } = await import('../../lib/support');
+    const ticketId = generateTicketId();
+    const complaint = await prisma.complaint.create({ data: { ...req.body, ticketId } });
+    sendSuccess(res, complaint, 'Complaint created', 201);
+  } catch (err) { next(err); }
+});
+
+router.patch('/complaints/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const complaint = await prisma.complaint.update({ where: { id }, data: req.body });
+    await logAudit(req, 'UPDATE', 'Complaint', id, req.body);
+    sendSuccess(res, complaint);
+  } catch (err) { next(err); }
+});
+
 // ─── Audit Logs & Security ───────────────────────────────────────────────────
 
 router.get('/audit-logs', async (req, res, next) => {
@@ -499,6 +516,21 @@ router.delete('/security/sessions/:userId', async (req: AuthRequest, res, next) 
     await prisma.refreshToken.deleteMany({ where: { userId } });
     await logAudit(req, 'FORCE_LOGOUT', 'User', userId);
     sendSuccess(res, null, 'All sessions revoked');
+  } catch (err) { next(err); }
+});
+
+// ─── Roles (read-only from enum) ─────────────────────────────────────────────
+
+router.get('/roles', async (_req, res, next) => {
+  try {
+    const roles = [
+      { role: 'SUPER_ADMIN', description: 'Full platform access', modules: ['all'] },
+      { role: 'PLATFORM_STAFF', description: 'Limited operational access', modules: ['organizations', 'verification', 'support'] },
+      { role: 'HOSPITAL_ADMIN', description: 'Hospital CRM full access', modules: ['crm'] },
+      { role: 'DOCTOR', description: 'Doctor portal & appointments', modules: ['appointments', 'patients'] },
+      { role: 'PATIENT', description: 'Patient portal', modules: ['appointments', 'profile'] },
+    ];
+    sendSuccess(res, roles);
   } catch (err) { next(err); }
 });
 

@@ -138,21 +138,21 @@ function SubscriptionActions({ sub, onDone }: { sub: Record<string, unknown>; on
   };
 
   return (
-    <div className="relative">
-      <button className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded" onClick={() => setOpen(!open)}>Actions ▾</button>
+    <div className="relative inline-block">
+      <button type="button" className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded" onClick={() => setOpen(!open)}>Actions ▾</button>
       {open && !modal && (
-        <div className="absolute right-0 z-10 mt-1 w-52 bg-white border rounded-lg shadow-lg py-1 text-xs">
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => setModal('view')}>View Subscription</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={openEdit}>Edit Subscription</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={openEdit}>Update Plan</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => act(`/admin/subscriptions/${id}/renew`, { reason: 'Admin renewal' })}>Renew Subscription</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => setModal('extend')}>Extend Subscription</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => { setEditForm((f) => ({ ...f, endDate: sub.endDate ? String(sub.endDate).slice(0, 10) : '' })); setModal('expiry'); }}>Change Expiry</button>
-          {sub.status !== 'SUSPENDED' && <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50 text-red-600" onClick={() => setModal('suspend')}>Suspend Subscription</button>}
-          {sub.status === 'SUSPENDED' && <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50 text-green-600" onClick={() => act(`/admin/subscriptions/${id}/activate`)}>Activate Subscription</button>}
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => act(`/admin/subscriptions/${id}/cancel`, { reason: 'Admin cancelled' })}>Cancel Subscription</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => act(`/admin/subscriptions/${id}/reset-default`)}>Reset to Default Plan</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => setModal('payments')}>View Payment History</button>
+        <div className="absolute right-0 z-50 mt-1 w-52 bg-white border rounded-lg shadow-lg py-1 text-xs flex flex-col">
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => setModal('view')}>View Subscription</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={openEdit}>Edit Subscription</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={openEdit}>Update Plan</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => act(`/admin/subscriptions/${id}/renew`, { reason: 'Admin renewal' })}>Renew Subscription</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => setModal('extend')}>Extend Subscription</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => { setEditForm((f) => ({ ...f, endDate: sub.endDate ? String(sub.endDate).slice(0, 10) : '' })); setModal('expiry'); }}>Change Expiry</button>
+          {sub.status !== 'SUSPENDED' && <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50 text-red-600" onClick={() => setModal('suspend')}>Suspend Subscription</button>}
+          {sub.status === 'SUSPENDED' && <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50 text-green-600" onClick={() => act(`/admin/subscriptions/${id}/activate`)}>Activate Subscription</button>}
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => act(`/admin/subscriptions/${id}/cancel`, { reason: 'Admin cancelled' })}>Cancel Subscription</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => act(`/admin/subscriptions/${id}/reset-default`)}>Reset to Default Plan</button>
+          <button type="button" className="block w-full text-left px-3 py-1.5 hover:bg-gray-50" onClick={() => setModal('payments')}>View Payment History</button>
         </div>
       )}
       {modal === 'suspend' && (
@@ -310,7 +310,7 @@ function AllSubscriptionsPage({ filter = '' }: { filter?: string }) {
           { key: 'endDate', label: 'Expiry', render: (r) => r.endDate ? formatDate(r.endDate as string) : '-' },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
           { key: 'source', label: 'Source', render: (r) => <span className="text-xs text-gray-500">{r.changeSource as string}</span> },
-          { key: 'actions', label: 'Actions', render: (r) => <SubscriptionActions sub={r} onDone={refetch} /> },
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => <SubscriptionActions sub={r} onDone={refetch} /> },
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}
     </SubscriptionLayout>

@@ -94,8 +94,8 @@ export function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await register(form);
-      navigate('/patient');
+      const profileCompleted = await register(form);
+      navigate(profileCompleted ? '/patient' : '/patient/complete-profile');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

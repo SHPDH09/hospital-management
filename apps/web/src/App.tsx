@@ -87,7 +87,7 @@ export default function App() {
             <Route path="/admin/appointments" element={<Admin><AdminAppointmentsPage /></Admin>} />
             <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
-            <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
+            <Route path="/admin/advertisements/*" element={<Admin><AdminAdvertisementsPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
             <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
             <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />

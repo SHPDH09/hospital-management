@@ -76,7 +76,7 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/ai/automation', icon: Bot, label: 'Automations' },
       { to: '/admin/ai/settings', icon: Settings, label: 'AI Settings' },
       { to: '/admin/cms', icon: Globe, label: 'CMS' },
-      { to: '/admin/settings', icon: Settings, label: 'Settings' },
+      { to: '/admin/settings', icon: Settings, label: 'Global Settings' },
       { to: '/admin/emergency', icon: AlertTriangle, label: 'Emergency Control' },
     ],
   },
