@@ -32,7 +32,7 @@ export function StatGrid({ stats }: { stats: { label: string; value: string | nu
 }
 
 export function AdminTable({ columns, rows, emptyMessage = 'No data found' }: {
-  columns: { key: string; label: string; render?: (row: Record<string, unknown>) => ReactNode }[];
+  columns: { key: string; label: string; render?: (row: Record<string, unknown>) => ReactNode; nowrap?: boolean }[];
   rows: Record<string, unknown>[];
   emptyMessage?: string;
 }) {
@@ -40,13 +40,13 @@ export function AdminTable({ columns, rows, emptyMessage = 'No data found' }: {
     return <div className="card p-12 text-center text-gray-500">{emptyMessage}</div>;
   }
   return (
-    <div className="card overflow-hidden">
+    <div className="card">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr className="text-left text-gray-500">
               {columns.map((c) => (
-                <th key={c.key} className="px-4 py-3 font-medium whitespace-nowrap">{c.label}</th>
+                <th key={c.key} className={`px-4 py-3 font-medium ${c.nowrap !== false ? 'whitespace-nowrap' : ''}`}>{c.label}</th>
               ))}
             </tr>
           </thead>
@@ -54,7 +54,10 @@ export function AdminTable({ columns, rows, emptyMessage = 'No data found' }: {
             {rows.map((row, i) => (
               <tr key={(row.id as string) || i} className="border-t border-gray-100 hover:bg-gray-50">
                 {columns.map((c) => (
-                  <td key={c.key} className="px-4 py-3 whitespace-nowrap">
+                  <td
+                    key={c.key}
+                    className={`px-4 py-3 ${c.nowrap !== false ? 'whitespace-nowrap' : 'whitespace-normal'} ${c.key === 'actions' ? 'relative overflow-visible' : ''}`}
+                  >
                     {c.render ? c.render(row) : String(row[c.key] ?? '-')}
                   </td>
                 ))}

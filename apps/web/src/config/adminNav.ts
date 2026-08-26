@@ -53,7 +53,7 @@ export const adminNavGroups: AdminNavGroup[] = [
     title: 'Platform',
     items: [
       { to: '/admin/staff', icon: UserCog, label: 'Staff' },
-      { to: '/admin/roles', icon: Shield, label: 'Roles & Permissions' },
+      { to: '/admin/permissions', icon: Shield, label: 'Roles & Permissions' },
       { to: '/admin/security', icon: Shield, label: 'Security Center' },
       { to: '/admin/audit-logs', icon: FileText, label: 'Audit Logs' },
     ],
@@ -61,7 +61,7 @@ export const adminNavGroups: AdminNavGroup[] = [
   {
     title: 'Support',
     items: [
-      { to: '/admin/complaints', icon: Headphones, label: 'Complaints' },
+      { to: '/admin/support', icon: Headphones, label: 'Support & Complaints' },
     ],
   },
   {
@@ -71,7 +71,7 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/master-data', icon: Database, label: 'Master Data' },
       { to: '/admin/communications', icon: Mail, label: 'Communications' },
       { to: '/admin/cms', icon: Globe, label: 'CMS' },
-      { to: '/admin/settings', icon: Settings, label: 'Settings' },
+      { to: '/admin/settings', icon: Settings, label: 'Global Settings' },
       { to: '/admin/emergency', icon: AlertTriangle, label: 'Emergency Control' },
     ],
   },

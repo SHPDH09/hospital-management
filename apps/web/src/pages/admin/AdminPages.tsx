@@ -4,15 +4,22 @@ export {
   AdminAppointmentsPage, AdminPaymentsPage,
 } from './AdminResourcePages';
 export {
-  AdminAdvertisementsPage, AdminCouponsPage,
+  AdminCouponsPage,
   AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
 } from './AdminCommercePages';
+export { AdminAdvertisementsPage } from './AdminAdvertisementPages';
 export { AdminSubscriptionsPage } from './AdminSubscriptionPages';
 export { AdminMasterDataPage } from './AdminMasterDataPages';
+export { AdminCommunicationsPage } from './AdminCommunicationPages';
+export { AdminCmsPage } from './AdminCmsPages';
+export { AdminSettingsPage } from './AdminSettingsPages';
+export { AdminEmergencyPage } from './AdminEmergencyPages';
+export { AdminStaffPage } from './AdminPlatformStaffPages';
+export { AdminPermissionsPage } from './AdminPermissionsPages';
+export { AdminSupportPage } from './AdminSupportPages';
 export {
-  AdminStaffPage, AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
+  AdminRolesPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminComplaintsPage, AdminLocationsPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
 } from './AdminPlatformPages';
 
 // Legacy aliases

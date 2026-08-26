@@ -12,6 +12,14 @@ import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
 import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
+import communicationRoutes from './communications';
+import cmsRoutes from './cms';
+import settingsRoutes from './settings';
+import emergencyRoutes from './emergency';
+import advertisementRoutes from './advertisements';
+import platformStaffRoutes from './platform-staff';
+import permissionsRoutes from './permissions';
+import supportRoutes from './support';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -19,6 +27,14 @@ router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
+router.use('/communications', communicationRoutes);
+router.use('/cms', cmsRoutes);
+router.use('/settings', settingsRoutes);
+router.use('/emergency', emergencyRoutes);
+router.use('/advertisements', advertisementRoutes);
+router.use('/platform-staff', platformStaffRoutes);
+router.use('/permissions', permissionsRoutes);
+router.use('/support', supportRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -307,32 +323,6 @@ router.get('/payments', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Advertisements ──────────────────────────────────────────────────────────
-
-router.get('/advertisements', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [ads, total] = await Promise.all([
-      prisma.advertisement.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { organization: { select: { name: true } } } }),
-      prisma.advertisement.count({ where }),
-    ]);
-    sendPaginated(res, ads, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) => {
-  try {
-    const { status } = req.body;
-    const id = paramId(req.params.id);
-    const ad = await prisma.advertisement.update({ where: { id }, data: { status } });
-    await logAudit(req, 'STATUS_CHANGE', 'Advertisement', id, { status });
-    sendSuccess(res, ad);
-  } catch (err) { next(err); }
-});
 
 // ─── Leads ───────────────────────────────────────────────────────────────────
 
@@ -387,61 +377,19 @@ router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Staff (Platform) ────────────────────────────────────────────────────────
 
-router.get('/staff', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where: { role: { in: ['SUPER_ADMIN', 'PLATFORM_STAFF'] } },
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        select: { id: true, email: true, role: true, isActive: true, lastLoginAt: true, createdAt: true },
-      }),
-      prisma.user.count({ where: { role: { in: ['SUPER_ADMIN', 'PLATFORM_STAFF'] } } }),
-    ]);
-    sendPaginated(res, users, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.post('/staff', validateBody(z.object({
-  email: z.string().email(), password: z.string().min(8), role: z.enum(['SUPER_ADMIN', 'PLATFORM_STAFF']),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const { email, password, role } = req.body;
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) throw new AppError('Email already exists', 409);
-    const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({ data: { email, passwordHash, role, isActive: true, emailVerified: true } });
-    await logAudit(req, 'CREATE', 'PlatformStaff', user.id);
-    sendSuccess(res, { id: user.id, email: user.email, role: user.role }, 'Staff created', 201);
-  } catch (err) { next(err); }
-});
-
-router.patch('/staff/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const user = await prisma.user.update({ where: { id }, data: { isActive: req.body.isActive, role: req.body.role } });
-    await logAudit(req, 'UPDATE', 'PlatformStaff', id, req.body);
-    sendSuccess(res, user);
-  } catch (err) { next(err); }
-});
-
-// ─── Complaints ──────────────────────────────────────────────────────────────
-
+// Legacy complaints routes (backward compatible)
 router.get('/complaints', async (req, res, next) => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
+    const where = status ? { status: status as never, isArchived: false } : { isArchived: false };
     const [complaints, total] = await Promise.all([
       prisma.complaint.findMany({
         where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { assignedTo: { select: { email: true } }, organization: { select: { name: true } } },
+        include: { assignedTo: { select: { email: true } }, organization: { select: { name: true } }, category: true },
       }),
       prisma.complaint.count({ where }),
     ]);
@@ -455,7 +403,8 @@ router.post('/complaints', validateBody(z.object({
   complainantEmail: z.string().optional(), organizationId: z.string().optional(),
 })), async (req: AuthRequest, res, next) => {
   try {
-    const ticketId = `TKT-${Date.now().toString(36).toUpperCase()}`;
+    const { generateTicketId } = await import('../../lib/support');
+    const ticketId = generateTicketId();
     const complaint = await prisma.complaint.create({ data: { ...req.body, ticketId } });
     sendSuccess(res, complaint, 'Complaint created', 201);
   } catch (err) { next(err); }
@@ -542,94 +491,6 @@ router.delete('/security/sessions/:userId', async (req: AuthRequest, res, next) 
     await prisma.refreshToken.deleteMany({ where: { userId } });
     await logAudit(req, 'FORCE_LOGOUT', 'User', userId);
     sendSuccess(res, null, 'All sessions revoked');
-  } catch (err) { next(err); }
-});
-
-// ─── CMS ─────────────────────────────────────────────────────────────────────
-
-router.get('/cms', async (_req, res, next) => {
-  try {
-    const pages = await prisma.cmsPage.findMany({ orderBy: { title: 'asc' } });
-    sendSuccess(res, pages);
-  } catch (err) { next(err); }
-});
-
-router.post('/cms', validateBody(z.object({
-  slug: z.string(), title: z.string(), content: z.string(), isPublished: z.boolean().optional(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const page = await prisma.cmsPage.create({ data: req.body });
-    sendSuccess(res, page, 'Page created', 201);
-  } catch (err) { next(err); }
-});
-
-router.patch('/cms/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const page = await prisma.cmsPage.update({ where: { id }, data: req.body });
-    sendSuccess(res, page);
-  } catch (err) { next(err); }
-});
-
-// ─── Communication Templates ─────────────────────────────────────────────────
-
-router.get('/communications', async (_req, res, next) => {
-  try {
-    const templates = await prisma.communicationTemplate.findMany({ orderBy: { name: 'asc' } });
-    sendSuccess(res, templates);
-  } catch (err) { next(err); }
-});
-
-router.post('/communications', validateBody(z.object({
-  name: z.string(), channel: z.string(), subject: z.string().optional(), body: z.string(),
-})), async (req: AuthRequest, res, next) => {
-  try {
-    const tpl = await prisma.communicationTemplate.create({ data: req.body });
-    sendSuccess(res, tpl, 'Template created', 201);
-  } catch (err) { next(err); }
-});
-
-// ─── Settings & Emergency ────────────────────────────────────────────────────
-
-router.get('/settings', async (_req, res, next) => {
-  try {
-    const settings = await prisma.platformSetting.findMany({ orderBy: { category: 'asc' } });
-    sendSuccess(res, settings);
-  } catch (err) { next(err); }
-});
-
-router.put('/settings', validateBody(z.object({ key: z.string(), value: z.unknown(), category: z.string().optional() })), async (req: AuthRequest, res, next) => {
-  try {
-    const { key, value, category } = req.body;
-    const setting = await prisma.platformSetting.upsert({
-      where: { key },
-      update: { value: value as Prisma.InputJsonValue, category },
-      create: { key, value: value as Prisma.InputJsonValue, category: category || 'general' },
-    });
-    await logAudit(req, 'UPDATE', 'PlatformSetting', key);
-    sendSuccess(res, setting);
-  } catch (err) { next(err); }
-});
-
-router.get('/emergency', async (_req, res, next) => {
-  try {
-    const settings = await prisma.platformSetting.findMany({ where: { category: 'emergency' } });
-    const flags = Object.fromEntries(settings.map((s) => [s.key, s.value]));
-    sendSuccess(res, flags);
-  } catch (err) { next(err); }
-});
-
-router.put('/emergency', async (req: AuthRequest, res, next) => {
-  try {
-    for (const [key, value] of Object.entries(req.body)) {
-      await prisma.platformSetting.upsert({
-        where: { key },
-        update: { value: value as Prisma.InputJsonValue },
-        create: { key, value: value as Prisma.InputJsonValue, category: 'emergency' },
-      });
-    }
-    await logAudit(req, 'EMERGENCY_UPDATE', 'Platform', undefined, req.body as Prisma.InputJsonValue);
-    sendSuccess(res, req.body, 'Emergency settings updated');
   } catch (err) { next(err); }
 });
 

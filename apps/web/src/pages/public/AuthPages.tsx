@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { User, Stethoscope, Building2, Users, Shield } from 'lucide-react';
+import { Stethoscope, Building2, Users, Shield } from 'lucide-react';
 import { RoleLoginPage } from '@/components/auth/RoleLoginPage';
 import { PublicLayout } from '@/components/layouts/PublicLayout';
 import { useState } from 'react';
@@ -14,22 +14,6 @@ const publicLoginLinks = [
   { to: '/login/staff', label: 'Staff' },
 ];
 
-export function PatientLoginPage() {
-  return (
-    <RoleLoginPage
-      config={{
-        title: 'Patient Login',
-        subtitle: 'Sign in to book appointments and manage your health records',
-        allowedRoles: ['PATIENT'],
-        icon: <User className="h-10 w-10 text-primary-600" />,
-        registerLink: { to: '/register', label: 'Create patient account' },
-        alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/patient'),
-        showDemo: true,
-      }}
-    />
-  );
-}
-
 export function DoctorLoginPage() {
   return (
     <RoleLoginPage
@@ -37,6 +21,7 @@ export function DoctorLoginPage() {
         title: 'Doctor Login',
         subtitle: 'Access your schedule, patients, and prescriptions',
         allowedRoles: ['DOCTOR'],
+        portalKey: 'doctor',
         icon: <Stethoscope className="h-10 w-10 text-primary-600" />,
         alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/doctor'),
       }}
@@ -51,6 +36,7 @@ export function HospitalLoginPage() {
         title: 'Hospital / Clinic Login',
         subtitle: 'Sign in to manage your organization, staff, and operations',
         allowedRoles: ['HOSPITAL_ADMIN', 'BRANCH_ADMIN'],
+        portalKey: 'hospital',
         icon: <Building2 className="h-10 w-10 text-primary-600" />,
         registerLink: { to: '/register/hospital', label: 'Register your organization' },
         alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/hospital'),
@@ -66,6 +52,7 @@ export function StaffLoginPage() {
         title: 'Staff Login',
         subtitle: 'For receptionists, nurses, accountants, pharmacists, and lab staff',
         allowedRoles: ['RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER'],
+        portalKey: 'staff',
         icon: <Users className="h-10 w-10 text-primary-600" />,
         alternateLinks: publicLoginLinks.filter((l) => l.to !== '/login/staff'),
       }}
@@ -81,6 +68,7 @@ export function AdminLoginPage() {
         title: 'Platform Admin',
         subtitle: 'Authorized platform operators only',
         allowedRoles: ['SUPER_ADMIN', 'PLATFORM_STAFF'],
+        portalKey: 'admin',
         icon: <Shield className="h-10 w-10 text-red-600" />,
       }}
     />
@@ -106,8 +94,8 @@ export function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await register(form);
-      navigate('/patient');
+      const profileCompleted = await register(form);
+      navigate(profileCompleted ? '/patient' : '/patient/complete-profile');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
