@@ -7,8 +7,21 @@ import { paramId } from '../../lib/params';
 import { AuthRequest } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
 import { logAudit } from '../../lib/audit';
+import { runSubscriptionReminders } from '../../lib/subscription-reminders';
 
 const router = Router();
+
+// Run the renewal lifecycle: send 7/3/1-day reminders, expire past-due
+// subscriptions and suspend those beyond the grace period. Intended to be
+// scheduled (cron/worker); exposed here for manual/admin triggering.
+router.post('/run-reminders', async (req: AuthRequest, res, next) => {
+  try {
+    const graceDays = Number(req.body?.graceDays) || 3;
+    const result = await runSubscriptionReminders(graceDays);
+    await logAudit(req, 'RUN_RENEWAL_REMINDERS', 'Subscription', undefined, result);
+    sendSuccess(res, result, 'Renewal reminders processed');
+  } catch (err) { next(err); }
+});
 
 const planSchema = z.object({
   code: z.string().min(2),

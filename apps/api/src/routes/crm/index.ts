@@ -9,6 +9,8 @@ import { authenticate, requireRoles, AuthRequest, CRM_ROLES, ORG_ADMIN_ROLES } f
 import { validateBody, validateQuery } from '../../middleware/validate';
 import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
+import { createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
+import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal } from '../../lib/subscription-renewal';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
@@ -508,9 +510,112 @@ router.get('/subscription', async (req: AuthRequest, res, next) => {
     const subscription = await prisma.subscription.findFirst({
       where: { organizationId: orgId },
       orderBy: { createdAt: 'desc' },
-      include: { plan: true, history: { take: 10, orderBy: { createdAt: 'desc' } } },
+      include: {
+        plan: true,
+        history: { take: 10, orderBy: { createdAt: 'desc' } },
+        payments: { take: 20, orderBy: { createdAt: 'desc' } },
+      },
     });
-    sendSuccess(res, subscription);
+
+    let daysRemaining: number | null = null;
+    let renewalAmount = 0;
+    if (subscription) {
+      if (subscription.endDate) {
+        daysRemaining = Math.ceil((subscription.endDate.getTime() - Date.now()) / 86_400_000);
+      }
+      renewalAmount = renewalAmountFor(subscription.plan, subscription.billingCycle);
+    }
+
+    sendSuccess(res, {
+      subscription,
+      daysRemaining,
+      renewalAmount,
+      autoRenew: subscription?.autoRenew ?? false,
+      paymentConfigured: isCashfreeConfigured(),
+    });
+  } catch (err) { next(err); }
+});
+
+// Toggle auto-renewal for the organization's subscription.
+router.patch('/subscription/auto-renew', validateBody(z.object({ autoRenew: z.boolean() })), async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    const subscription = await prisma.subscription.findFirst({ where: { organizationId: orgId }, orderBy: { createdAt: 'desc' } });
+    if (!subscription) throw new AppError('No subscription found', 404);
+    const updated = await prisma.subscription.update({ where: { id: subscription.id }, data: { autoRenew: req.body.autoRenew } });
+    await logCrmAudit(req, orgId, 'UPDATE', 'Subscription', subscription.id, { autoRenew: req.body.autoRenew });
+    sendSuccess(res, { autoRenew: updated.autoRenew }, 'Auto-renewal preference updated');
+  } catch (err) { next(err); }
+});
+
+// Start a renewal: creates a PENDING renewal payment and a Cashfree order.
+// The subscription is only activated by the verified webhook — never here.
+router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional() })), async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    if (!isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Add Cashfree credentials to enable online renewal.', 503);
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' }, include: { plan: true, organization: { select: { name: true, email: true, phone: true } } },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const cycle = req.body.billingCycle || subscription.billingCycle;
+    const amount = renewalAmountFor(subscription.plan, cycle);
+    if (amount <= 0) throw new AppError('This plan has no renewal price configured', 400);
+
+    const payment = await prisma.subscriptionPayment.create({
+      data: {
+        subscriptionId: subscription.id, organizationId: orgId, planId: subscription.planId,
+        amount, currency: subscription.plan.currency || 'INR', billingCycle: cycle, status: 'PENDING',
+        gateway: 'cashfree', invoiceNumber: generateInvoiceNumber(),
+      },
+    });
+
+    const orderId = `sub_${payment.id}`;
+    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const apiUrl = process.env.API_PUBLIC_URL || '';
+    const order = await createCashfreeOrder({
+      orderId,
+      amount,
+      currency: subscription.plan.currency || 'INR',
+      customer: { id: orgId, email: subscription.organization.email || undefined, phone: subscription.organization.phone || undefined },
+      returnUrl: `${appUrl}/crm/subscription?order_id={order_id}`,
+      notifyUrl: apiUrl ? `${apiUrl}/api/v1/webhooks/cashfree` : undefined,
+    });
+
+    await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
+
+    sendSuccess(res, {
+      paymentId: payment.id,
+      orderId: order.orderId,
+      paymentSessionId: order.paymentSessionId,
+      amount,
+      billingCycle: cycle,
+      invoiceNumber: payment.invoiceNumber,
+    }, 'Renewal order created. Complete payment to activate.');
+  } catch (err) { next(err); }
+});
+
+// Server-side verification of a renewal (used on payment return). The
+// subscription is activated only if Cashfree confirms the order is PAID.
+router.post('/subscription/verify/:paymentId', async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    const paymentId = paramId(req.params.paymentId);
+    const payment = await prisma.subscriptionPayment.findFirst({ where: { id: paymentId, organizationId: orgId } });
+    if (!payment) throw new AppError('Renewal payment not found', 404);
+    if (payment.status === 'COMPLETED') return sendSuccess(res, { status: 'COMPLETED', invoiceNumber: payment.invoiceNumber }, 'Already renewed');
+
+    const order = await getCashfreeOrder(payment.gatewayOrderId || `sub_${payment.id}`);
+    if (order.orderStatus === 'PAID') {
+      await applySubscriptionRenewal(payment.id, { method: 'cashfree' });
+      return sendSuccess(res, { status: 'COMPLETED', invoiceNumber: payment.invoiceNumber }, 'Subscription renewed');
+    }
+    sendSuccess(res, { status: order.orderStatus }, 'Payment not completed yet');
   } catch (err) { next(err); }
 });
 

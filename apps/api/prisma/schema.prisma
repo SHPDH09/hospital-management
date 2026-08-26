@@ -612,6 +612,7 @@ model Subscription {
   endDate        DateTime?
   trialEndsAt    DateTime?
   suspendReason  String?
+  autoRenew      Boolean                  @default(false)
   changeSource   SubscriptionChangeSource @default(SYSTEM)
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
@@ -619,10 +620,41 @@ model Subscription {
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   plan         SubscriptionPlan      @relation(fields: [planId], references: [id])
   history      SubscriptionHistory[]
+  payments     SubscriptionPayment[]
 
   @@index([organizationId])
   @@index([status, endDate])
   @@map("subscriptions")
+}
+
+// Renewal/payment transactions for subscriptions, backed by Cashfree.
+// The secret key is NEVER stored here — only non-sensitive gateway references.
+model SubscriptionPayment {
+  id             String        @id @default(uuid())
+  subscriptionId String
+  organizationId String
+  planId         String?
+  amount         Float
+  currency       String        @default("INR")
+  billingCycle   BillingCycle  @default(MONTHLY)
+  status         PaymentStatus @default(PENDING)
+  gateway        String        @default("cashfree")
+  gatewayOrderId String?       @unique
+  gatewayPaymentId String?
+  method         String?
+  invoiceNumber  String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  failureReason  String?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, createdAt])
+  @@map("subscription_payments")
 }
 
 model SubscriptionHistory {
