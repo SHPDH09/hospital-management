@@ -15,16 +15,12 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 export function StatGrid({ stats }: { stats: { label: string; value: string | number; icon?: ReactNode; color?: string }[] }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
       {stats.map((s) => (
-        <div key={s.label} className="card p-5">
-          <div className="flex items-center gap-3">
-            {s.icon && <div className={`p-2 rounded-lg ${s.color || 'bg-primary-50 text-primary-600'}`}>{s.icon}</div>}
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">{s.label}</p>
-              <p className="text-xl font-bold mt-0.5">{s.value}</p>
-            </div>
-          </div>
+        <div key={s.label} className="group card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          {s.icon && <div className={`grid h-11 w-11 place-items-center rounded-xl ${s.color || 'bg-primary-50 text-primary-600'}`}>{s.icon}</div>}
+          <p className="mt-4 text-2xl font-bold tracking-tight text-gray-900">{s.value}</p>
+          <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-gray-500">{s.label}</p>
         </div>
       ))}
     </div>
@@ -40,19 +36,19 @@ export function AdminTable({ columns, rows, emptyMessage = 'No data found' }: {
     return <div className="card p-12 text-center text-gray-500">{emptyMessage}</div>;
   }
   return (
-    <div className="card">
+    <div className="card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr className="text-left text-gray-500">
+          <thead className="bg-gray-50/80">
+            <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
               {columns.map((c) => (
-                <th key={c.key} className={`px-4 py-3 font-medium ${c.nowrap !== false ? 'whitespace-nowrap' : ''}`}>{c.label}</th>
+                <th key={c.key} className={`px-4 py-3 font-semibold ${c.nowrap !== false ? 'whitespace-nowrap' : ''}`}>{c.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={(row.id as string) || i} className="border-t border-gray-100 hover:bg-gray-50">
+              <tr key={(row.id as string) || i} className="border-t border-gray-100 transition-colors hover:bg-gray-50">
                 {columns.map((c) => (
                   <td
                     key={c.key}
