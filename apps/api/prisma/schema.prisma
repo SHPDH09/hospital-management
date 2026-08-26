@@ -21,6 +21,8 @@ enum UserRole {
   LAB_STAFF
   MANAGER
   PATIENT
+  ASHA
+  REFERRAL_PARTNER
 }
 
 enum OrganizationType {
@@ -98,13 +100,43 @@ enum AdvertisementStatus {
   REJECTED
 }
 
+enum AdPaymentStatus {
+  UNPAID
+  PAID
+  PARTIALLY_PAID
+  REFUNDED
+}
+
+enum AdPricingModel {
+  FIXED
+  CPM
+  CPC
+  CPA
+  CAMPAIGN
+}
+
 enum AdvertisementType {
   HOMEPAGE_BANNER
   SEARCH_PROMOTION
   FEATURED_HOSPITAL
   FEATURED_DOCTOR
   FEATURED_CLINIC
+  FEATURED_SERVICE
   HEALTH_PACKAGE
+  PROMOTIONAL_CARD
+  SEARCH_AD
+}
+
+enum PatientSourceType {
+  DIRECT
+  GOOGLE
+  ADVERTISEMENT
+  HOSPITAL_WEBSITE
+  SOCIAL_MEDIA
+  ASHA
+  REFERRAL_PARTNER
+  CAMPAIGN
+  DOCTOR_REFERRAL
 }
 
 enum LeadStatus {
@@ -268,6 +300,10 @@ model Patient {
   privacyAcceptedAt        DateTime?
   healthConsentAt          DateTime?
   profileCompletedAt       DateTime?
+  globalPatientId          String?   @unique
+  accountStatus            String?
+  registrationSource       String?
+  photoUrl                 String?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
@@ -281,12 +317,13 @@ model Patient {
 }
 
 model PatientOrganization {
-  id             String   @id @default(uuid())
+  id             String             @id @default(uuid())
   patientId      String
   organizationId String
   patientNumber  String?
   notes          String?
-  createdAt      DateTime @default(now())
+  sourceType     PatientSourceType?
+  createdAt      DateTime           @default(now())
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -314,6 +351,8 @@ model Doctor {
   isActive           Boolean  @default(true)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
+  verificationStatus String?
+  accountActivated   Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -324,6 +363,7 @@ model Doctor {
   appointments Appointment[]
   slots        AppointmentSlot[]
   reviews      Review[]
+  advertisements Advertisement[]
 
   @@index([organizationId])
   @@index([specialization])
@@ -373,11 +413,17 @@ model Department {
 model Service {
   id             String   @id @default(uuid())
   organizationId String
+  branchId       String?
+  departmentId   String?
+  doctorId       String?
   name           String
   description    String?
+  category       String?
   price          Float
   duration       Int?
   isActive       Boolean  @default(true)
+  isOnline       Boolean  @default(true)
+  isOffline      Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -419,9 +465,21 @@ model Appointment {
   type           String            @default("consultation")
   status         AppointmentStatus @default(PENDING)
   notes          String?
-  noShowRisk     NoShowRisk        @default(LOW)
-  confirmationStatus String        @default("PENDING")
-  reminderSentAt DateTime?
+  appointmentNumber  String?
+  paymentStatus      String?
+  referralSource     String?
+  referralId         String?
+  referralName       String?
+  advertisementId    String?
+  cancellationReason String?
+  rescheduledFromId  String?
+  checkedInAt        DateTime?
+  tokenNumber        String?
+  isEmergency        Boolean           @default(false)
+  isOnline           Boolean           @default(false)
+  noShowRisk         String            @default("LOW")
+  confirmationStatus String            @default("PENDING")
+  reminderSentAt     DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -577,53 +635,179 @@ model SubscriptionHistory {
 }
 
 model Advertisement {
-  id             String              @id @default(uuid())
-  organizationId String?
-  title          String
-  type           AdvertisementType
-  status         AdvertisementStatus @default(PENDING)
-  imageUrl       String?
-  targetUrl      String?
-  startDate      DateTime?
-  endDate        DateTime?
-  impressions    Int                 @default(0)
-  clicks         Int                 @default(0)
-  budget         Float?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                   String              @id @default(uuid())
+  organizationId       String?
+  doctorId             String?
+  campaignName         String?
+  title                String
+  description          String?
+  category             String?
+  type                 AdvertisementType
+  status               AdvertisementStatus @default(PENDING)
+  imageUrl             String?
+  mobileImageUrl       String?
+  videoUrl             String?
+  logoUrl              String?
+  ctaText              String?
+  targetUrl            String?
+  landingType          String?
+  landingId            String?
+  targetCities         String[]
+  targetStates         String[]
+  targetPinCodes       String[]
+  targetRadiusKm       Float?
+  audienceType         String?
+  healthcareCategories String[]
+  platforms            String[]            @default(["website"])
+  startDate            DateTime?
+  endDate              DateTime?
+  scheduledAt          DateTime?
+  budget               Float?
+  dailyBudget          Float?
+  pricingModel         AdPricingModel      @default(FIXED)
+  adPlanId             String?
+  priority             Int                 @default(0)
+  placement            String?
+  impressions          Int                 @default(0)
+  uniqueImpressions    Int                 @default(0)
+  clicks               Int                 @default(0)
+  leads                Int                 @default(0)
+  appointments         Int                 @default(0)
+  conversions          Int                 @default(0)
+  profileViews         Int                 @default(0)
+  callClicks           Int                 @default(0)
+  whatsappClicks       Int                 @default(0)
+  paidAmount           Float               @default(0)
+  pendingAmount        Float?
+  campaignCost         Float?
+  paymentStatus        AdPaymentStatus     @default(UNPAID)
+  rejectionReason      String?
+  flaggedReason        String?
+  isPaused             Boolean             @default(false)
+  createdByEmail       String?
+  approvedByEmail      String?
+  approvedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id])
+  doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+  adPlan       AdPlan?       @relation(fields: [adPlanId], references: [id])
+  history      AdHistory[]
+  adLeads      Lead[]
 
+  @@index([status, type])
+  @@index([organizationId])
+  @@index([startDate, endDate])
   @@map("advertisements")
 }
 
-model Lead {
-  id             String     @id @default(uuid())
-  organizationId String
-  name           String?
-  email          String?
-  phone          String?
-  source         String?
-  status         LeadStatus @default(NEW)
-  notes          String?
-  score          Int                @default(0)
-  temperature    LeadTemperature    @default(COLD)
-  assignedToId   String?
-  aiSummary      String?
-  nextBestAction String?
-  lastScoredAt   DateTime?
-  specialty      String?
-  lastContactAt  DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+model AdPlan {
+  id                    String            @id @default(uuid())
+  name                  String
+  adType                AdvertisementType
+  price                 Float
+  durationDays          Int
+  pricingModel          AdPricingModel    @default(FIXED)
+  description           String?
+  placement             String?
+  priority              Int               @default(0)
+  recommendedDimensions Json?
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignedTo   User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
-  activities   LeadActivity[]
+  advertisements Advertisement[]
+
+  @@map("ad_plans")
+}
+
+model AdHistory {
+  id               String   @id @default(uuid())
+  advertisementId  String
+  action           String
+  performedByEmail String?
+  reason           String?
+  details          Json?
+  createdAt        DateTime @default(now())
+
+  advertisement Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+
+  @@index([advertisementId, createdAt])
+  @@map("ad_history")
+}
+
+model Lead {
+  id                 String          @id @default(uuid())
+  organizationId     String
+  advertisementId    String?
+  leadNumber         String?
+  name               String?
+  email              String?
+  phone              String?
+  source             String?
+  type               String?
+  city               String?
+  state              String?
+  campaign           String?
+  referralName       String?
+  referralType       String?
+  specialty          String?
+  service            String?
+  preferredDate      DateTime?
+  preferredTime      String?
+  priority           String?
+  status             LeadStatus      @default(NEW)
+  notes              String?
+  score              Int             @default(0)
+  temperature        String          @default("COLD")
+  assignedToId       String?
+  assignedAt         DateTime?
+  interestedDoctorId String?
+  patientId          String?
+  appointmentId      String?
+  phoneVerified      Boolean         @default(false)
+  emailVerified      Boolean         @default(false)
+  nextFollowUpAt     DateTime?
+  lastContactAt      DateTime?
+  lostReason         String?
+  isDuplicate        Boolean         @default(false)
+  mergedIntoId       String?
+  tags               String[]        @default([])
+  aiSummary          String?
+  nextBestAction     String?
+  lastScoredAt       DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  advertisement Advertisement? @relation(fields: [advertisementId], references: [id])
+  assignedTo    User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  activities    LeadActivity[]
+  followUps     LeadFollowUp[]
 
   @@index([organizationId, status])
   @@index([temperature, score])
+  @@index([advertisementId])
   @@map("leads")
+}
+
+model LeadFollowUp {
+  id           String    @id @default(uuid())
+  leadId       String
+  assignedToId String?
+  scheduledAt  DateTime?
+  reason       String?
+  status       String    @default("PENDING")
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, scheduledAt])
+  @@map("lead_follow_ups")
 }
 
 model Review {

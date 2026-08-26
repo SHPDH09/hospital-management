@@ -697,4 +697,15 @@ router.get('/suggest-articles', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── Seed defaults ───────────────────────────────────────────────────────────
+
+router.post('/seed-defaults', async (req: AuthRequest, res, next) => {
+  try {
+    const { seedSupport } = await import('../../lib/support-seed');
+    await seedSupport(prisma);
+    await logAudit(req, 'SEED', 'SupportDefaults', 'support');
+    sendSuccess(res, null, 'Support defaults seeded');
+  } catch (err) { next(err); }
+});
+
 export default router;

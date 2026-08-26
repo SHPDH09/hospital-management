@@ -144,26 +144,26 @@ async function main() {
     });
   }
 
-  // Departments
-  const cardiology = await prisma.department.create({
-    data: { organizationId: organization.id, name: 'Cardiology', description: 'Heart and cardiovascular care' },
-  });
-  const orthopedics = await prisma.department.create({
-    data: { organizationId: organization.id, name: 'Orthopedics', description: 'Bone and joint care' },
-  });
-  const general = await prisma.department.create({
-    data: { organizationId: organization.id, name: 'General Medicine', description: 'Primary healthcare' },
-  });
+  const upsertDept = async (name: string, description: string) => {
+    const existing = await prisma.department.findFirst({ where: { organizationId: organization.id, name } });
+    if (existing) return existing;
+    return prisma.department.create({ data: { organizationId: organization.id, name, description } });
+  };
+  const cardiology = await upsertDept('Cardiology', 'Heart and cardiovascular care');
+  const orthopedics = await upsertDept('Orthopedics', 'Bone and joint care');
+  const general = await upsertDept('General Medicine', 'Primary healthcare');
 
   // Services
-  await prisma.service.createMany({
-    data: [
-      { organizationId: organization.id, name: 'General Consultation', price: 500, duration: 30 },
-      { organizationId: organization.id, name: 'ECG', price: 800, duration: 15 },
-      { organizationId: organization.id, name: 'X-Ray', price: 1200, duration: 20 },
-      { organizationId: organization.id, name: 'Blood Test Panel', price: 1500, duration: 10 },
-    ],
-  });
+  const serviceDefs = [
+    { name: 'General Consultation', price: 500, duration: 30 },
+    { name: 'ECG', price: 800, duration: 15 },
+    { name: 'X-Ray', price: 1200, duration: 20 },
+    { name: 'Blood Test Panel', price: 1500, duration: 10 },
+  ];
+  for (const svc of serviceDefs) {
+    const existing = await prisma.service.findFirst({ where: { organizationId: organization.id, name: svc.name } });
+    if (!existing) await prisma.service.create({ data: { organizationId: organization.id, ...svc } });
+  }
 
   // Doctors
   const doctorUsers = [
@@ -268,22 +268,28 @@ async function main() {
     },
   });
 
-  await prisma.patientOrganization.create({
-    data: { patientId: patient.id, organizationId: organization.id },
+  await prisma.patientOrganization.upsert({
+    where: { patientId_organizationId: { patientId: patient.id, organizationId: organization.id } },
+    update: {},
+    create: { patientId: patient.id, organizationId: organization.id },
   });
 
-  // Sample Advertisement
-  await prisma.advertisement.create({
-    data: {
-      organizationId: organization.id,
-      title: 'Free Health Checkup Camp',
-      type: 'HOMEPAGE_BANNER',
-      status: 'ACTIVE',
-      targetUrl: '/organizations/city-general-hospital',
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
+  const existingAd = await prisma.advertisement.findFirst({
+    where: { organizationId: organization.id, title: 'Free Health Checkup Camp' },
   });
+  if (!existingAd) {
+    await prisma.advertisement.create({
+      data: {
+        organizationId: organization.id,
+        title: 'Free Health Checkup Camp',
+        type: 'HOMEPAGE_BANNER',
+        status: 'ACTIVE',
+        targetUrl: '/organizations/city-general-hospital',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
 
   // Specializations (Master Data)
   const specs = [
@@ -303,24 +309,25 @@ async function main() {
 
   // CMS Pages
   const cmsPages = [
-    { slug: 'about', title: 'About Us', content: 'Healthcare Platform — connecting patients with hospitals and clinics.', isPublished: true },
-    { slug: 'terms', title: 'Terms & Conditions', content: 'Terms and conditions for using the platform.', isPublished: true },
-    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data.', isPublished: true },
-    { slug: 'faq', title: 'FAQ', content: 'Frequently asked questions.', isPublished: true },
+    { slug: 'about', title: 'About Us', content: 'Healthcare Platform — connecting patients with hospitals and clinics.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
+    { slug: 'terms', title: 'Terms & Conditions', content: 'Terms and conditions for using the platform.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'faq', title: 'FAQ', content: 'Frequently asked questions.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
   ];
   for (const page of cmsPages) {
-    await prisma.cmsPage.upsert({ where: { slug: page.slug }, update: {}, create: page });
+    await prisma.cmsPage.upsert({ where: { slug: page.slug }, update: { isPublished: page.isPublished, status: page.status }, create: page });
   }
 
   // Communication Templates
   const templates = [
-    { name: 'Appointment Confirmation', channel: 'EMAIL', subject: 'Appointment Confirmed', body: 'Your appointment has been confirmed.' },
-    { name: 'Payment Receipt', channel: 'EMAIL', subject: 'Payment Received', body: 'Thank you for your payment.' },
-    { name: 'Welcome Message', channel: 'SMS', body: 'Welcome to Healthcare Platform!' },
-    { name: 'Password Reset', channel: 'EMAIL', subject: 'Reset Password', body: 'Click the link to reset your password.' },
+    { name: 'Appointment Confirmation', channel: 'EMAIL' as const, category: 'Appointment', subject: 'Appointment Confirmed', body: 'Your appointment has been confirmed.' },
+    { name: 'Payment Receipt', channel: 'EMAIL' as const, category: 'Payment', subject: 'Payment Received', body: 'Thank you for your payment.' },
+    { name: 'Welcome Message', channel: 'SMS' as const, category: 'Account', body: 'Welcome to Healthcare Platform!' },
+    { name: 'Password Reset', channel: 'EMAIL' as const, category: 'Account', subject: 'Reset Password', body: 'Click the link to reset your password.' },
   ];
   for (const tpl of templates) {
-    await prisma.communicationTemplate.create({ data: tpl });
+    const existing = await prisma.communicationTemplate.findFirst({ where: { name: tpl.name } });
+    if (!existing) await prisma.communicationTemplate.create({ data: tpl });
   }
 
   // Locations
@@ -350,6 +357,12 @@ async function main() {
   }
 
   await seedMasterData(prisma);
+
+  const { seedPlatformStaff } = await import('./platform-staff-seed');
+  await seedPlatformStaff(prisma);
+
+  const { seedSupport } = await import('./support-seed');
+  await seedSupport(prisma);
 
   const { seedPlatformSettings } = await import('../prisma/settings-seed');
   await seedPlatformSettings(prisma);
