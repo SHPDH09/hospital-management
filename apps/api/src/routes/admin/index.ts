@@ -209,6 +209,60 @@ router.post('/organizations/:id/impersonate', async (req: AuthRequest, res, next
   } catch (err) { next(err); }
 });
 
+// ─── User impersonation (any role except super admin) ───────────────────────
+
+const IMPERSONATION_REDIRECT: Record<string, string> = {
+  SUPER_ADMIN: '/admin',
+  PLATFORM_STAFF: '/admin',
+  HOSPITAL_ADMIN: '/crm',
+  BRANCH_ADMIN: '/crm',
+  DOCTOR: '/crm',
+  RECEPTIONIST: '/crm',
+  NURSE: '/crm',
+  ACCOUNTANT: '/crm',
+  PHARMACIST: '/crm',
+  LAB_STAFF: '/crm',
+  MANAGER: '/crm',
+  PATIENT: '/patient',
+};
+
+router.post('/users/:userId/impersonate', async (req: AuthRequest, res, next) => {
+  try {
+    const userId = paramId(req.params.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { doctor: true, staff: true },
+    });
+    if (!user) throw new AppError('User not found', 404);
+    if (!user.isActive) throw new AppError('User is blocked', 403);
+    if (user.role === 'SUPER_ADMIN') throw new AppError('Cannot impersonate super admin accounts', 403);
+    if (req.user?.userId === userId) throw new AppError('Cannot impersonate yourself', 400);
+
+    const organizationId = user.doctor?.organizationId || user.staff?.organizationId || undefined;
+    const branchId = user.doctor?.branchId || user.staff?.branchId || undefined;
+
+    const accessToken = signAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role as import('@healthcare/shared').UserRole,
+      organizationId,
+      branchId,
+    });
+    const refreshToken = signRefreshToken({ userId: user.id });
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    await prisma.refreshToken.create({ data: { token: refreshToken, userId: user.id, expiresAt } });
+    await logAudit(req, 'IMPERSONATE', 'User', userId, { targetEmail: user.email, role: user.role });
+
+    sendSuccess(res, {
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email, role: user.role },
+      redirectTo: IMPERSONATION_REDIRECT[user.role] || '/',
+    }, 'Impersonation token issued');
+  } catch (err) { next(err); }
+});
+
 // ─── Doctors ─────────────────────────────────────────────────────────────────
 
 router.get('/doctors', async (req, res, next) => {
@@ -234,8 +288,55 @@ router.patch('/doctors/:id/status', async (req: AuthRequest, res, next) => {
     const id = paramId(req.params.id);
     const { isActive } = req.body;
     const doctor = await prisma.doctor.update({ where: { id }, data: { isActive } });
+    const full = await prisma.doctor.findUnique({ where: { id }, select: { userId: true } });
+    if (full) {
+      await prisma.user.update({ where: { id: full.userId }, data: { isActive } });
+      if (!isActive) await prisma.refreshToken.deleteMany({ where: { userId: full.userId } });
+    }
     await logAudit(req, 'STATUS_CHANGE', 'Doctor', id, { isActive });
     sendSuccess(res, doctor);
+  } catch (err) { next(err); }
+});
+
+router.patch('/doctors/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const { fullName, specialization, qualification, experience, consultationFee, registrationNumber } = req.body;
+    const doctor = await prisma.doctor.update({
+      where: { id },
+      data: {
+        ...(fullName !== undefined && { fullName }),
+        ...(specialization !== undefined && { specialization }),
+        ...(qualification !== undefined && { qualification }),
+        ...(experience !== undefined && { experience: Number(experience) }),
+        ...(consultationFee !== undefined && { consultationFee: Number(consultationFee) }),
+        ...(registrationNumber !== undefined && { registrationNumber }),
+      },
+    });
+    await logAudit(req, 'UPDATE', 'Doctor', id, req.body);
+    sendSuccess(res, doctor);
+  } catch (err) { next(err); }
+});
+
+router.delete('/doctors/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const doctor = await prisma.doctor.findUnique({ where: { id }, select: { userId: true } });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+
+    const appointmentCount = await prisma.appointment.count({ where: { doctorId: id } });
+    if (appointmentCount > 0) {
+      await prisma.user.update({ where: { id: doctor.userId }, data: { isActive: false } });
+      await prisma.doctor.update({ where: { id }, data: { isActive: false } });
+      await prisma.refreshToken.deleteMany({ where: { userId: doctor.userId } });
+      await logAudit(req, 'SOFT_DELETE', 'Doctor', id, { reason: 'Has appointments — deactivated instead' });
+      return sendSuccess(res, null, 'Doctor has appointments — account blocked instead of deleted');
+    }
+
+    await prisma.refreshToken.deleteMany({ where: { userId: doctor.userId } });
+    await prisma.user.delete({ where: { id: doctor.userId } });
+    await logAudit(req, 'DELETE', 'Doctor', id);
+    sendSuccess(res, null, 'Doctor deleted');
   } catch (err) { next(err); }
 });
 
@@ -265,8 +366,63 @@ router.patch('/patients/:id/status', async (req: AuthRequest, res, next) => {
     const patient = await prisma.patient.findUnique({ where: { id } });
     if (!patient) throw new AppError('Patient not found', 404);
     await prisma.user.update({ where: { id: patient.userId }, data: { isActive: req.body.isActive } });
+    if (!req.body.isActive) {
+      await prisma.refreshToken.deleteMany({ where: { userId: patient.userId } });
+    }
     await logAudit(req, 'STATUS_CHANGE', 'Patient', id, req.body);
     sendSuccess(res, { id, isActive: req.body.isActive });
+  } catch (err) { next(err); }
+});
+
+router.patch('/patients/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({ where: { id }, include: { user: true } });
+    if (!patient) throw new AppError('Patient not found', 404);
+
+    const { fullName, city, state, phone, email } = req.body;
+    const updated = await prisma.patient.update({
+      where: { id },
+      data: {
+        ...(fullName !== undefined && { fullName }),
+        ...(city !== undefined && { city }),
+        ...(state !== undefined && { state }),
+      },
+    });
+
+    if (phone !== undefined || email !== undefined) {
+      await prisma.user.update({
+        where: { id: patient.userId },
+        data: {
+          ...(phone !== undefined && { phone }),
+          ...(email !== undefined && { email }),
+        },
+      });
+    }
+
+    await logAudit(req, 'UPDATE', 'Patient', id, req.body);
+    sendSuccess(res, updated);
+  } catch (err) { next(err); }
+});
+
+router.delete('/patients/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({ where: { id }, select: { userId: true } });
+    if (!patient) throw new AppError('Patient not found', 404);
+
+    const appointmentCount = await prisma.appointment.count({ where: { patientId: id } });
+    if (appointmentCount > 0) {
+      await prisma.user.update({ where: { id: patient.userId }, data: { isActive: false } });
+      await prisma.refreshToken.deleteMany({ where: { userId: patient.userId } });
+      await logAudit(req, 'SOFT_DELETE', 'Patient', id, { reason: 'Has appointments — blocked instead' });
+      return sendSuccess(res, null, 'Patient has appointments — account blocked instead of deleted');
+    }
+
+    await prisma.refreshToken.deleteMany({ where: { userId: patient.userId } });
+    await prisma.user.delete({ where: { id: patient.userId } });
+    await logAudit(req, 'DELETE', 'Patient', id);
+    sendSuccess(res, null, 'Patient deleted');
   } catch (err) { next(err); }
 });
 

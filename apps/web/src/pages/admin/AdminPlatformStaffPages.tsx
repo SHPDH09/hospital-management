@@ -3,7 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
+import { AdminRowActions, AdminEditModal } from '@/components/admin/AdminRowActions';
 import { api } from '@/lib/api';
+import { confirmAction, impersonateUser } from '@/lib/adminActions';
 import { formatDate, cn } from '@/lib/utils';
 
 const subNav = [
@@ -76,12 +78,28 @@ function DashboardPage() {
 
 function AllStaffPage() {
   const qc = useQueryClient();
+  const [edit, setEdit] = useState<{ id: string; values: Record<string, string> } | null>(null);
+  const [saving, setSaving] = useState(false);
   const { data, isLoading } = useQuery({ queryKey: ['staff-list'], queryFn: () => api.get('/admin/platform-staff?limit=100') });
   const rows = (data?.data as Record<string, unknown>[]) || [];
 
+  const refetch = () => qc.invalidateQueries({ queryKey: ['staff-list'] });
+
   const control = async (id: string, action: string) => {
     await api.post(`/admin/platform-staff/${id}/${action}`);
-    qc.invalidateQueries({ queryKey: ['staff-list'] });
+    refetch();
+  };
+
+  const saveEdit = async () => {
+    if (!edit) return;
+    setSaving(true);
+    try {
+      await api.patch(`/admin/platform-staff/${edit.id}`, edit.values);
+      setEdit(null);
+      refetch();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -99,18 +117,48 @@ function AllStaffPage() {
             const ll = (r.user as { lastLoginAt?: string })?.lastLoginAt;
             return ll ? formatDate(ll) : 'Never';
           }},
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <div className="flex flex-wrap gap-1">
-              <Link to={`/admin/staff/profile/${r.id}`} className="text-xs text-primary-600">View</Link>
-              {r.status === 'ACTIVE' ? (
-                <ActionBtn variant="danger" onClick={() => control(String(r.id), 'suspend')}>Suspend</ActionBtn>
-              ) : (
-                <ActionBtn variant="success" onClick={() => control(String(r.id), 'activate')}>Activate</ActionBtn>
-              )}
-              <ActionBtn onClick={() => control(String(r.id), 'force-logout')}>Logout</ActionBtn>
-            </div>
-          )},
+          { key: 'actions', label: 'Actions', render: (r) => {
+            const user = r.user as { id?: string; isActive?: boolean } | undefined;
+            const active = r.status === 'ACTIVE';
+            return (
+              <AdminRowActions
+                onEdit={() => setEdit({
+                  id: String(r.id),
+                  values: {
+                    fullName: String(r.fullName || ''),
+                    designation: String(r.designation || ''),
+                    phone: String(r.phone || ''),
+                  },
+                })}
+                isBlocked={!active}
+                onBlock={active ? async () => {
+                  if (!confirmAction(`Block staff "${r.fullName}"?`)) return;
+                  await control(String(r.id), 'suspend');
+                } : undefined}
+                onUnblock={!active ? () => control(String(r.id), 'activate') : undefined}
+                onLoginAs={user?.id ? () => impersonateUser(user.id!) : undefined}
+                loginAsLabel="Login as Staff"
+                extra={<Link to={`/admin/staff/profile/${r.id}`} className="text-xs text-primary-600 hover:underline">View</Link>}
+              />
+            );
+          }},
         ]} rows={rows} />
+      )}
+
+      {edit && (
+        <AdminEditModal
+          title="Edit Staff"
+          fields={[
+            { key: 'fullName', label: 'Full Name', required: true },
+            { key: 'designation', label: 'Designation' },
+            { key: 'phone', label: 'Phone' },
+          ]}
+          values={edit.values}
+          onChange={(key, value) => setEdit({ ...edit, values: { ...edit.values, [key]: value } })}
+          onClose={() => setEdit(null)}
+          onSave={saveEdit}
+          saving={saving}
+        />
       )}
     </StaffLayout>
   );
