@@ -11,19 +11,14 @@ export async function getCampaignAnalytics() {
 
   const leads = await prisma.lead.findMany({
     where: {
-      OR: [
-        { source: { contains: 'AD', mode: 'insensitive' } },
-        { source: { contains: 'CAMPAIGN', mode: 'insensitive' } },
-        { source: { contains: 'ADVERTISEMENT', mode: 'insensitive' } },
-      ],
+      source: { in: ['ADVERTISEMENT', 'CAMPAIGN'] },
     },
     select: { id: true, source: true, status: true, createdAt: true },
   });
 
   const campaigns = ads.map((ad) => {
     const relatedLeads = leads.filter((l) =>
-      l.source?.toLowerCase().includes(ad.title.toLowerCase().slice(0, 10)) ||
-      l.source?.toLowerCase().includes(ad.type.toLowerCase())
+      l.source === 'ADVERTISEMENT' || l.source === 'CAMPAIGN'
     );
     const appointments = relatedLeads.filter((l) =>
       ['APPOINTMENT_BOOKED', 'CONVERTED'].includes(l.status)

@@ -19,6 +19,11 @@ import supportRoutes from './support';
 import cmsRoutes from './cms';
 import permissionsRoutes from './permissions';
 import platformStaffRoutes from './platform-staff';
+import leadsRoutes from './leads';
+import reviewsRoutes from './reviews';
+import paymentsRoutes from './payments';
+import referralsRoutes from './referrals';
+import verificationRoutes from './verification';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -33,6 +38,11 @@ router.use('/support', supportRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/permissions', permissionsRoutes);
 router.use('/platform-staff', platformStaffRoutes);
+router.use('/leads', leadsRoutes);
+router.use('/reviews', reviewsRoutes);
+router.use('/payments', paymentsRoutes);
+router.use('/referrals', referralsRoutes);
+router.use('/verification', verificationRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -301,26 +311,6 @@ router.patch('/appointments/:id/status', async (req: AuthRequest, res, next) => 
   } catch (err) { next(err); }
 });
 
-// ─── Payments ────────────────────────────────────────────────────────────────
-
-router.get('/payments', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where, skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { bill: { include: { patient: { select: { fullName: true } }, organization: { select: { name: true } } } } },
-      }),
-      prisma.payment.count({ where }),
-    ]);
-    sendPaginated(res, payments, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
 // ─── Advertisements ──────────────────────────────────────────────────────────
 
 router.get('/advertisements', async (req, res, next) => {
@@ -345,85 +335,6 @@ router.patch('/advertisements/:id/status', async (req: AuthRequest, res, next) =
     const ad = await prisma.advertisement.update({ where: { id }, data: { status } });
     await logAudit(req, 'STATUS_CHANGE', 'Advertisement', id, { status });
     sendSuccess(res, ad);
-  } catch (err) { next(err); }
-});
-
-// ─── Leads ───────────────────────────────────────────────────────────────────
-
-router.get('/leads', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const status = req.query.status as string | undefined;
-    const where = status ? { status: status as never } : {};
-    const [leads, total] = await Promise.all([
-      prisma.lead.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { organization: { select: { name: true } } } }),
-      prisma.lead.count({ where }),
-    ]);
-    sendPaginated(res, leads, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/leads/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const lead = await prisma.lead.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Lead', id, req.body);
-
-    const { enqueueJob } = await import('../../services/jobs/queue');
-    const { emitAutomationEvent } = await import('../../services/automation/engine');
-    enqueueJob('lead_score', { leadId: id }).catch(console.error);
-    emitAutomationEvent('lead.status_changed', 'lead', id, {
-      status: lead.status,
-      temperature: lead.temperature,
-      score: lead.score,
-    }).catch(console.error);
-
-    sendSuccess(res, lead);
-  } catch (err) { next(err); }
-});
-
-router.post('/leads/:id/score', async (req: AuthRequest, res, next) => {
-  try {
-    const { scoreLead } = await import('../../services/leads/lead-scoring');
-    const result = await scoreLead(paramId(req.params.id), req.user!.userId);
-    sendSuccess(res, result, 'Lead scored');
-  } catch (err) { next(err); }
-});
-
-// ─── Reviews ─────────────────────────────────────────────────────────────────
-
-router.get('/reviews', async (req, res, next) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-    const [reviews, total] = await Promise.all([
-      prisma.review.findMany({
-        skip, take: limit, orderBy: { createdAt: 'desc' },
-        include: { patient: { select: { fullName: true } }, organization: { select: { name: true } }, doctor: { select: { fullName: true } } },
-      }),
-      prisma.review.count(),
-    ]);
-    sendPaginated(res, reviews, { page, limit, total });
-  } catch (err) { next(err); }
-});
-
-router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
-  try {
-    const id = paramId(req.params.id);
-    const review = await prisma.review.update({ where: { id }, data: req.body });
-    await logAudit(req, 'UPDATE', 'Review', id, req.body);
-    sendSuccess(res, review);
-  } catch (err) { next(err); }
-});
-
-router.post('/reviews/:id/analyze', async (req: AuthRequest, res, next) => {
-  try {
-    const { analyzeReview } = await import('../../services/reviews/review-analysis');
-    const result = await analyzeReview(paramId(req.params.id), req.user!.userId);
-    sendSuccess(res, result, 'Review analyzed');
   } catch (err) { next(err); }
 });
 

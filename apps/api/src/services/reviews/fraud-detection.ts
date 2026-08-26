@@ -120,7 +120,7 @@ export async function detectReferralFraud(): Promise<{ flags: FraudFlag[]; insig
   const referralLeads = await prisma.lead.findMany({
     where: {
       createdAt: { gte: monthAgo },
-      source: { in: ['REFERRAL', 'AASHA', 'referral', 'aasha'] },
+      source: { in: ['REFERRAL', 'AASHA', 'DOCTOR_REFERRAL', 'CAMPAIGN'] },
     },
     select: { id: true, email: true, phone: true, source: true, status: true, organizationId: true, createdAt: true },
     take: 500,
@@ -150,19 +150,20 @@ export async function detectReferralFraud(): Promise<{ flags: FraudFlag[]; insig
 
   const byOrgSource = await prisma.lead.groupBy({
     by: ['organizationId', 'source'],
-    where: { createdAt: { gte: monthAgo }, source: { not: null } },
+    where: { createdAt: { gte: monthAgo } },
     _count: { id: true },
   });
 
   for (const g of byOrgSource) {
-    if (g._count.id >= 50) {
+    const count = g._count?.id ?? 0;
+    if (count >= 50) {
       const org = await prisma.organization.findUnique({ where: { id: g.organizationId }, select: { name: true } });
       flags.push({
         type: 'referral_volume_spike',
         severity: 'MEDIUM',
         entityType: 'Organization',
         entityId: g.organizationId,
-        message: `${org?.name || 'Org'} has ${g._count.id} leads from source "${g.source}" this month.`,
+        message: `${org?.name || 'Org'} has ${count} leads from source "${g.source}" this month.`,
       });
     }
   }

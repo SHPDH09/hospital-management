@@ -28,7 +28,7 @@ const patientNav = [
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  portal: 'crm' | 'admin' | 'patient';
+  portal: 'crm' | 'admin' | 'patient' | 'referral';
 }
 
 export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
@@ -52,7 +52,7 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
     return () => clearTimeout(t);
   }, [searchQuery, portal]);
 
-  const title = portal === 'crm' ? 'Hospital CRM' : portal === 'admin' ? 'Super Admin' : 'Patient Portal';
+  const title = portal === 'crm' ? 'Hospital CRM' : portal === 'admin' ? 'Super Admin' : portal === 'referral' ? 'Referral Portal' : 'Patient Portal';
 
   const isActive = (path: string) =>
     path === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(path);
