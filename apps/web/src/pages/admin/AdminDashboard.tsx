@@ -6,7 +6,9 @@ import {
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, StatGrid, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
+import { impersonateOrganization } from '@/lib/adminActions';
 import { formatCurrency } from '@/lib/utils';
+import { AdminRowActions } from '@/components/admin/AdminRowActions';
 
 interface Stats {
   totalHospitals: number; totalClinics: number; totalDoctors: number;
@@ -96,11 +98,16 @@ export function AdminDashboard() {
                 { key: 'city', label: 'City' },
                 { key: 'verificationStatus', label: 'Status', render: (r) => <StatusBadge status={r.verificationStatus as string} /> },
                 { key: 'actions', label: 'Actions', render: (r) => (
-                  <div className="flex gap-2">
-                    <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => window.location.reload())}>Approve</ActionBtn>
-                    <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'REJECTED' }).then(() => window.location.reload())}>Reject</ActionBtn>
-                    <ActionBtn onClick={() => handleImpersonate(r.id as string)}>Login as Admin</ActionBtn>
-                  </div>
+                  <AdminRowActions
+                    onLoginAs={() => impersonateOrganization(r.id as string)}
+                    loginAsLabel="Login as Admin"
+                    extra={
+                      <>
+                        <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => window.location.reload())}>Approve</ActionBtn>
+                        <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'REJECTED' }).then(() => window.location.reload())}>Reject</ActionBtn>
+                      </>
+                    }
+                  />
                 )},
               ]}
               rows={(orgs?.data as Record<string, unknown>[]) || []}
@@ -113,12 +120,3 @@ export function AdminDashboard() {
   );
 }
 
-async function handleImpersonate(orgId: string) {
-  const res = await api.post<{ accessToken: string; refreshToken: string; redirectTo: string }>(`/admin/organizations/${orgId}/impersonate`);
-  if (res.success && res.data) {
-    api.setTokens(res.data.accessToken, res.data.refreshToken);
-    window.location.href = res.data.redirectTo;
-  }
-}
-
-export { handleImpersonate };

@@ -2,13 +2,20 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
+import { AdminRowActions, AdminEditModal } from '@/components/admin/AdminRowActions';
 import { api } from '@/lib/api';
-import { handleImpersonate } from './AdminDashboard';
+import { confirmAction, impersonateOrganization, impersonateUser } from '@/lib/adminActions';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 function useAdminList(endpoint: string, params = '') {
   return useQuery({ queryKey: [endpoint, params], queryFn: () => api.get(`${endpoint}${params}`) });
 }
+
+type EditState = {
+  type: 'organization' | 'doctor' | 'patient';
+  id: string;
+  values: Record<string, string | number>;
+} | null;
 
 // ─── Organizations (Hospitals / Clinics) ─────────────────────────────────────
 
@@ -22,7 +29,52 @@ export function AdminClinicsPage() {
 
 function OrgListPage({ type, title, subtitle }: { type: string; title: string; subtitle: string }) {
   const [search, setSearch] = useState('');
+  const [edit, setEdit] = useState<EditState>(null);
+  const [saving, setSaving] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/organizations', `?type=${type}&search=${search}&limit=50`);
+
+  const openEdit = (row: Record<string, unknown>) => {
+    setEdit({
+      type: 'organization',
+      id: row.id as string,
+      values: {
+        name: String(row.name || ''),
+        city: String(row.city || ''),
+        phone: String(row.phone || ''),
+        email: String(row.email || ''),
+      },
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!edit) return;
+    setSaving(true);
+    try {
+      await api.patch(`/admin/organizations/${edit.id}`, edit.values);
+      setEdit(null);
+      refetch();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const blockOrg = async (id: string) => {
+    if (!confirmAction('Block this organization? It will be hidden from public listings.')) return;
+    await api.patch(`/admin/organizations/${id}/status`, { isActive: false, verificationStatus: 'SUSPENDED', isPubliclyListed: false });
+    refetch();
+  };
+
+  const unblockOrg = async (id: string) => {
+    await api.patch(`/admin/organizations/${id}/status`, { isActive: true, verificationStatus: 'APPROVED', isPubliclyListed: true });
+    refetch();
+  };
+
+  const deleteOrg = async (id: string, name: string) => {
+    if (!confirmAction(`Permanently delete "${name}"? This cannot be undone.`)) return;
+    const res = await api.delete(`/admin/organizations/${id}`);
+    if (!res.success) alert(res.error || 'Delete failed');
+    refetch();
+  };
 
   return (
     <DashboardLayout portal="admin">
@@ -36,25 +88,42 @@ function OrgListPage({ type, title, subtitle }: { type: string; title: string; s
             { key: 'city', label: 'City' },
             { key: 'verificationStatus', label: 'Status', render: (r) => <StatusBadge status={r.verificationStatus as string} /> },
             { key: 'doctors', label: 'Doctors', render: (r) => String((r._count as { doctors?: number })?.doctors || 0) },
-            { key: 'actions', label: 'Actions', render: (r) => (
-              <div className="flex flex-wrap gap-2">
-                {r.verificationStatus === 'PENDING' && (
-                  <>
-                    <ActionBtn onClick={() => api.post(`/ai/approvals/organizations/${r.id}/analyze`, {}).then(() => alert('Verification analysis submitted — check AI Approvals queue'))}>AI Verify</ActionBtn>
+            { key: 'actions', label: 'Actions', render: (r) => {
+              const suspended = r.verificationStatus === 'SUSPENDED' || r.isActive === false;
+              return (
+                <AdminRowActions
+                  onEdit={() => openEdit(r)}
+                  onDelete={() => deleteOrg(r.id as string, String(r.name))}
+                  isBlocked={suspended}
+                  onBlock={!suspended ? () => blockOrg(r.id as string) : undefined}
+                  onUnblock={suspended ? () => unblockOrg(r.id as string) : undefined}
+                  onLoginAs={() => impersonateOrganization(r.id as string)}
+                  loginAsLabel="Login as Admin"
+                  extra={r.verificationStatus === 'PENDING' ? (
                     <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => refetch())}>Approve</ActionBtn>
-                  </>
-                )}
-                {r.verificationStatus === 'APPROVED' && (
-                  <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: false, verificationStatus: 'SUSPENDED' }).then(() => refetch())}>Suspend</ActionBtn>
-                )}
-                {r.verificationStatus === 'SUSPENDED' && (
-                  <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: true, verificationStatus: 'APPROVED' }).then(() => refetch())}>Activate</ActionBtn>
-                )}
-                <ActionBtn onClick={() => handleImpersonate(r.id as string)}>Login as Admin</ActionBtn>
-              </div>
-            )},
+                  ) : undefined}
+                />
+              );
+            }},
           ]}
           rows={(data?.data as Record<string, unknown>[]) || []}
+        />
+      )}
+
+      {edit?.type === 'organization' && (
+        <AdminEditModal
+          title="Edit Organization"
+          fields={[
+            { key: 'name', label: 'Name', required: true },
+            { key: 'city', label: 'City' },
+            { key: 'phone', label: 'Phone' },
+            { key: 'email', label: 'Email', type: 'email' },
+          ]}
+          values={edit.values}
+          onChange={(key, value) => setEdit({ ...edit, values: { ...edit.values, [key]: value } })}
+          onClose={() => setEdit(null)}
+          onSave={saveEdit}
+          saving={saving}
         />
       )}
     </DashboardLayout>
@@ -64,22 +133,88 @@ function OrgListPage({ type, title, subtitle }: { type: string; title: string; s
 // ─── Doctors ─────────────────────────────────────────────────────────────────
 
 export function AdminDoctorsPage() {
+  const [edit, setEdit] = useState<EditState>(null);
+  const [saving, setSaving] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/doctors', '?limit=50');
+
+  const saveEdit = async () => {
+    if (!edit) return;
+    setSaving(true);
+    try {
+      await api.patch(`/admin/doctors/${edit.id}`, edit.values);
+      setEdit(null);
+      refetch();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Doctor Management" subtitle="Approve, verify, suspend doctors platform-wide" />
+      <PageHeader title="Doctor Management" subtitle="Edit, block, delete, or login as doctor" />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'fullName', label: 'Name' },
           { key: 'specialization', label: 'Specialization' },
           { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name || '-') },
           { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'SUSPENDED'} /> },
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <ActionBtn variant={r.isActive ? 'danger' : 'success'} onClick={() => api.patch(`/admin/doctors/${r.id}/status`, { isActive: !r.isActive }).then(() => refetch())}>
-              {r.isActive ? 'Suspend' : 'Activate'}
-            </ActionBtn>
-          )},
+          { key: 'actions', label: 'Actions', render: (r) => {
+            const user = r.user as { isActive?: boolean; id?: string } | undefined;
+            const active = r.isActive !== false && user?.isActive !== false;
+            return (
+              <AdminRowActions
+                onEdit={() => setEdit({
+                  type: 'doctor',
+                  id: r.id as string,
+                  values: {
+                    fullName: String(r.fullName || ''),
+                    specialization: String(r.specialization || ''),
+                    qualification: String(r.qualification || ''),
+                    experience: Number(r.experience || 0),
+                    consultationFee: Number(r.consultationFee || 0),
+                  },
+                })}
+                onDelete={async () => {
+                  if (!confirmAction(`Delete doctor "${r.fullName}"?`)) return;
+                  const res = await api.delete(`/admin/doctors/${r.id}`);
+                  if (res.message) alert(res.message);
+                  if (!res.success) alert(res.error || 'Delete failed');
+                  refetch();
+                }}
+                isBlocked={!active}
+                onBlock={active ? async () => {
+                  if (!confirmAction(`Block doctor "${r.fullName}"?`)) return;
+                  await api.patch(`/admin/doctors/${r.id}/status`, { isActive: false });
+                  refetch();
+                } : undefined}
+                onUnblock={!active ? async () => {
+                  await api.patch(`/admin/doctors/${r.id}/status`, { isActive: true });
+                  refetch();
+                } : undefined}
+                onLoginAs={user?.id ? () => impersonateUser(user.id!) : undefined}
+                loginAsLabel="Login as Doctor"
+              />
+            );
+          }},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+      )}
+
+      {edit?.type === 'doctor' && (
+        <AdminEditModal
+          title="Edit Doctor"
+          fields={[
+            { key: 'fullName', label: 'Full Name', required: true },
+            { key: 'specialization', label: 'Specialization' },
+            { key: 'qualification', label: 'Qualification' },
+            { key: 'experience', label: 'Experience (years)', type: 'number' },
+            { key: 'consultationFee', label: 'Consultation Fee', type: 'number' },
+          ]}
+          values={edit.values}
+          onChange={(key, value) => setEdit({ ...edit, values: { ...edit.values, [key]: value } })}
+          onClose={() => setEdit(null)}
+          onSave={saveEdit}
+          saving={saving}
+        />
       )}
     </DashboardLayout>
   );
@@ -88,6 +223,8 @@ export function AdminDoctorsPage() {
 // ─── Patients ────────────────────────────────────────────────────────────────
 
 export function AdminPatientsPage() {
+  const [edit, setEdit] = useState<EditState>(null);
+  const [saving, setSaving] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/patients', '?limit=50');
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const { data: duplicates } = useQuery({
@@ -103,9 +240,21 @@ export function AdminPatientsPage() {
   const refreshCompletion = (id: string) =>
     api.post(`/ai/patients/${id}/completion`, {}).then(() => refetch());
 
+  const saveEdit = async () => {
+    if (!edit) return;
+    setSaving(true);
+    try {
+      await api.patch(`/admin/patients/${edit.id}`, edit.values);
+      setEdit(null);
+      refetch();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Patient Management" subtitle="View patients, profile completion, duplicates, and AI timelines" actions={
+      <PageHeader title="Patient Management" subtitle="Edit, block, delete, or login as patient" actions={
         <ActionBtn onClick={() => api.post('/ai/patients/batch-completion', {}).then(() => refetch())}>Refresh All Completion %</ActionBtn>
       } />
 
@@ -129,16 +278,66 @@ export function AdminPatientsPage() {
           }},
           { key: 'appointments', label: 'Appointments', render: (r) => String((r._count as { appointments?: number })?.appointments || 0) },
           { key: 'actions', label: 'Actions', render: (r) => {
-            const active = (r.user as { isActive?: boolean })?.isActive;
+            const user = r.user as { isActive?: boolean; id?: string; email?: string } | undefined;
+            const active = user?.isActive !== false;
             return (
-              <div className="flex flex-wrap gap-2">
-                <ActionBtn onClick={() => setSelectedPatient(r.id as string)}>Timeline</ActionBtn>
-                <ActionBtn onClick={() => refreshCompletion(r.id as string)}>Score</ActionBtn>
-                <ActionBtn variant={active ? 'danger' : 'success'} onClick={() => api.patch(`/admin/patients/${r.id}/status`, { isActive: !active }).then(() => refetch())}>{active ? 'Block' : 'Unblock'}</ActionBtn>
-              </div>
+              <AdminRowActions
+                onEdit={() => setEdit({
+                  type: 'patient',
+                  id: r.id as string,
+                  values: {
+                    fullName: String(r.fullName || ''),
+                    email: String(user?.email || ''),
+                    city: String(r.city || ''),
+                    phone: String((user as { phone?: string })?.phone || ''),
+                  },
+                })}
+                onDelete={async () => {
+                  if (!confirmAction(`Delete patient "${r.fullName}"?`)) return;
+                  const res = await api.delete(`/admin/patients/${r.id}`);
+                  if (res.message) alert(res.message);
+                  if (!res.success) alert(res.error || 'Delete failed');
+                  refetch();
+                }}
+                isBlocked={!active}
+                onBlock={active ? async () => {
+                  if (!confirmAction(`Block patient "${r.fullName}"?`)) return;
+                  await api.patch(`/admin/patients/${r.id}/status`, { isActive: false });
+                  refetch();
+                } : undefined}
+                onUnblock={!active ? async () => {
+                  await api.patch(`/admin/patients/${r.id}/status`, { isActive: true });
+                  refetch();
+                } : undefined}
+                onLoginAs={user?.id ? () => impersonateUser(user.id!) : undefined}
+                loginAsLabel="Login as Patient"
+                extra={
+                  <>
+                    <ActionBtn onClick={() => setSelectedPatient(r.id as string)}>Timeline</ActionBtn>
+                    <ActionBtn onClick={() => refreshCompletion(r.id as string)}>Score</ActionBtn>
+                  </>
+                }
+              />
             );
           }},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+      )}
+
+      {edit?.type === 'patient' && (
+        <AdminEditModal
+          title="Edit Patient"
+          fields={[
+            { key: 'fullName', label: 'Full Name', required: true },
+            { key: 'email', label: 'Email', type: 'email' },
+            { key: 'city', label: 'City' },
+            { key: 'phone', label: 'Phone' },
+          ]}
+          values={edit.values}
+          onChange={(key, value) => setEdit({ ...edit, values: { ...edit.values, [key]: value } })}
+          onClose={() => setEdit(null)}
+          onSave={saveEdit}
+          saving={saving}
+        />
       )}
 
       {selectedPatient && timeline?.data ? (
@@ -178,8 +377,14 @@ export function AdminAppointmentsPage() {
           { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name) },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
           { key: 'risk', label: 'No-Show Risk', render: (r) => r.noShowRisk ? <StatusBadge status={r.noShowRisk === 'HIGH' ? 'URGENT' : r.noShowRisk === 'MEDIUM' ? 'PENDING' : 'ACTIVE'} /> : '-' },
-          { key: 'actions', label: 'Actions', render: (r) => r.status !== 'CANCELLED' && (
-            <ActionBtn variant="danger" onClick={() => api.patch(`/admin/appointments/${r.id}/status`, { status: 'CANCELLED' }).then(() => refetch())}>Cancel</ActionBtn>
+          { key: 'actions', label: 'Actions', render: (r) => (
+            <AdminRowActions
+              onDelete={r.status !== 'CANCELLED' ? async () => {
+                if (!confirmAction('Cancel this appointment?')) return;
+                await api.patch(`/admin/appointments/${r.id}/status`, { status: 'CANCELLED' });
+                refetch();
+              } : undefined}
+            />
           )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
       )}
