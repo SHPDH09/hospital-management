@@ -87,12 +87,20 @@ export function ActionBtn({ onClick, children, variant = 'primary' }: { onClick:
   );
 }
 
-export type EditField = { name: string; label: string; type?: 'text' | 'number' | 'textarea' };
+export type EditField = {
+  name: string;
+  label: string;
+  type?: 'text' | 'number' | 'textarea' | 'password' | 'email' | 'select';
+  options?: { value: string; label: string }[];
+  required?: boolean;
+  placeholder?: string;
+};
 
-export function EditModal({ title, fields, initial, onClose, onSave }: {
+export function EditModal({ title, fields, initial = {}, submitLabel = 'Save', onClose, onSave }: {
   title: string;
   fields: EditField[];
-  initial: Record<string, unknown>;
+  initial?: Record<string, unknown>;
+  submitLabel?: string;
   onClose: () => void;
   onSave: (values: Record<string, unknown>) => Promise<void> | void;
 }) {
@@ -107,8 +115,13 @@ export function EditModal({ title, fields, initial, onClose, onSave }: {
   const setField = (name: string, value: string) => setValues((s) => ({ ...s, [name]: value }));
 
   const submit = async () => {
-    setSaving(true);
     setError(null);
+    const missing = fields.filter((f) => f.required && !String(values[f.name] ?? '').trim());
+    if (missing.length > 0) {
+      setError(`Please fill in: ${missing.map((f) => f.label).join(', ')}`);
+      return;
+    }
+    setSaving(true);
     const out: Record<string, unknown> = {};
     for (const f of fields) {
       const raw = values[f.name];
@@ -131,18 +144,31 @@ export function EditModal({ title, fields, initial, onClose, onSave }: {
         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           {fields.map((f) => (
             <div key={f.name}>
-              <label className="block text-xs font-medium text-gray-500 mb-1">{f.label}</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                {f.label}{f.required && <span className="text-red-500"> *</span>}
+              </label>
               {f.type === 'textarea' ? (
-                <textarea className="input w-full" rows={3} value={values[f.name]} onChange={(e) => setField(f.name, e.target.value)} />
+                <textarea className="input w-full" rows={3} value={values[f.name]} placeholder={f.placeholder} onChange={(e) => setField(f.name, e.target.value)} />
+              ) : f.type === 'select' ? (
+                <select className="input w-full" value={values[f.name]} onChange={(e) => setField(f.name, e.target.value)}>
+                  <option value="">Select...</option>
+                  {(f.options || []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               ) : (
-                <input className="input w-full" type={f.type === 'number' ? 'number' : 'text'} value={values[f.name]} onChange={(e) => setField(f.name, e.target.value)} />
+                <input
+                  className="input w-full"
+                  type={f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : f.type === 'email' ? 'email' : 'text'}
+                  value={values[f.name]}
+                  placeholder={f.placeholder}
+                  onChange={(e) => setField(f.name, e.target.value)}
+                />
               )}
             </div>
           ))}
         </div>
         <div className="flex justify-end gap-2 mt-6">
           <button className="btn-secondary text-sm" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn-primary text-sm" onClick={submit} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+          <button className="btn-primary text-sm" onClick={submit} disabled={saving}>{saving ? 'Saving...' : submitLabel}</button>
         </div>
       </div>
     </div>

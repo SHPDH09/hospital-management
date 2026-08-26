@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { JwtPayload } from '@healthcare/shared';
 import { prisma } from '../../lib/prisma';
-import { hashPassword, signAccessToken, signRefreshToken } from '../../lib/auth';
+import { hashPassword, signAccessToken, signRefreshToken, slugify } from '../../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../../lib/response';
 import { paramId } from '../../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../middleware/auth';
@@ -165,6 +165,68 @@ router.get('/organizations', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const createOrgSchema = z.object({
+  name: z.string().min(2),
+  type: z.enum(['HOSPITAL', 'CLINIC', 'DIAGNOSTIC_CENTER', 'PHARMACY']).default('HOSPITAL'),
+  email: z.string().email(),
+  password: z.string().min(8),
+  ownerName: z.string().min(2),
+  phone: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  address: z.string().optional(),
+  pinCode: z.string().optional(),
+});
+
+router.post('/organizations', validateBody(createOrgSchema), async (req: AuthRequest, res, next) => {
+  try {
+    const data = req.body;
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) throw new AppError('Email already registered', 409);
+
+    let slug = slugify(data.name);
+    if (await prisma.organization.findUnique({ where: { slug } })) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const defaultPlan = await prisma.subscriptionPlan.findFirst({ where: { isDefault: true } })
+      || await prisma.subscriptionPlan.findFirst({ where: { code: 'basic' } });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { email: data.email, phone: data.phone, passwordHash, role: 'HOSPITAL_ADMIN', emailVerified: true },
+      });
+      // Admin-created organizations are approved and listed immediately.
+      const organization = await tx.organization.create({
+        data: {
+          name: data.name, slug, type: data.type, email: data.email, phone: data.phone,
+          address: data.address, city: data.city, state: data.state, pinCode: data.pinCode,
+          ownerName: data.ownerName, verificationStatus: 'APPROVED', isActive: true, isPubliclyListed: true,
+        },
+      });
+      await tx.staff.create({
+        data: { userId: user.id, organizationId: organization.id, fullName: data.ownerName, role: 'HOSPITAL_ADMIN' },
+      });
+      if (defaultPlan) {
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 1);
+        await tx.subscription.create({
+          data: {
+            organizationId: organization.id, planId: defaultPlan.id, status: 'ACTIVE',
+            billingCycle: 'MONTHLY', price: defaultPlan.monthlyPrice ?? defaultPlan.price,
+            endDate, changeSource: 'SYSTEM',
+          },
+        });
+      }
+      return organization;
+    });
+
+    await logAudit(req, 'CREATE', 'Organization', result.id, { name: data.name, type: data.type });
+    sendSuccess(res, result, `${data.type === 'CLINIC' ? 'Clinic' : 'Organization'} created`, 201);
+  } catch (err) { next(err); }
+});
+
 router.get('/organizations/:id', async (req, res, next) => {
   try {
     const id = paramId(req.params.id);
@@ -257,6 +319,46 @@ router.get('/doctors', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const createDoctorSchema = z.object({
+  organizationId: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(8),
+  fullName: z.string().min(2),
+  specialization: z.string().optional(),
+  qualification: z.string().optional(),
+  experience: z.coerce.number().int().nonnegative().optional(),
+  consultationFee: z.coerce.number().nonnegative().optional(),
+  registrationNumber: z.string().optional(),
+});
+
+router.post('/doctors', validateBody(createDoctorSchema), async (req: AuthRequest, res, next) => {
+  try {
+    const data = req.body;
+    const org = await prisma.organization.findUnique({ where: { id: data.organizationId }, select: { id: true } });
+    if (!org) throw new AppError('Organization not found', 404);
+    if (await prisma.user.findUnique({ where: { email: data.email } })) {
+      throw new AppError('Email already registered', 409);
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const doctor = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { email: data.email, passwordHash, role: 'DOCTOR', emailVerified: true } });
+      return tx.doctor.create({
+        data: {
+          userId: user.id, organizationId: data.organizationId, fullName: data.fullName,
+          specialization: data.specialization, qualification: data.qualification,
+          experience: data.experience, consultationFee: data.consultationFee ?? 0,
+          registrationNumber: data.registrationNumber,
+        },
+        include: { organization: { select: { name: true } }, user: { select: { email: true, isActive: true } } },
+      });
+    });
+
+    await logAudit(req, 'CREATE', 'Doctor', doctor.id, { fullName: data.fullName, email: data.email });
+    sendSuccess(res, doctor, 'Doctor created', 201);
+  } catch (err) { next(err); }
+});
+
 router.patch('/doctors/:id/status', async (req: AuthRequest, res, next) => {
   try {
     const id = paramId(req.params.id);
@@ -328,6 +430,36 @@ router.get('/patients', async (req, res, next) => {
       prisma.patient.count({ where }),
     ]);
     sendPaginated(res, patients, { page, limit, total });
+  } catch (err) { next(err); }
+});
+
+const createPatientSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  fullName: z.string().min(2),
+  phone: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+});
+
+router.post('/patients', validateBody(createPatientSchema), async (req: AuthRequest, res, next) => {
+  try {
+    const data = req.body;
+    if (await prisma.user.findUnique({ where: { email: data.email } })) {
+      throw new AppError('Email already registered', 409);
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const patient = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { email: data.email, phone: data.phone, passwordHash, role: 'PATIENT', emailVerified: true } });
+      return tx.patient.create({
+        data: { userId: user.id, fullName: data.fullName, city: data.city, state: data.state },
+        include: { user: { select: { email: true, isActive: true } } },
+      });
+    });
+
+    await logAudit(req, 'CREATE', 'Patient', patient.id, { fullName: data.fullName, email: data.email });
+    sendSuccess(res, patient, 'Patient created', 201);
   } catch (err) { next(err); }
 });
 

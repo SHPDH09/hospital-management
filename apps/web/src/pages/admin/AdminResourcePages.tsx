@@ -49,15 +49,31 @@ const ORG_EDIT_FIELDS: EditField[] = [
   { name: 'address', label: 'Address', type: 'textarea' },
 ];
 
+const ORG_CREATE_FIELDS: EditField[] = [
+  { name: 'name', label: 'Name', required: true },
+  { name: 'ownerName', label: 'Owner / Admin Name', required: true },
+  { name: 'email', label: 'Login Email', type: 'email', required: true },
+  { name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Min 8 characters' },
+  { name: 'phone', label: 'Phone' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+  { name: 'address', label: 'Address', type: 'textarea' },
+];
+
 function OrgListPage({ type, title, subtitle }: { type: string; title: string; subtitle: string }) {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/organizations', `?type=${type}&search=${search}&limit=50`);
+  const entity = type === 'CLINIC' ? 'Clinic' : 'Hospital';
 
   return (
     <DashboardLayout portal="admin">
       <PageHeader title={title} subtitle={subtitle} actions={
-        <input className="input text-sm" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <>
+          <input className="input text-sm" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button className="btn-primary text-sm whitespace-nowrap" onClick={() => setCreating(true)}>+ Add {entity}</button>
+        </>
       } />
       {isLoading ? <LoadingState /> : (
         <AdminTable
@@ -100,6 +116,20 @@ function OrgListPage({ type, title, subtitle }: { type: string; title: string; s
           }}
         />
       )}
+      {creating && (
+        <EditModal
+          title={`Add ${entity}`}
+          fields={ORG_CREATE_FIELDS}
+          submitLabel={`Create ${entity}`}
+          onClose={() => setCreating(false)}
+          onSave={async (values) => {
+            const res = await api.post('/admin/organizations', { ...values, type });
+            if (!res.success) throw new Error(res.error || 'Create failed');
+            setCreating(false);
+            refetch();
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
@@ -117,10 +147,25 @@ const DOCTOR_EDIT_FIELDS: EditField[] = [
 
 export function AdminDoctorsPage() {
   const [editing, setEditing] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/doctors', '?limit=50');
+  const { data: orgData } = useAdminList('/admin/organizations', '?limit=100');
+  const orgOptions = ((orgData?.data as Row[]) || []).map((o) => ({ value: String(o.id), label: String(o.name) }));
+  const doctorCreateFields: EditField[] = [
+    { name: 'organizationId', label: 'Organization', type: 'select', options: orgOptions, required: true },
+    { name: 'fullName', label: 'Full Name', required: true },
+    { name: 'email', label: 'Login Email', type: 'email', required: true },
+    { name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Min 8 characters' },
+    { name: 'specialization', label: 'Specialization' },
+    { name: 'qualification', label: 'Qualification' },
+    { name: 'experience', label: 'Experience (years)', type: 'number' },
+    { name: 'consultationFee', label: 'Consultation Fee', type: 'number' },
+  ];
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Doctor Management" subtitle="Edit, block, impersonate or remove doctors platform-wide" />
+      <PageHeader title="Doctor Management" subtitle="Edit, block, impersonate or remove doctors platform-wide" actions={
+        <button className="btn-primary text-sm whitespace-nowrap" onClick={() => setCreating(true)}>+ Add Doctor</button>
+      } />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'fullName', label: 'Name' },
@@ -153,6 +198,20 @@ export function AdminDoctorsPage() {
           }}
         />
       )}
+      {creating && (
+        <EditModal
+          title="Add Doctor"
+          fields={doctorCreateFields}
+          submitLabel="Create Doctor"
+          onClose={() => setCreating(false)}
+          onSave={async (values) => {
+            const res = await api.post('/admin/doctors', values);
+            if (!res.success) throw new Error(res.error || 'Create failed');
+            setCreating(false);
+            refetch();
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
@@ -168,12 +227,24 @@ const PATIENT_EDIT_FIELDS: EditField[] = [
   { name: 'address', label: 'Address', type: 'textarea' },
 ];
 
+const PATIENT_CREATE_FIELDS: EditField[] = [
+  { name: 'fullName', label: 'Full Name', required: true },
+  { name: 'email', label: 'Login Email', type: 'email', required: true },
+  { name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Min 8 characters' },
+  { name: 'phone', label: 'Phone' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+];
+
 export function AdminPatientsPage() {
   const [editing, setEditing] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/patients', '?limit=50');
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Patient Management" subtitle="Edit, block, impersonate or remove patients" />
+      <PageHeader title="Patient Management" subtitle="Edit, block, impersonate or remove patients" actions={
+        <button className="btn-primary text-sm whitespace-nowrap" onClick={() => setCreating(true)}>+ Add Patient</button>
+      } />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'fullName', label: 'Name' },
@@ -204,6 +275,20 @@ export function AdminPatientsPage() {
             const res = await api.patch(`/admin/patients/${editing.id}`, values);
             if (!res.success) throw new Error(res.error || 'Update failed');
             setEditing(null);
+            refetch();
+          }}
+        />
+      )}
+      {creating && (
+        <EditModal
+          title="Add Patient"
+          fields={PATIENT_CREATE_FIELDS}
+          submitLabel="Create Patient"
+          onClose={() => setCreating(false)}
+          onSave={async (values) => {
+            const res = await api.post('/admin/patients', values);
+            if (!res.success) throw new Error(res.error || 'Create failed');
+            setCreating(false);
             refetch();
           }}
         />
