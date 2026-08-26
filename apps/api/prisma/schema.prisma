@@ -63,6 +63,44 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+  INITIATED
+  PROCESSING
+  AUTHORIZED
+  CAPTURED
+  CANCELLED
+  EXPIRED
+  PARTIAL_REFUND
+  DISPUTED
+}
+
+enum PaymentPurpose {
+  APPOINTMENT
+  CONSULTATION
+  FOLLOW_UP
+  ONLINE_CONSULTATION
+  EMERGENCY
+  HOME_VISIT
+  SERVICE
+  DIAGNOSTIC
+  HEALTH_PACKAGE
+  PROCEDURE
+  TREATMENT
+  SUBSCRIPTION
+  ADVERTISEMENT
+  REFERRAL_COMMISSION
+  OTHER
+}
+
+enum PaymentMethod {
+  UPI
+  CREDIT_CARD
+  DEBIT_CARD
+  NET_BANKING
+  WALLET
+  PAYMENT_LINK
+  CASH
+  POS
+  BANK_TRANSFER
 }
 
 enum SubscriptionPlanTier {
@@ -143,9 +181,85 @@ enum LeadStatus {
   NEW
   CONTACTED
   INTERESTED
+  QUALIFIED
+  FOLLOW_UP
   APPOINTMENT_BOOKED
+  VISITED
+  TREATMENT_STARTED
   CONVERTED
+  NOT_INTERESTED
+  WRONG_NUMBER
+  DUPLICATE
   LOST
+  INVALID
+}
+
+enum LeadType {
+  PATIENT
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  REFERRAL
+  ADVERTISEMENT
+  PARTNER
+}
+
+enum LeadSource {
+  WEBSITE
+  MOBILE_APP
+  GOOGLE
+  SOCIAL_MEDIA
+  ADVERTISEMENT
+  REFERRAL
+  AASHA
+  DOCTOR_REFERRAL
+  CAMPAIGN
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  PARTNER
+  CALL
+  WHATSAPP
+  EMAIL
+  MANUAL_ENTRY
+  API
+}
+
+enum LeadPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ReviewType {
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  SERVICE
+  APPOINTMENT
+}
+
+enum ReviewStatus {
+  PENDING
+  UNDER_MODERATION
+  APPROVED
+  REJECTED
+  HIDDEN
+  REPORTED
+  FLAGGED
+  REMOVED
+  RESTORED
+}
+
+enum ReviewSource {
+  PLATFORM
+  WEBSITE
+  MOBILE_APP
+  APPOINTMENT
+  QR_CODE
+  CAMPAIGN
+  HOSPITAL
+  CLINIC
 }
 
 enum Gender {
@@ -185,6 +299,17 @@ model User {
   patientPhoneOtps   PatientPhoneOtp[]
   platformStaffProfile PlatformStaffProfile?
   passwordHistory    PasswordHistory[]
+  ashaProfile         AshaProfile?
+  referralPartner     ReferralPartner?
+  reviewReports       ReviewReport[] @relation("ReviewReports")
+  submittedApplications VerificationApplication[] @relation("SubmittedApplications")
+  verifierAssignments VerificationApplication[] @relation("VerifierAssignments")
+  verifiedDocuments   VerificationDocument[]
+  verificationAuditLogs VerificationAuditLog[]
+  leadActivities      LeadActivity[] @relation("LeadActivities")
+  leadFollowUpAssignments LeadFollowUp[] @relation("LeadFollowUpAssignee")
+  reviewActivities    ReviewActivity[] @relation("ReviewActivities")
+  moderatedReviews    Review[] @relation("ReviewModerator")
 
   @@map("users")
 }
@@ -226,6 +351,7 @@ model Organization {
   facilities         String[]
   ownerName          String?
   registrationNumber String?
+  accountActivated   Boolean            @default(false)
   averageRating      Float              @default(0)
   reviewCount        Int                @default(0)
   createdAt          DateTime           @default(now())
@@ -247,6 +373,14 @@ model Organization {
   complaints      Complaint[]
   coupons         Coupon[]
   platformStaffAssignments PlatformStaffAssignment[]
+  referralCommissionPlans ReferralCommissionPlan[]
+  referralConnections ReferralHospitalConnection[]
+  referralCampaigns ReferralCampaign[]
+  patientReferrals PatientReferralAttribution[]
+  referralCommissions ReferralCommission[]
+  referralSettings OrganizationReferralSettings?
+  verificationApplication VerificationApplication?
+  auditLogs       OrganizationAuditLog[]
 
   @@index([city, state])
   @@index([verificationStatus, isActive, isPubliclyListed])
@@ -312,6 +446,10 @@ model Patient {
   appointments  Appointment[]
   bills         Bill[]
   reviews       Review[]
+  referralAttributions PatientReferralAttribution[]
+  referralCommissions ReferralCommission[]
+  referralEvents ReferralTrackingEvent[]
+  leads         Lead[]
 
   @@map("patients")
 }
@@ -364,6 +502,8 @@ model Doctor {
   slots        AppointmentSlot[]
   reviews      Review[]
   advertisements Advertisement[]
+  interestedLeads Lead[]
+  verificationApplication VerificationApplication?
 
   @@index([organizationId])
   @@index([specialization])
@@ -429,6 +569,7 @@ model Service {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   billItems    BillItem[]
+  reviews      Review[]
 
   @@index([organizationId])
   @@map("services")
@@ -490,6 +631,8 @@ model Appointment {
   department   Department?      @relation(fields: [departmentId], references: [id])
   slot         AppointmentSlot? @relation(fields: [slotId], references: [id])
   bills        Bill[]
+  reviews      Review[]
+  leads        Lead[]
 
   @@index([organizationId, appointmentDate])
   @@index([doctorId, appointmentDate, status])
@@ -539,17 +682,37 @@ model BillItem {
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  billId        String
-  amount        Float
-  method        String
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
+  id                   String         @id @default(uuid())
+  billId               String
+  paymentNumber        String?        @unique
+  amount               Float
+  method               String
+  purpose              PaymentPurpose @default(APPOINTMENT)
+  status               PaymentStatus  @default(PENDING)
+  transactionId        String?
+  gatewayPaymentId     String?
+  gatewayOrderId       String?
+  platformFee          Float          @default(0)
+  providerShare        Float          @default(0)
+  referralCommission   Float          @default(0)
+  refundAmount         Float          @default(0)
+  refundReason         String?
+  refundId             String?
+  webhookStatus        String?
+  webhookVerified      Boolean        @default(false)
+  riskLevel            String         @default("LOW")
+  reconciliationStatus String?
+  paidAt               DateTime?
+  capturedAt           DateTime?
+  failedAt             DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
+  @@index([paymentNumber])
+  @@index([status, createdAt])
+  @@index([gatewayPaymentId])
   @@map("payments")
 }
 
@@ -745,8 +908,8 @@ model Lead {
   name               String?
   email              String?
   phone              String?
-  source             String?
-  type               String?
+  source             LeadSource       @default(WEBSITE)
+  type               LeadType         @default(PATIENT)
   city               String?
   state              String?
   campaign           String?
@@ -756,11 +919,11 @@ model Lead {
   service            String?
   preferredDate      DateTime?
   preferredTime      String?
-  priority           String?
+  priority           LeadPriority?    @default(MEDIUM)
   status             LeadStatus      @default(NEW)
   notes              String?
   score              Int             @default(0)
-  temperature        String          @default("COLD")
+  temperature        LeadTemperature @default(COLD)
   assignedToId       String?
   assignedAt         DateTime?
   interestedDoctorId String?
@@ -783,6 +946,9 @@ model Lead {
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   advertisement Advertisement? @relation(fields: [advertisementId], references: [id])
   assignedTo    User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  interestedDoctor Doctor?     @relation(fields: [interestedDoctorId], references: [id])
+  patient       Patient?       @relation(fields: [patientId], references: [id])
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
   activities    LeadActivity[]
   followUps     LeadFollowUp[]
 
@@ -804,33 +970,90 @@ model LeadFollowUp {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("LeadFollowUpAssignee", fields: [assignedToId], references: [id])
 
   @@index([leadId, scheduledAt])
   @@map("lead_follow_ups")
 }
 
 model Review {
-  id             String   @id @default(uuid())
-  patientId      String
-  organizationId String?
-  doctorId       String?
-  rating         Int
-  comment        String?
-  response       String?
-  isPublished    Boolean  @default(true)
-  sentiment      ReviewSentiment?
-  topics         String[] @default([])
-  riskScore      String   @default("LOW")
-  aiSummary      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String          @id @default(uuid())
+  reviewNumber     String?         @unique
+  patientId        String
+  organizationId   String?
+  doctorId         String?
+  appointmentId    String?
+  type             ReviewType      @default(HOSPITAL)
+  status           ReviewStatus    @default(PENDING)
+  source           ReviewSource    @default(PLATFORM)
+  rating           Int
+  comment          String?
+  response         String?
+  responseStatus   String?
+  moderationReason String?
+  moderatedById    String?
+  moderatedAt      DateTime?
+  respondedAt      DateTime?
+  serviceId        String?
+  isPublished      Boolean         @default(false)
+  isVerifiedVisit  Boolean         @default(false)
+  isAnonymous      Boolean         @default(false)
+  reportCount      Int             @default(0)
+  sentiment        ReviewSentiment?
+  topics           String[]        @default([])
+  riskScore        String          @default("LOW")
+  aiSummary        String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
-  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+  patient      Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id])
+  doctor       Doctor?          @relation(fields: [doctorId], references: [id])
+  appointment  Appointment?     @relation(fields: [appointmentId], references: [id])
+  service      Service?         @relation(fields: [serviceId], references: [id])
+  moderatedBy  User?            @relation("ReviewModerator", fields: [moderatedById], references: [id])
+  reports      ReviewReport[]
+  activities   ReviewActivity[]
 
+  @@index([status, createdAt])
+  @@index([organizationId, status])
   @@map("reviews")
+}
+
+model ReviewActivity {
+  id        String        @id @default(uuid())
+  reviewId  String
+  userId    String?
+  action    String
+  oldStatus ReviewStatus?
+  newStatus ReviewStatus?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User?  @relation("ReviewActivities", fields: [userId], references: [id])
+
+  @@index([reviewId, createdAt])
+  @@map("review_activities")
+}
+
+model ReviewReport {
+  id         String    @id @default(uuid())
+  reviewId   String
+  reporterId String?
+  reason     String
+  details    String?
+  status     String    @default("PENDING")
+  decision   String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporter User?  @relation("ReviewReports", fields: [reporterId], references: [id])
+
+  @@index([reviewId])
+  @@map("review_reports")
 }
 
 model Document {
@@ -1876,14 +2099,17 @@ model JobQueue {
 }
 
 model LeadActivity {
-  id        String   @id @default(uuid())
+  id        String      @id @default(uuid())
   leadId    String
   userId    String?
   action    String
+  oldStatus LeadStatus?
+  newStatus LeadStatus?
   notes     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation("LeadActivities", fields: [userId], references: [id])
 
   @@index([leadId, createdAt])
   @@map("lead_activities")
@@ -2297,4 +2523,490 @@ model PatientPhoneOtp {
 
   @@index([userId, phone])
   @@map("patient_phone_otps")
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  DOCUMENTS_REQUIRED
+  VERIFICATION_IN_PROGRESS
+  APPROVED
+  REJECTED
+  SUSPENDED
+  EXPIRED
+  RE_VERIFICATION_REQUIRED
+}
+
+enum VerificationApplicationType {
+  HOSPITAL
+  CLINIC
+  DOCTOR
+  AASHA
+  REFERRAL_PARTNER
+}
+
+enum DocumentVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REUPLOAD_REQUIRED
+}
+
+enum VerificationRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReferralAgentStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+  REJECTED
+}
+
+enum ReferralConnectionStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DISCONNECTED
+}
+
+enum ReferralEventType {
+  LINK_GENERATED
+  LINK_CLICK
+  QR_SCAN
+  LANDING_VISIT
+  FORM_STARTED
+  FORM_SUBMITTED
+  PATIENT_REGISTERED
+  APPOINTMENT_BOOKED
+  PATIENT_VISITED
+  TREATMENT_COMPLETED
+  COMMISSION_ELIGIBLE
+  COMMISSION_PAID
+}
+
+enum CommissionStatus {
+  NOT_ELIGIBLE
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  PAYABLE
+  PAID
+  REJECTED
+  REVERSED
+  ON_HOLD
+}
+
+enum CommissionRuleType {
+  FIXED
+  TREATMENT_BASED
+  PERCENTAGE
+  SERVICE_BASED
+}
+
+enum PayoutStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum AttributionPolicy {
+  FIRST_CLICK
+  LAST_CLICK
+  REGISTRATION_TIME
+}
+
+model AshaProfile {
+  id                 String              @id @default(uuid())
+  userId             String?             @unique
+  ashaId             String              @unique
+  ashaName           String
+  ashaPhoto          String?
+  mobile             String?
+  email              String?
+  address            String?
+  area               String?
+  village            String?
+  district           String?
+  state              String?
+  pinCode            String?
+  idProofUrl         String?
+  joiningDate        DateTime?
+  verificationStatus VerificationStatus  @default(PENDING)
+  status             ReferralAgentStatus @default(PENDING)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  user         User?                        @relation(fields: [userId], references: [id])
+  connections  ReferralHospitalConnection[] @relation("AshaConnections")
+  campaigns    ReferralCampaign[]           @relation("AshaCampaigns")
+  events       ReferralTrackingEvent[]      @relation("AshaEvents")
+  attributions PatientReferralAttribution[] @relation("AshaAttributions")
+  commissions  ReferralCommission[]         @relation("AshaCommissions")
+  wallet       ReferralWallet?              @relation("AshaWallet")
+  verificationApplication VerificationApplication?
+
+  @@index([status])
+  @@map("asha_profiles")
+}
+
+model ReferralPartner {
+  id                   String              @id @default(uuid())
+  userId               String?             @unique
+  referralId           String              @unique
+  referralPartnerName  String
+  referralPhoto        String?
+  mobile               String?
+  email                String?
+  address              String?
+  area                 String?
+  district             String?
+  state                String?
+  pinCode              String?
+  idProofUrl           String?
+  referralCode         String              @unique
+  verificationStatus   VerificationStatus  @default(PENDING)
+  status               ReferralAgentStatus @default(PENDING)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  user         User?                        @relation(fields: [userId], references: [id])
+  connections  ReferralHospitalConnection[] @relation("PartnerConnections")
+  campaigns    ReferralCampaign[]           @relation("PartnerCampaigns")
+  events       ReferralTrackingEvent[]      @relation("PartnerEvents")
+  attributions PatientReferralAttribution[] @relation("PartnerAttributions")
+  commissions  ReferralCommission[]         @relation("PartnerCommissions")
+  wallet       ReferralWallet?              @relation("PartnerWallet")
+  verificationApplication VerificationApplication?
+
+  @@index([status])
+  @@index([referralCode])
+  @@map("referral_partners")
+}
+
+model ReferralCommissionPlan {
+  id             String             @id @default(uuid())
+  organizationId String?
+  name           String
+  ruleType       CommissionRuleType
+  rules          Json
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization?              @relation(fields: [organizationId], references: [id])
+  connections  ReferralHospitalConnection[]
+
+  @@map("referral_commission_plans")
+}
+
+model ReferralHospitalConnection {
+  id                 String                   @id @default(uuid())
+  organizationId     String
+  ashaProfileId      String?
+  referralPartnerId  String?
+  connectionDate     DateTime                 @default(now())
+  effectiveDate      DateTime?
+  status             ReferralConnectionStatus @default(PENDING)
+  commissionPlanId   String?
+  totalPatients      Int                      @default(0)
+  totalTreatments    Int                      @default(0)
+  totalCommission    Float                    @default(0)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ashaProfile     AshaProfile?            @relation("AshaConnections", fields: [ashaProfileId], references: [id])
+  referralPartner ReferralPartner?        @relation("PartnerConnections", fields: [referralPartnerId], references: [id])
+  commissionPlan  ReferralCommissionPlan? @relation(fields: [commissionPlanId], references: [id])
+
+  @@index([organizationId])
+  @@index([ashaProfileId])
+  @@index([referralPartnerId])
+  @@map("referral_hospital_connections")
+}
+
+model ReferralCampaign {
+  id                String   @id @default(uuid())
+  organizationId    String?
+  ashaProfileId     String?
+  referralPartnerId String?
+  name              String
+  referralCode      String   @unique
+  referralLink      String
+  qrCodeUrl         String?
+  clicks            Int      @default(0)
+  uniqueVisitors    Int      @default(0)
+  qrScans           Int      @default(0)
+  formsStarted      Int      @default(0)
+  formsSubmitted    Int      @default(0)
+  registrations     Int      @default(0)
+  appointments      Int      @default(0)
+  treatments        Int      @default(0)
+  revenue           Float    @default(0)
+  commission        Float    @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization    Organization?              @relation(fields: [organizationId], references: [id])
+  ashaProfile     AshaProfile?               @relation("AshaCampaigns", fields: [ashaProfileId], references: [id])
+  referralPartner ReferralPartner?           @relation("PartnerCampaigns", fields: [referralPartnerId], references: [id])
+  events          ReferralTrackingEvent[]
+  attributions    PatientReferralAttribution[]
+
+  @@index([referralCode])
+  @@map("referral_campaigns")
+}
+
+model ReferralTrackingEvent {
+  id                String            @id @default(uuid())
+  eventType         ReferralEventType
+  ashaProfileId     String?
+  referralPartnerId String?
+  organizationId    String?
+  campaignId        String?
+  patientId         String?
+  appointmentId     String?
+  metadata          Json?
+  createdAt         DateTime          @default(now())
+
+  ashaProfile     AshaProfile?     @relation("AshaEvents", fields: [ashaProfileId], references: [id])
+  referralPartner ReferralPartner? @relation("PartnerEvents", fields: [referralPartnerId], references: [id])
+  campaign        ReferralCampaign? @relation(fields: [campaignId], references: [id])
+  patient         Patient?         @relation(fields: [patientId], references: [id])
+
+  @@index([ashaProfileId, createdAt])
+  @@index([referralPartnerId, createdAt])
+  @@index([organizationId, eventType])
+  @@map("referral_tracking_events")
+}
+
+model PatientReferralAttribution {
+  id                   String            @id @default(uuid())
+  patientId            String
+  organizationId       String
+  sourceType           PatientSourceType
+  ashaProfileId        String?
+  referralPartnerId    String?
+  campaignId           String?
+  referralDisplayName  String?
+  referralDisplayId    String?
+  attributionPolicy    AttributionPolicy @default(REGISTRATION_TIME)
+  firstTouchAt         DateTime?
+  registrationTouchAt  DateTime?
+  treatmentStatus      String?
+  commissionStatus     CommissionStatus  @default(NOT_ELIGIBLE)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ashaProfile     AshaProfile?     @relation("AshaAttributions", fields: [ashaProfileId], references: [id])
+  referralPartner ReferralPartner? @relation("PartnerAttributions", fields: [referralPartnerId], references: [id])
+  campaign        ReferralCampaign? @relation(fields: [campaignId], references: [id])
+  commissions     ReferralCommission[]
+
+  @@unique([patientId, organizationId])
+  @@index([organizationId, sourceType])
+  @@map("patient_referral_attributions")
+}
+
+model ReferralCommission {
+  id                String           @id @default(uuid())
+  organizationId    String
+  ashaProfileId     String?
+  referralPartnerId String?
+  patientId         String
+  attributionId     String?
+  appointmentId     String?
+  billId            String?
+  eligibleAmount    Float            @default(0)
+  commissionAmount  Float            @default(0)
+  status            CommissionStatus @default(PENDING)
+  holdReason        String?
+  fraudFlag         Boolean          @default(false)
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  paymentId         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ashaProfile     AshaProfile?               @relation("AshaCommissions", fields: [ashaProfileId], references: [id])
+  referralPartner ReferralPartner?           @relation("PartnerCommissions", fields: [referralPartnerId], references: [id])
+  patient         Patient                    @relation(fields: [patientId], references: [id])
+  attribution     PatientReferralAttribution? @relation(fields: [attributionId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([ashaProfileId])
+  @@index([referralPartnerId])
+  @@map("referral_commissions")
+}
+
+model ReferralWallet {
+  id                String   @id @default(uuid())
+  ashaProfileId     String?  @unique
+  referralPartnerId String?  @unique
+  totalEarned       Float    @default(0)
+  pending           Float    @default(0)
+  approved          Float    @default(0)
+  paid              Float    @default(0)
+  onHold            Float    @default(0)
+  updatedAt         DateTime @updatedAt
+
+  ashaProfile     AshaProfile?     @relation("AshaWallet", fields: [ashaProfileId], references: [id])
+  referralPartner ReferralPartner? @relation("PartnerWallet", fields: [referralPartnerId], references: [id])
+  payouts         ReferralPayout[]
+
+  @@map("referral_wallets")
+}
+
+model ReferralPayout {
+  id            String       @id @default(uuid())
+  walletId      String
+  amount        Float
+  status        PayoutStatus @default(PENDING)
+  bankDetails   Json?
+  transactionId String?
+  requestedAt   DateTime     @default(now())
+  paidAt        DateTime?
+  createdAt     DateTime     @default(now())
+
+  wallet ReferralWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, status])
+  @@map("referral_payouts")
+}
+
+model OrganizationReferralSettings {
+  id                     String            @id @default(uuid())
+  organizationId         String            @unique
+  referralEnabled        Boolean           @default(true)
+  acceptAsha             Boolean           @default(true)
+  acceptReferralPartners Boolean           @default(true)
+  commissionHoldDays     Int               @default(7)
+  minPayout              Float             @default(500)
+  requireApproval        Boolean           @default(true)
+  attributionPolicy      AttributionPolicy @default(REGISTRATION_TIME)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_referral_settings")
+}
+
+model VerificationApplication {
+  id                    String                      @id @default(uuid())
+  applicationNumber     String                      @unique
+  type                  VerificationApplicationType
+  status                ApplicationStatus           @default(DRAFT)
+  riskScore             Int                         @default(0)
+  riskLevel             VerificationRiskLevel       @default(LOW)
+  organizationId        String?                     @unique
+  doctorId              String?                     @unique
+  ashaProfileId         String?                     @unique
+  referralPartnerId     String?                     @unique
+  submittedByUserId     String?
+  assignedVerifierId    String?
+  assignedAt            DateTime?
+  submittedAt           DateTime?
+  reviewedAt            DateTime?
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  rejectionReason       String?
+  profileData           Json?
+  checklist             Json?
+  duplicateFlags        Json?
+  slaDueAt              DateTime?
+  slaBreached           Boolean                     @default(false)
+  isReVerification      Boolean                     @default(false)
+  previousApplicationId String?
+  accountActivated      Boolean                     @default(false)
+  approvalLevel         Int                         @default(1)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  organization     Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  doctor           Doctor?                @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  ashaProfile      AshaProfile?           @relation(fields: [ashaProfileId], references: [id], onDelete: Cascade)
+  referralPartner  ReferralPartner?       @relation(fields: [referralPartnerId], references: [id], onDelete: Cascade)
+  submittedBy      User?                  @relation("SubmittedApplications", fields: [submittedByUserId], references: [id])
+  assignedVerifier User?                  @relation("VerifierAssignments", fields: [assignedVerifierId], references: [id])
+  documents        VerificationDocument[]
+  auditLogs        VerificationAuditLog[]
+
+  @@index([status, type])
+  @@index([assignedVerifierId])
+  @@index([submittedAt])
+  @@map("verification_applications")
+}
+
+model VerificationDocument {
+  id                 String                     @id @default(uuid())
+  applicationId      String
+  documentType       String
+  fileName           String
+  fileUrl            String
+  mimeType           String?
+  fileSize           Int?
+  status             DocumentVerificationStatus @default(PENDING)
+  rejectionReason    String?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  expiryDate         DateTime?
+  version            Int                        @default(1)
+  previousDocumentId String?
+  uploadedById       String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  application  VerificationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  verifiedBy   User?                   @relation(fields: [verifiedById], references: [id])
+
+  @@index([applicationId])
+  @@index([status])
+  @@map("verification_documents")
+}
+
+model VerificationAuditLog {
+  id            String   @id @default(uuid())
+  applicationId String
+  action        String
+  actorUserId   String?
+  actorName     String?
+  details       Json?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  application VerificationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?                   @relation(fields: [actorUserId], references: [id])
+
+  @@index([applicationId, createdAt])
+  @@map("verification_audit_logs")
+}
+
+model OrganizationAuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String?
+  staffName      String?
+  action         String
+  entityType     String?
+  entityId       String?
+  details        Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("organization_audit_logs")
 }

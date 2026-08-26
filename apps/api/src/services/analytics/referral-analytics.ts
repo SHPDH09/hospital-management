@@ -6,7 +6,7 @@ const REFERRAL_SOURCES = ['REFERRAL', 'AASHA', 'DOCTOR_REFERRAL', 'CAMPAIGN'];
 export async function getReferralAnalytics() {
   const leads = await prisma.lead.findMany({
     where: {
-      OR: REFERRAL_SOURCES.map((s) => ({ source: { contains: s, mode: 'insensitive' as const } })),
+      source: { in: ['REFERRAL', 'AASHA', 'DOCTOR_REFERRAL', 'CAMPAIGN'] },
     },
     include: { organization: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
@@ -29,7 +29,7 @@ export async function getReferralAnalytics() {
     }
     const bucket = bySource[key];
     bucket.leads += 1;
-    bucket.organizations.add(lead.organization.name);
+    bucket.organizations.add(lead.organization?.name || 'Unknown');
     if (lead.status === 'APPOINTMENT_BOOKED') bucket.appointments += 1;
     if (lead.status === 'CONVERTED') bucket.converted += 1;
   }

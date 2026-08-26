@@ -23,6 +23,19 @@ export {
 export {
   AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage, AdminApprovalsPage,
 } from './AdminAiPages';
+export { AdminReferralsPage } from './AdminReferralPages';
+export {
+  LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
+} from './AdminLeadManagementPages';
+export {
+  ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
+} from './AdminReviewManagementPages';
+export {
+  PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
+} from './AdminPaymentManagementPages';
+export {
+  AdminVerificationDashboardPage, AdminVerificationApplicationsPage, AdminVerificationDetailPage,
+} from './AdminVerificationPages';
 
 // Legacy aliases
 export { AdminHospitalsPage as AdminOrganizationsPage } from './AdminResourcePages';

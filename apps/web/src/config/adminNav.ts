@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Building2, Store, Stethoscope, Users, Calendar, CreditCard,
   Receipt, Megaphone, Target, Star, UserCog, Shield, FileText, Headphones,
-  MapPin, Database, Mail, Ticket, BarChart3, Settings, Globe, AlertTriangle, Bot,
+  MapPin, Database, Mail, Ticket, BarChart3, Settings, Globe, AlertTriangle, Bot, Share2, ShieldCheck,
 } from 'lucide-react';
 
 export interface AdminNavItem {
@@ -40,8 +40,13 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [
       { to: '/admin/appointments', icon: Calendar, label: 'Appointments' },
       { to: '/admin/payments', icon: Receipt, label: 'Payments' },
+      { to: '/admin/payment-management', icon: Receipt, label: 'Payment Management' },
       { to: '/admin/leads', icon: Target, label: 'Leads' },
+      { to: '/admin/lead-management', icon: Target, label: 'Lead Management' },
       { to: '/admin/reviews', icon: Star, label: 'Reviews' },
+      { to: '/admin/review-management', icon: Star, label: 'Review Management' },
+      { to: '/admin/referrals', icon: Share2, label: 'Referral / AASHA' },
+      { to: '/admin/verification', icon: ShieldCheck, label: 'Verification' },
     ],
   },
   {

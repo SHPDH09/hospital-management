@@ -29,11 +29,22 @@ import {
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
   AdminPermissionsPage, AdminSupportPage,
   AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage, AdminApprovalsPage,
+  AdminReferralsPage,
+  LeadManagementDashboardPage, LeadManagementListPage, LeadManagementDetailPage, LeadFollowUpsPage,
+  ReviewManagementDashboardPage, ReviewManagementListPage, ReviewManagementDetailPage, ReviewFraudFlagsPage,
+  PaymentManagementDashboardPage, PaymentManagementListPage, PaymentManagementDetailPage, PaymentExceptionsPage,
+  AdminVerificationDashboardPage, AdminVerificationApplicationsPage, AdminVerificationDetailPage,
 } from '@/pages/admin/AdminPages';
+import { ReferralLandingPage } from '@/pages/public/ReferralLandingPage';
+import {
+  ReferralDashboardPage, ReferralProfilePage, ReferralHospitalsPage, ReferralPatientsPage,
+  ReferralAnalyticsPage, ReferralCommissionsPage, ReferralPayoutsPage, ReferralCampaignsPage,
+} from '@/pages/referral/ReferralPortalPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'PLATFORM_STAFF'] as const;
+const REFERRAL_ROLES = ['ASHA', 'REFERRAL_PARTNER'] as const;
 const CRM_ROLES = ['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT', 'PHARMACIST', 'LAB_STAFF', 'MANAGER'] as const;
 
 function Admin({ children }: { children: React.ReactNode }) {
@@ -64,6 +75,17 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
 
+            <Route path="/ref/:code" element={<ReferralLandingPage />} />
+
+            <Route path="/referral" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralDashboardPage /></ProtectedRoute>} />
+            <Route path="/referral/profile" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralProfilePage /></ProtectedRoute>} />
+            <Route path="/referral/hospitals" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralHospitalsPage /></ProtectedRoute>} />
+            <Route path="/referral/patients" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralPatientsPage /></ProtectedRoute>} />
+            <Route path="/referral/analytics" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralAnalyticsPage /></ProtectedRoute>} />
+            <Route path="/referral/commissions" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralCommissionsPage /></ProtectedRoute>} />
+            <Route path="/referral/payouts" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralPayoutsPage /></ProtectedRoute>} />
+            <Route path="/referral/campaigns" element={<ProtectedRoute roles={[...REFERRAL_ROLES]}><ReferralCampaignsPage /></ProtectedRoute>} />
+
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
             <Route path="/patient/complete-profile" element={<ProtectedRoute roles={['PATIENT']} allowIncompleteProfile><PatientCompleteProfilePage /></ProtectedRoute>} />
@@ -90,7 +112,26 @@ export default function App() {
             <Route path="/admin/advertisements" element={<Admin><AdminAdvertisementsPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
             <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
+            <Route path="/admin/lead-management" element={<Admin><LeadManagementDashboardPage /></Admin>} />
+            <Route path="/admin/lead-management/leads" element={<Admin><LeadManagementListPage /></Admin>} />
+            <Route path="/admin/lead-management/leads/:id" element={<Admin><LeadManagementDetailPage /></Admin>} />
+            <Route path="/admin/lead-management/follow-ups" element={<Admin><LeadFollowUpsPage /></Admin>} />
+            <Route path="/admin/lead-management/unassigned" element={<Admin><LeadManagementListPage unassignedOnly title="Unassigned Leads" /></Admin>} />
             <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />
+            <Route path="/admin/review-management" element={<Admin><ReviewManagementDashboardPage /></Admin>} />
+            <Route path="/admin/review-management/reviews" element={<Admin><ReviewManagementListPage /></Admin>} />
+            <Route path="/admin/review-management/reviews/:id" element={<Admin><ReviewManagementDetailPage /></Admin>} />
+            <Route path="/admin/review-management/pending" element={<Admin><ReviewManagementListPage presetStatus="PENDING" title="Pending Moderation" /></Admin>} />
+            <Route path="/admin/review-management/reported" element={<Admin><ReviewManagementListPage reportedOnly title="Reported Reviews" /></Admin>} />
+            <Route path="/admin/review-management/fraud" element={<Admin><ReviewFraudFlagsPage /></Admin>} />
+            <Route path="/admin/payment-management" element={<Admin><PaymentManagementDashboardPage /></Admin>} />
+            <Route path="/admin/payment-management/payments" element={<Admin><PaymentManagementListPage /></Admin>} />
+            <Route path="/admin/payment-management/payments/:id" element={<Admin><PaymentManagementDetailPage /></Admin>} />
+            <Route path="/admin/payment-management/exceptions" element={<Admin><PaymentExceptionsPage /></Admin>} />
+            <Route path="/admin/referrals/*" element={<Admin><AdminReferralsPage /></Admin>} />
+            <Route path="/admin/verification" element={<Admin><AdminVerificationDashboardPage /></Admin>} />
+            <Route path="/admin/verification/applications" element={<Admin><AdminVerificationApplicationsPage /></Admin>} />
+            <Route path="/admin/verification/applications/:id" element={<Admin><AdminVerificationDetailPage /></Admin>} />
             <Route path="/admin/staff/*" element={<Admin><AdminStaffPage /></Admin>} />
             <Route path="/admin/permissions/*" element={<Admin><AdminPermissionsPage /></Admin>} />
             <Route path="/admin/roles" element={<Navigate to="/admin/permissions" replace />} />
