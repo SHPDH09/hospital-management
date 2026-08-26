@@ -144,26 +144,26 @@ async function main() {
     });
   }
 
-  // Departments
-  const cardiology = await prisma.department.create({
-    data: { organizationId: organization.id, name: 'Cardiology', description: 'Heart and cardiovascular care' },
-  });
-  const orthopedics = await prisma.department.create({
-    data: { organizationId: organization.id, name: 'Orthopedics', description: 'Bone and joint care' },
-  });
-  const general = await prisma.department.create({
-    data: { organizationId: organization.id, name: 'General Medicine', description: 'Primary healthcare' },
-  });
+  const upsertDept = async (name: string, description: string) => {
+    const existing = await prisma.department.findFirst({ where: { organizationId: organization.id, name } });
+    if (existing) return existing;
+    return prisma.department.create({ data: { organizationId: organization.id, name, description } });
+  };
+  const cardiology = await upsertDept('Cardiology', 'Heart and cardiovascular care');
+  const orthopedics = await upsertDept('Orthopedics', 'Bone and joint care');
+  const general = await upsertDept('General Medicine', 'Primary healthcare');
 
   // Services
-  await prisma.service.createMany({
-    data: [
-      { organizationId: organization.id, name: 'General Consultation', price: 500, duration: 30 },
-      { organizationId: organization.id, name: 'ECG', price: 800, duration: 15 },
-      { organizationId: organization.id, name: 'X-Ray', price: 1200, duration: 20 },
-      { organizationId: organization.id, name: 'Blood Test Panel', price: 1500, duration: 10 },
-    ],
-  });
+  const serviceDefs = [
+    { name: 'General Consultation', price: 500, duration: 30 },
+    { name: 'ECG', price: 800, duration: 15 },
+    { name: 'X-Ray', price: 1200, duration: 20 },
+    { name: 'Blood Test Panel', price: 1500, duration: 10 },
+  ];
+  for (const svc of serviceDefs) {
+    const existing = await prisma.service.findFirst({ where: { organizationId: organization.id, name: svc.name } });
+    if (!existing) await prisma.service.create({ data: { organizationId: organization.id, ...svc } });
+  }
 
   // Doctors
   const doctorUsers = [
@@ -255,7 +255,7 @@ async function main() {
 
   const patient = await prisma.patient.upsert({
     where: { userId: patientUser.id },
-    update: { profileCompleted: true, profileCompletionPercent: 100 },
+    update: {},
     create: {
       userId: patientUser.id,
       fullName: 'Rahul Verma',
@@ -264,64 +264,32 @@ async function main() {
       address: '78 Lake View Apartments',
       city: 'Mumbai',
       state: 'Maharashtra',
-      country: 'India',
-      pinCode: '400001',
       emergencyContact: '+91-9876543298',
-      emergencyContactName: 'Priya Verma',
-      profileCompleted: true,
-      profileCompletionPercent: 100,
-      termsAcceptedAt: new Date(),
-      privacyAcceptedAt: new Date(),
     },
   });
 
-  await prisma.user.update({
-    where: { id: patientUser.id },
-    data: { phoneVerified: true },
+  await prisma.patientOrganization.upsert({
+    where: { patientId_organizationId: { patientId: patient.id, organizationId: organization.id } },
+    update: {},
+    create: { patientId: patient.id, organizationId: organization.id },
   });
 
-  await prisma.patientOrganization.create({
-    data: { patientId: patient.id, organizationId: organization.id },
+  const existingAd = await prisma.advertisement.findFirst({
+    where: { organizationId: organization.id, title: 'Free Health Checkup Camp' },
   });
-
-  // Sample Advertisement
-  await prisma.advertisement.create({
-    data: {
-      organizationId: organization.id,
-      campaignName: 'Health Checkup Camp',
-      title: 'Free Health Checkup Camp',
-      description: 'Comprehensive health screening at City General Hospital',
-      type: 'HOMEPAGE_BANNER',
-      status: 'ACTIVE',
-      targetUrl: '/organizations/city-general-hospital',
-      ctaText: 'Book Now',
-      imageUrl: 'https://placehold.co/1200x400/2563eb/white?text=Health+Checkup',
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      budget: 4999,
-      paidAmount: 4999,
-      paymentStatus: 'PAID',
-      platforms: ['website', 'android', 'ios'],
-      targetCities: ['Mumbai'],
-      healthcareCategories: ['General Medicine'],
-      impressions: 1250,
-      clicks: 86,
-      leads: 12,
-      appointments: 5,
-      conversions: 5,
-      priority: 2,
-      placement: 'homepage',
-    },
-  });
-
-  const { seedAdPlans } = await import('./ad-plans-seed');
-  await seedAdPlans(prisma);
-
-  const { seedPlatformStaff } = await import('./platform-staff-seed');
-  await seedPlatformStaff(prisma);
-
-  const { seedSupport } = await import('./support-seed');
-  await seedSupport(prisma);
+  if (!existingAd) {
+    await prisma.advertisement.create({
+      data: {
+        organizationId: organization.id,
+        title: 'Free Health Checkup Camp',
+        type: 'HOMEPAGE_BANNER',
+        status: 'ACTIVE',
+        targetUrl: '/organizations/city-general-hospital',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
 
   // Specializations (Master Data)
   const specs = [
@@ -342,55 +310,24 @@ async function main() {
   // CMS Pages
   const cmsPages = [
     { slug: 'about', title: 'About Us', content: 'Healthcare Platform — connecting patients with hospitals and clinics.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
-    { slug: 'contact', title: 'Contact Us', content: 'Contact us at support@healthcare.platform', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
-    { slug: 'services', title: 'Services', content: 'Find hospitals, clinics, and doctors.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
     { slug: 'terms', title: 'Terms & Conditions', content: 'Terms and conditions for using the platform.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
-    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data. Version 2.1', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
-    { slug: 'cookie-policy', title: 'Cookie Policy', content: 'Cookie usage policy.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
-    { slug: 'refund-policy', title: 'Refund Policy', content: 'Refund terms.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'privacy', title: 'Privacy Policy', content: 'How we handle your data.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'LEGAL' as const },
+    { slug: 'faq', title: 'FAQ', content: 'Frequently asked questions.', isPublished: true, status: 'PUBLISHED' as const, pageType: 'STATIC' as const },
   ];
   for (const page of cmsPages) {
     await prisma.cmsPage.upsert({ where: { slug: page.slug }, update: { isPublished: page.isPublished, status: page.status }, create: page });
   }
 
-  const menuItems = [
-    { label: 'Home', url: '/', sortOrder: 1 },
-    { label: 'Find Doctor', url: '/find/doctors', sortOrder: 2 },
-    { label: 'Find Hospital', url: '/find/hospitals', sortOrder: 3 },
-    { label: 'About', url: '/about', sortOrder: 4 },
-    { label: 'Contact', url: '/contact', sortOrder: 5 },
-  ];
-  for (const item of menuItems) {
-    const existing = await prisma.cmsMenuItem.findFirst({ where: { label: item.label } });
-    if (!existing) await prisma.cmsMenuItem.create({ data: item });
-  }
-
-  const faqs = [
-    { question: 'How do I book an appointment?', answer: 'Search for a hospital or doctor and click Book Appointment.', category: 'Patients' },
-    { question: 'How do hospitals register?', answer: 'Click Register Hospital on the homepage.', category: 'Hospitals' },
-  ];
-  for (const faq of faqs) {
-    const existing = await prisma.cmsFaq.findFirst({ where: { question: faq.question } });
-    if (!existing) await prisma.cmsFaq.create({ data: faq });
-  }
-
   // Communication Templates
   const templates = [
-    { name: 'Appointment Confirmed', channel: 'EMAIL' as const, category: 'Appointment', subject: 'Appointment Confirmed', body: 'Hello {{patient_name}}, your appointment with {{doctor_name}} at {{hospital_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.' },
-    { name: 'Appointment Reminder', channel: 'SMS' as const, category: 'Appointment Reminder', body: 'Reminder: Your appointment with {{doctor_name}} is on {{appointment_date}} at {{appointment_time}}.' },
-    { name: 'Payment Successful', channel: 'EMAIL' as const, category: 'Payment', subject: 'Payment Received', body: 'Payment of {{amount}} received. Invoice: {{invoice_number}}.' },
-    { name: 'Welcome', channel: 'EMAIL' as const, category: 'Account', subject: 'Welcome', body: 'Welcome {{patient_name}} to Healthcare Platform!' },
-    { name: 'Subscription Expiring', channel: 'SMS' as const, category: 'Subscription', body: 'Your subscription at {{hospital_name}} is expiring soon.' },
-    { name: 'Lab Report Available', channel: 'WHATSAPP' as const, category: 'Healthcare', body: 'Hello {{patient_name}}, your lab report is now available.' },
-    { name: 'Appointment Push', channel: 'PUSH' as const, category: 'Appointment', body: 'New appointment booked with {{doctor_name}}.' },
+    { name: 'Appointment Confirmation', channel: 'EMAIL' as const, category: 'Appointment', subject: 'Appointment Confirmed', body: 'Your appointment has been confirmed.' },
+    { name: 'Payment Receipt', channel: 'EMAIL' as const, category: 'Payment', subject: 'Payment Received', body: 'Thank you for your payment.' },
+    { name: 'Welcome Message', channel: 'SMS' as const, category: 'Account', body: 'Welcome to Healthcare Platform!' },
+    { name: 'Password Reset', channel: 'EMAIL' as const, category: 'Account', subject: 'Reset Password', body: 'Click the link to reset your password.' },
   ];
   for (const tpl of templates) {
     const existing = await prisma.communicationTemplate.findFirst({ where: { name: tpl.name } });
-    if (!existing) {
-      await prisma.communicationTemplate.create({
-        data: { ...tpl, variables: ['patient_name', 'doctor_name', 'hospital_name', 'appointment_date', 'appointment_time', 'amount', 'invoice_number'] },
-      });
-    }
+    if (!existing) await prisma.communicationTemplate.create({ data: tpl });
   }
 
   // Locations
@@ -408,22 +345,66 @@ async function main() {
   const delhi = await upsertLocation({ name: 'Delhi', type: 'STATE', parentId: india.id });
   await upsertLocation({ name: 'New Delhi', type: 'CITY', parentId: delhi.id, pinCode: '110001' });
 
-  // Platform Settings (27 categories)
-  const { seedPlatformSettings } = await import('./settings-seed');
-  await seedPlatformSettings(prisma);
-
-  // Legacy individual settings (kept for backward compatibility)
-  const legacySettings = [
+  // Platform Settings
+  const settings = [
     { key: 'platformName', value: 'Healthcare Platform', category: 'general' },
     { key: 'currency', value: 'INR', category: 'general' },
     { key: 'supportEmail', value: 'support@healthcare.platform', category: 'contact' },
     { key: 'supportPhone', value: '+91-1800-000-000', category: 'contact' },
   ];
-  for (const s of legacySettings) {
+  for (const s of settings) {
     await prisma.platformSetting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
   }
 
   await seedMasterData(prisma);
+
+  const { seedPlatformStaff } = await import('./platform-staff-seed');
+  await seedPlatformStaff(prisma);
+
+  const { seedSupport } = await import('./support-seed');
+  await seedSupport(prisma);
+
+  const { seedPlatformSettings } = await import('../prisma/settings-seed');
+  await seedPlatformSettings(prisma);
+
+  // AI settings & default automations
+  await prisma.aiSetting.upsert({
+    where: { key: 'global' },
+    update: {},
+    create: {
+      key: 'global',
+      value: {
+        enabled: true,
+        provider: 'builtin',
+        model: 'healthcare-builtin-v1',
+        maxTokens: 1024,
+        temperature: 0.3,
+        features: {
+          copilot: true,
+          leadScoring: true,
+          leadSummary: true,
+          reviewSentiment: true,
+          ticketClassification: true,
+          appointmentReminders: true,
+          documentVerification: true,
+          patientTimeline: true,
+          fraudDetection: true,
+          communicationAi: true,
+        },
+        leadScoringWeights: {
+          source: 15,
+          verifiedContact: 20,
+          appointmentIntent: 25,
+          interestedStatus: 20,
+          recentActivity: 10,
+          followUpDue: 10,
+        },
+      },
+    },
+  });
+
+  const { seedDefaultAutomations } = await import('../src/services/automation/engine');
+  await seedDefaultAutomations();
 
   console.log('Seed completed!');
   console.log('\nDemo accounts (password: Password123!):');

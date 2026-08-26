@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Building2, Store, Stethoscope, Users, Calendar, CreditCard,
   Receipt, Megaphone, Target, Star, UserCog, Shield, FileText, Headphones,
-  MapPin, Database, Mail, Ticket, BarChart3, Settings, Globe, AlertTriangle,
+  MapPin, Database, Mail, Ticket, BarChart3, Settings, Globe, AlertTriangle, Bot,
 } from 'lucide-react';
 
 export interface AdminNavItem {
@@ -21,6 +21,9 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [
       { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+      { to: '/admin/ai/copilot', icon: Bot, label: 'AI Copilot' },
+      { to: '/admin/ai/insights', icon: BarChart3, label: 'AI Insights' },
+      { to: '/admin/ai/approvals', icon: Shield, label: 'AI Approvals' },
     ],
   },
   {
@@ -52,7 +55,7 @@ export const adminNavGroups: AdminNavGroup[] = [
   {
     title: 'Platform',
     items: [
-      { to: '/admin/staff', icon: UserCog, label: 'Staff' },
+      { to: '/admin/staff', icon: UserCog, label: 'Platform Staff' },
       { to: '/admin/permissions', icon: Shield, label: 'Roles & Permissions' },
       { to: '/admin/security', icon: Shield, label: 'Security Center' },
       { to: '/admin/audit-logs', icon: FileText, label: 'Audit Logs' },
@@ -70,6 +73,8 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/locations', icon: MapPin, label: 'Locations' },
       { to: '/admin/master-data', icon: Database, label: 'Master Data' },
       { to: '/admin/communications', icon: Mail, label: 'Communications' },
+      { to: '/admin/ai/automation', icon: Bot, label: 'Automations' },
+      { to: '/admin/ai/settings', icon: Settings, label: 'AI Settings' },
       { to: '/admin/cms', icon: Globe, label: 'CMS' },
       { to: '/admin/settings', icon: Settings, label: 'Global Settings' },
       { to: '/admin/emergency', icon: AlertTriangle, label: 'Emergency Control' },

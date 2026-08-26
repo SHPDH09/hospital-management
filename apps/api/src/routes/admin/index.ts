@@ -12,14 +12,14 @@ import subscriptionRoutes from './subscriptions';
 import couponRoutes from './coupons';
 import locationRoutes from './locations';
 import masterDataRoutes from './master-data';
-import communicationRoutes from './communications';
-import cmsRoutes from './cms';
 import settingsRoutes from './settings';
 import emergencyRoutes from './emergency';
-import advertisementRoutes from './advertisements';
-import platformStaffRoutes from './platform-staff';
-import permissionsRoutes from './permissions';
+import communicationsRoutes from './communications';
 import supportRoutes from './support';
+import cmsRoutes from './cms';
+import permissionsRoutes from './permissions';
+import platformStaffRoutes from './platform-staff';
+import advertisementRoutes from './advertisements';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
@@ -27,14 +27,14 @@ router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
 router.use('/master-data', masterDataRoutes);
-router.use('/communications', communicationRoutes);
-router.use('/cms', cmsRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/emergency', emergencyRoutes);
-router.use('/advertisements', advertisementRoutes);
-router.use('/platform-staff', platformStaffRoutes);
-router.use('/permissions', permissionsRoutes);
+router.use('/communications', communicationsRoutes);
 router.use('/support', supportRoutes);
+router.use('/cms', cmsRoutes);
+router.use('/permissions', permissionsRoutes);
+router.use('/platform-staff', platformStaffRoutes);
+router.use('/advertisements', advertisementRoutes);
 
 // ─── Dashboard & Analytics ───────────────────────────────────────────────────
 
@@ -346,7 +346,25 @@ router.patch('/leads/:id', async (req: AuthRequest, res, next) => {
     const id = paramId(req.params.id);
     const lead = await prisma.lead.update({ where: { id }, data: req.body });
     await logAudit(req, 'UPDATE', 'Lead', id, req.body);
+
+    const { enqueueJob } = await import('../../services/jobs/queue');
+    const { emitAutomationEvent } = await import('../../services/automation/engine');
+    enqueueJob('lead_score', { leadId: id }).catch(console.error);
+    emitAutomationEvent('lead.status_changed', 'lead', id, {
+      status: lead.status,
+      temperature: lead.temperature,
+      score: lead.score,
+    }).catch(console.error);
+
     sendSuccess(res, lead);
+  } catch (err) { next(err); }
+});
+
+router.post('/leads/:id/score', async (req: AuthRequest, res, next) => {
+  try {
+    const { scoreLead } = await import('../../services/leads/lead-scoring');
+    const result = await scoreLead(paramId(req.params.id), req.user!.userId);
+    sendSuccess(res, result, 'Lead scored');
   } catch (err) { next(err); }
 });
 
@@ -377,6 +395,13 @@ router.patch('/reviews/:id', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/reviews/:id/analyze', async (req: AuthRequest, res, next) => {
+  try {
+    const { analyzeReview } = await import('../../services/reviews/review-analysis');
+    const result = await analyzeReview(paramId(req.params.id), req.user!.userId);
+    sendSuccess(res, result, 'Review analyzed');
+  } catch (err) { next(err); }
+});
 
 // Legacy complaints routes (backward compatible)
 router.get('/complaints', async (req, res, next) => {

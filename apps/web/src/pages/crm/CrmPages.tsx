@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { Users, Calendar, Stethoscope, DollarSign, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Users, Calendar, Stethoscope, DollarSign, TrendingUp, Bot, Send, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { api } from '@/lib/api';
 import { formatCurrency, getStatusColor } from '@/lib/utils';
@@ -287,6 +288,53 @@ export function CrmSettingsPage() {
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
       <div className="card p-6">
         <p className="text-gray-500">Organization settings, subscription management, and branding options will be available here.</p>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+export function CrmCopilotPage() {
+  const [query, setQuery] = useState('');
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+
+  const ask = useMutation({
+    mutationFn: (q: string) => api.post<{ answer: string }>('/ai/copilot/org', { query: q }),
+    onSuccess: (res, q) => {
+      setMessages((m) => [...m, { role: 'user', text: q }, { role: 'assistant', text: res.data?.answer || 'No response.' }]);
+      setQuery('');
+    },
+  });
+
+  const suggestions = [
+    "Show me today's appointments",
+    'How many patients do we have?',
+    'Show billing summary this week',
+    'List active doctors',
+    'Show hot leads',
+  ];
+
+  return (
+    <DashboardLayout portal="crm">
+      <h1 className="text-2xl font-bold mb-2 flex items-center gap-2"><Bot className="h-7 w-7" /> Hospital AI Copilot</h1>
+      <p className="text-gray-500 mb-6">Ask about your organization's appointments, patients, billing, and leads.</p>
+
+      <div className="card p-4 min-h-[360px] flex flex-col">
+        <div className="flex-1 space-y-3 mb-4 overflow-y-auto max-h-96">
+          {messages.length === 0 && <p className="text-sm text-gray-500">Try a suggestion below or ask your own question.</p>}
+          {messages.map((m, i) => (
+            <div key={i} className={`rounded-lg p-3 text-sm max-w-[85%] ${m.role === 'user' ? 'bg-primary-100 ml-auto' : 'bg-gray-100'}`}>{m.text}</div>
+          ))}
+          {ask.isPending && <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Thinking...</div>}
+        </div>
+        <div className="flex gap-2 flex-wrap mb-3">
+          {suggestions.map((s) => (
+            <button key={s} type="button" className="text-xs btn-ghost border" onClick={() => ask.mutate(s)}>{s}</button>
+          ))}
+        </div>
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (query.trim()) ask.mutate(query.trim()); }}>
+          <input className="input flex-1" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ask about your hospital..." />
+          <button type="submit" className="btn-primary flex items-center gap-2" disabled={ask.isPending}><Send className="h-4 w-4" /> Ask</button>
+        </form>
       </div>
     </DashboardLayout>
   );

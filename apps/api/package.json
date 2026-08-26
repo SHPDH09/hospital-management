@@ -14,7 +14,8 @@
     "db:push": "npm run db:prepare && prisma db push",
     "db:seed": "npm run db:prepare && tsx prisma/seed.ts",
     "db:test": "npm run db:prepare && prisma db execute --stdin <<< 'SELECT 1'",
-    "admin:create": "tsx scripts/create-admin.ts"
+    "admin:create": "tsx scripts/create-admin.ts",
+    "jobs:worker": "tsx scripts/run-jobs-worker.ts"
   },
   "dependencies": {
     "@healthcare/shared": "*",

@@ -21,6 +21,8 @@ enum UserRole {
   LAB_STAFF
   MANAGER
   PATIENT
+  ASHA
+  REFERRAL_PARTNER
 }
 
 enum OrganizationType {
@@ -101,18 +103,6 @@ enum AdvertisementStatus {
   CHANGES_REQUESTED
 }
 
-enum AdvertisementType {
-  HOMEPAGE_BANNER
-  SEARCH_PROMOTION
-  FEATURED_HOSPITAL
-  FEATURED_DOCTOR
-  FEATURED_CLINIC
-  FEATURED_SERVICE
-  HEALTH_PACKAGE
-  PROMOTIONAL_CARD
-  SEARCH_AD
-}
-
 enum AdPaymentStatus {
   UNPAID
   PAID
@@ -126,6 +116,30 @@ enum AdPricingModel {
   CPC
   CPA
   CAMPAIGN
+}
+
+enum AdvertisementType {
+  HOMEPAGE_BANNER
+  SEARCH_PROMOTION
+  FEATURED_HOSPITAL
+  FEATURED_DOCTOR
+  FEATURED_CLINIC
+  FEATURED_SERVICE
+  HEALTH_PACKAGE
+  PROMOTIONAL_CARD
+  SEARCH_AD
+}
+
+enum PatientSourceType {
+  DIRECT
+  GOOGLE
+  ADVERTISEMENT
+  HOSPITAL_WEBSITE
+  SOCIAL_MEDIA
+  ASHA
+  REFERRAL_PARTNER
+  CAMPAIGN
+  DOCTOR_REFERRAL
 }
 
 enum LeadStatus {
@@ -167,10 +181,13 @@ model User {
   loginHistory  LoginHistory[]
   assignedComplaints Complaint[] @relation("AssignedComplaints")
   createdTickets     Complaint[] @relation("UserTickets")
+  assignedLeads      Lead[]       @relation("AssignedLeads")
+  aiAuditLogs        AiAuditLog[]
+  approvalRequests   ApprovalRequest[] @relation("ApprovalRequester")
   passwordResetRequests PasswordResetRequest[]
-  passwordHistory    PasswordHistory[]
-  platformStaffProfile PlatformStaffProfile?
   patientPhoneOtps   PatientPhoneOtp[]
+  platformStaffProfile PlatformStaffProfile?
+  passwordHistory    PasswordHistory[]
 
   @@map("users")
 }
@@ -263,31 +280,35 @@ model Branch {
 }
 
 model Patient {
-  id                        String    @id @default(uuid())
-  userId                    String    @unique
-  fullName                  String
-  profilePhoto              String?
-  dateOfBirth               DateTime?
-  gender                    Gender?
-  address                   String?
-  city                      String?
-  state                     String?
-  country                   String?
-  pinCode                   String?
-  alternatePhone            String?
-  emergencyContact          String?
-  emergencyContactName      String?
-  emergencyContactRelation  String?
-  bloodGroup                String?
-  profileCompleted          Boolean   @default(false)
-  profileCompletionStep     String?
-  profileCompletionPercent  Int       @default(0)
-  termsAcceptedAt           DateTime?
-  privacyAcceptedAt         DateTime?
-  healthConsentAt           DateTime?
-  profileCompletedAt        DateTime?
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  id                       String    @id @default(uuid())
+  userId                   String    @unique
+  fullName                 String
+  profilePhoto             String?
+  dateOfBirth              DateTime?
+  gender                   Gender?
+  address                  String?
+  city                     String?
+  state                    String?
+  country                  String?
+  pinCode                  String?
+  alternatePhone           String?
+  emergencyContact         String?
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  bloodGroup               String?
+  profileCompleted         Boolean   @default(false)
+  profileCompletionStep    String?
+  profileCompletionPercent Int       @default(0)
+  termsAcceptedAt          DateTime?
+  privacyAcceptedAt        DateTime?
+  healthConsentAt          DateTime?
+  profileCompletedAt       DateTime?
+  globalPatientId          String?   @unique
+  accountStatus            String?
+  registrationSource       String?
+  photoUrl                 String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizations PatientOrganization[]
@@ -299,12 +320,13 @@ model Patient {
 }
 
 model PatientOrganization {
-  id             String   @id @default(uuid())
+  id             String             @id @default(uuid())
   patientId      String
   organizationId String
   patientNumber  String?
   notes          String?
-  createdAt      DateTime @default(now())
+  sourceType     PatientSourceType?
+  createdAt      DateTime           @default(now())
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -332,6 +354,8 @@ model Doctor {
   isActive           Boolean  @default(true)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
+  verificationStatus String?
+  accountActivated   Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -392,11 +416,17 @@ model Department {
 model Service {
   id             String   @id @default(uuid())
   organizationId String
+  branchId       String?
+  departmentId   String?
+  doctorId       String?
   name           String
   description    String?
+  category       String?
   price          Float
   duration       Int?
   isActive       Boolean  @default(true)
+  isOnline       Boolean  @default(true)
+  isOffline      Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -438,6 +468,21 @@ model Appointment {
   type           String            @default("consultation")
   status         AppointmentStatus @default(PENDING)
   notes          String?
+  appointmentNumber  String?
+  paymentStatus      String?
+  referralSource     String?
+  referralId         String?
+  referralName       String?
+  advertisementId    String?
+  cancellationReason String?
+  rescheduledFromId  String?
+  checkedInAt        DateTime?
+  tokenNumber        String?
+  isEmergency        Boolean           @default(false)
+  isOnline           Boolean           @default(false)
+  noShowRisk         String            @default("LOW")
+  confirmationStatus String            @default("PENDING")
+  reminderSentAt     DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -696,24 +741,76 @@ model AdHistory {
 }
 
 model Lead {
-  id              String     @id @default(uuid())
-  organizationId  String
-  advertisementId String?
-  name            String?
-  email           String?
-  phone           String?
-  source          String?
-  status          LeadStatus @default(NEW)
-  notes           String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id                 String          @id @default(uuid())
+  organizationId     String
+  advertisementId    String?
+  leadNumber         String?
+  name               String?
+  email              String?
+  phone              String?
+  source             String?
+  type               String?
+  city               String?
+  state              String?
+  campaign           String?
+  referralName       String?
+  referralType       String?
+  specialty          String?
+  service            String?
+  preferredDate      DateTime?
+  preferredTime      String?
+  priority           String?
+  status             LeadStatus      @default(NEW)
+  notes              String?
+  score              Int             @default(0)
+  temperature        String          @default("COLD")
+  assignedToId       String?
+  assignedAt         DateTime?
+  interestedDoctorId String?
+  patientId          String?
+  appointmentId      String?
+  phoneVerified      Boolean         @default(false)
+  emailVerified      Boolean         @default(false)
+  nextFollowUpAt     DateTime?
+  lastContactAt      DateTime?
+  lostReason         String?
+  isDuplicate        Boolean         @default(false)
+  mergedIntoId       String?
+  tags               String[]        @default([])
+  aiSummary          String?
+  nextBestAction     String?
+  lastScoredAt       DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   advertisement Advertisement? @relation(fields: [advertisementId], references: [id])
+  assignedTo    User?          @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  activities    LeadActivity[]
+  followUps     LeadFollowUp[]
 
   @@index([organizationId, status])
+  @@index([temperature, score])
   @@index([advertisementId])
   @@map("leads")
+}
+
+model LeadFollowUp {
+  id           String    @id @default(uuid())
+  leadId       String
+  assignedToId String?
+  scheduledAt  DateTime?
+  reason       String?
+  status       String    @default("PENDING")
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, scheduledAt])
+  @@map("lead_follow_ups")
 }
 
 model Review {
@@ -725,6 +822,10 @@ model Review {
   comment        String?
   response       String?
   isPublished    Boolean  @default(true)
+  sentiment      ReviewSentiment?
+  topics         String[] @default([])
+  riskScore      String   @default("LOW")
+  aiSummary      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -865,13 +966,17 @@ model Complaint {
   csatFeedback     String?
   reopenReason     String?
   isArchived       Boolean           @default(false)
+  aiCategory       String?
+  aiPriority       ComplaintPriority?
+  aiSummary        String?
+  suggestedResponse String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
-  category     SupportCategory?       @relation(fields: [categoryId], references: [id])
-  user         User?                  @relation("UserTickets", fields: [userId], references: [id])
-  assignedTo   User?                  @relation("AssignedComplaints", fields: [assignedToId], references: [id])
-  organization Organization?          @relation(fields: [organizationId], references: [id])
+  category     SupportCategory?        @relation(fields: [categoryId], references: [id])
+  user         User?                   @relation("UserTickets", fields: [userId], references: [id])
+  assignedTo   User?                   @relation("AssignedComplaints", fields: [assignedToId], references: [id])
+  organization Organization?           @relation(fields: [organizationId], references: [id])
   messages     SupportTicketMessage[]
   history      SupportTicketHistory[]
   transfers    SupportTicketTransfer[]
@@ -1063,19 +1168,6 @@ model LoginHistory {
   @@map("login_history")
 }
 
-enum CmsContentStatus {
-  DRAFT
-  SCHEDULED
-  PUBLISHED
-  ARCHIVED
-}
-
-enum CmsPageType {
-  STATIC
-  LEGAL
-  LOCATION
-}
-
 model CmsPage {
   id              String           @id @default(uuid())
   slug            String           @unique
@@ -1100,6 +1192,19 @@ model CmsPage {
   updatedAt       DateTime         @updatedAt
 
   @@map("cms_pages")
+}
+
+enum CmsContentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CmsPageType {
+  STATIC
+  LEGAL
+  LOCATION
 }
 
 model CmsBlog {
@@ -1499,23 +1604,6 @@ model Location {
   @@map("locations")
 }
 
-model CommunicationTemplate {
-  id        String              @id @default(uuid())
-  name      String
-  channel   CommunicationChannel
-  category  String?
-  subject   String?
-  body      String              @db.Text
-  variables String[]
-  isActive  Boolean             @default(true)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-
-  messages CommunicationMessage[]
-
-  @@map("communication_templates")
-}
-
 enum CommunicationChannel {
   EMAIL
   SMS
@@ -1536,6 +1624,23 @@ enum AnnouncementType {
   WARNING
   MAINTENANCE
   EMERGENCY
+}
+
+model CommunicationTemplate {
+  id        String               @id @default(uuid())
+  name      String
+  channel   CommunicationChannel
+  category  String?
+  subject   String?
+  body      String               @db.Text
+  variables String[]             @default([])
+  isActive  Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  messages CommunicationMessage[]
+
+  @@map("communication_templates")
 }
 
 model CommunicationMessage {
@@ -1626,11 +1731,184 @@ model SystemAnnouncement {
   @@map("system_announcements")
 }
 
-enum EmergencySystemStatus {
-  NORMAL
-  PARTIAL_RESTRICTION
-  EMERGENCY_MODE
-  FULL_MAINTENANCE
+// ─── AI & Automation ─────────────────────────────────────────────────────────
+
+enum LeadTemperature {
+  HOT
+  WARM
+  COLD
+}
+
+enum NoShowRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD
+}
+
+enum AutomationModule {
+  LEADS
+  APPOINTMENTS
+  PAYMENTS
+  REVIEWS
+  COMPLAINTS
+  SUBSCRIPTIONS
+  VERIFICATION
+  GENERAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AiSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_settings")
+}
+
+model AiAuditLog {
+  id             String   @id @default(uuid())
+  requestId      String   @unique @default(uuid())
+  userId         String?
+  organizationId String?
+  module         String
+  feature        String
+  inputRef       String?
+  outputSummary  String?  @db.Text
+  model          String?
+  status         String
+  error          String?
+  humanApproval  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([module, feature])
+  @@map("ai_audit_logs")
+}
+
+model AiInsight {
+  id             String   @id @default(uuid())
+  entityType     String
+  entityId       String
+  insightType    String
+  content        Json
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([entityType, entityId, insightType])
+  @@index([entityType, entityId])
+  @@map("ai_insights")
+}
+
+model AutomationRule {
+  id          String           @id @default(uuid())
+  name        String
+  module      AutomationModule @default(GENERAL)
+  trigger     String
+  conditions  Json             @default("[]")
+  actions     Json             @default("[]")
+  delayMinutes Int             @default(0)
+  schedule    String?
+  channel     String?
+  audience    String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  executions AutomationExecution[]
+
+  @@index([isActive, trigger])
+  @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id         String   @id @default(uuid())
+  ruleId     String
+  entityType String?
+  entityId   String?
+  status     String
+  result     Json?
+  error      String?
+  ranAt      DateTime @default(now())
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, ranAt])
+  @@map("automation_executions")
+}
+
+model JobQueue {
+  id          String    @id @default(uuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  scheduledAt DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([type, status])
+  @@map("job_queue")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String
+  userId    String?
+  action    String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model ApprovalRequest {
+  id           String         @id @default(uuid())
+  requesterId  String
+  actionType   String
+  entityType   String
+  entityId     String
+  payload      Json?
+  status       ApprovalStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+
+  requester User @relation("ApprovalRequester", fields: [requesterId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("approval_requests")
 }
 
 enum EmergencySuspensionType {
@@ -1670,35 +1948,35 @@ model EmergencyActionLog {
 }
 
 model EmergencyAnnouncement {
-  id               String                      @id @default(uuid())
+  id               String                        @id @default(uuid())
   title            String
-  message          String                      @db.Text
+  message          String                        @db.Text
   severity         EmergencyAnnouncementSeverity @default(WARNING)
   affectedServices String[]
   displayLocations String[]
-  startsAt         DateTime                    @default(now())
+  startsAt         DateTime                      @default(now())
   endsAt           DateTime?
-  isActive         Boolean                     @default(true)
+  isActive         Boolean                       @default(true)
   createdByEmail   String?
-  createdAt        DateTime                    @default(now())
-  updatedAt        DateTime                    @updatedAt
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
 
   @@map("emergency_announcements")
 }
 
 model ScheduledMaintenance {
-  id               String   @id @default(uuid())
-  title            String
-  description      String?
-  maintenanceType  String   @default("full")
-  affectedModules  String[]
-  startAt          DateTime
-  endAt            DateTime
-  isActive         Boolean  @default(true)
-  autoActivate     Boolean  @default(true)
-  createdByEmail   String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  maintenanceType String   @default("full")
+  affectedModules String[]
+  startAt         DateTime
+  endAt           DateTime
+  isActive        Boolean  @default(true)
+  autoActivate    Boolean  @default(true)
+  createdByEmail  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([startAt, endAt])
   @@map("scheduled_maintenances")
@@ -1725,7 +2003,6 @@ model EmergencySuspension {
   @@index([type, targetId, isActive])
   @@map("emergency_suspensions")
 }
-
 enum PlatformStaffStatus {
   ACTIVE
   INACTIVE

@@ -1,14 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, Calendar, Stethoscope, Receipt, Settings, LogOut, Heart, Menu,
+  LayoutDashboard, Users, Calendar, Stethoscope, Receipt, Settings, LogOut, Heart, Menu, Bot, Search,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { adminNavGroups } from '@/config/adminNav';
+import { api } from '@/lib/api';
+import { useNavigate } from 'react-router-dom';
 
 const crmNav = [
   { to: '/crm', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/crm/copilot', icon: Bot, label: 'AI Copilot' },
   { to: '/crm/patients', icon: Users, label: 'Patients' },
   { to: '/crm/doctors', icon: Stethoscope, label: 'Doctors' },
   { to: '/crm/appointments', icon: Calendar, label: 'Appointments' },
@@ -30,8 +33,24 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ title: string; url: string; subtitle?: string }[]>([]);
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (portal !== 'admin' || searchQuery.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api.get<{ results: { title: string; url: string; subtitle?: string }[] }>(`/ai/search?q=${encodeURIComponent(searchQuery)}`)
+        .then((res) => setSearchResults(res.data?.results || []))
+        .catch(() => setSearchResults([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, portal]);
 
   const title = portal === 'crm' ? 'Hospital CRM' : portal === 'admin' ? 'Super Admin' : 'Patient Portal';
 
@@ -95,6 +114,32 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
           <button className="lg:hidden p-2" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-6 w-6" />
           </button>
+          {portal === 'admin' && (
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                className="input pl-9 w-full text-sm"
+                placeholder="Search hospitals, doctors, patients..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                  {searchResults.map((r, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
+                      onClick={() => { navigate(r.url); setSearchQuery(''); setSearchResults([]); }}
+                    >
+                      <p className="font-medium">{r.title}</p>
+                      {r.subtitle && <p className="text-xs text-gray-500">{r.subtitle}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <Link to="/" className="text-sm text-gray-500 hover:text-primary-600 ml-auto">Back to Website</Link>
         </header>
         <main className="p-4 lg:p-8">{children}</main>

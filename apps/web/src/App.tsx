@@ -10,23 +10,25 @@ import {
   StaffLoginPage, AdminLoginPage, RegisterPage, RegisterHospitalPage,
 } from '@/pages/public/AuthPages';
 import { PatientLoginPage } from '@/pages/public/PatientLoginPage';
-import { PatientCompleteProfilePage } from '@/pages/patient/PatientCompleteProfilePage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
+import { PatientCompleteProfilePage } from '@/pages/patient/PatientCompleteProfilePage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
 
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 import {
-  CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage,
+  CrmDashboard, CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage, CrmSettingsPage, CrmCopilotPage,
 } from '@/pages/crm/CrmPages';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
-  AdminStaffPage, AdminPermissionsPage, AdminSupportPage, AdminSecurityPage, AdminAuditLogsPage,
+  AdminStaffPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminLocationsPage, AdminMasterDataPage,
   AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminPermissionsPage, AdminSupportPage,
+  AdminAiCopilotPage, AdminAutomationPage, AdminAiSettingsPage, AdminAiAuditPage, AdminAiInsightsPage, AdminApprovalsPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -67,6 +69,7 @@ export default function App() {
             <Route path="/patient/complete-profile" element={<ProtectedRoute roles={['PATIENT']} allowIncompleteProfile><PatientCompleteProfilePage /></ProtectedRoute>} />
 
             <Route path="/crm" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmDashboard /></ProtectedRoute>} />
+            <Route path="/crm/copilot" element={<ProtectedRoute roles={[...CRM_ROLES]}><CrmCopilotPage /></ProtectedRoute>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />
             <Route path="/crm/doctors" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN']}><CrmDoctorsPage /></ProtectedRoute>} />
             <Route path="/crm/appointments" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}><CrmAppointmentsPage /></ProtectedRoute>} />
@@ -101,6 +104,13 @@ export default function App() {
             <Route path="/admin/cms/*" element={<Admin><AdminCmsPage /></Admin>} />
             <Route path="/admin/settings/*" element={<Admin><AdminSettingsPage /></Admin>} />
             <Route path="/admin/emergency/*" element={<Admin><AdminEmergencyPage /></Admin>} />
+            <Route path="/admin/ai/copilot" element={<Admin><AdminAiCopilotPage /></Admin>} />
+            <Route path="/admin/ai/insights" element={<Admin><AdminAiInsightsPage /></Admin>} />
+            <Route path="/admin/ai/approvals" element={<Admin><AdminApprovalsPage /></Admin>} />
+            <Route path="/admin/ai/automation" element={<Admin><AdminAutomationPage /></Admin>} />
+            <Route path="/admin/ai/settings" element={<Admin><AdminAiSettingsPage /></Admin>} />
+            <Route path="/admin/ai/audit" element={<Admin><AdminAiAuditPage /></Admin>} />
+            <Route path="/admin/ai" element={<Admin><AdminAiCopilotPage /></Admin>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

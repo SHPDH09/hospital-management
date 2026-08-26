@@ -2,8 +2,7 @@ import { Router } from 'express';
 import { prisma, readDb } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 import { getEmergencyState, computeSystemStatus, getActiveControls } from '../lib/emergency';
-import { mergeWithDefaults, settingsKey } from '../lib/settings';
-import { SettingCategory } from '../lib/settings';
+import { mergeWithDefaults, settingsKey, SettingCategory } from '../lib/settings';
 import { paramId } from '../lib/params';
 
 const router = Router();
@@ -28,36 +27,48 @@ router.get('/platform-status', async (_req, res, next) => {
     const modules = (synced.modules || {}) as Record<string, boolean>;
     const maintenanceMode = Boolean(synced.maintenanceMode) && String(synced.maintenanceType) === 'full';
 
-    const announcements = await prisma.emergencyAnnouncement.findMany({
-      where: {
-        isActive: true,
-        startsAt: { lte: new Date() },
-        OR: [{ endsAt: null }, { endsAt: { gte: new Date() } }],
-        displayLocations: { has: 'website' },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 3,
-    });
+    let announcements: { message: string; title: string; severity: string }[] = [];
+    try {
+      announcements = await prisma.emergencyAnnouncement.findMany({
+        where: {
+          isActive: true,
+          startsAt: { lte: new Date() },
+          OR: [{ endsAt: null }, { endsAt: { gte: new Date() } }],
+          displayLocations: { has: 'website' },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        select: { message: true, title: true, severity: true },
+      });
+    } catch {
+      announcements = [];
+    }
+
+    const websiteSettings = website as Record<string, unknown>;
+    const platformSettings = platform as Record<string, unknown>;
+    const brandingSettings = branding as Record<string, unknown>;
+    const mobileSettings = mobile as Record<string, unknown>;
+    const securitySettings = (synced.security || {}) as Record<string, unknown>;
 
     sendSuccess(res, {
       systemStatus: status,
-      platformName: platform.platformName,
-      tagline: platform.tagline,
-      logo: branding.primaryLogo || platform.logo,
-      favicon: branding.favicon || platform.favicon,
+      platformName: platformSettings.platformName,
+      tagline: platformSettings.tagline,
+      logo: brandingSettings.primaryLogo || platformSettings.logo,
+      favicon: brandingSettings.favicon || platformSettings.favicon,
       maintenanceMode,
-      maintenanceMessage: synced.maintenanceMessage || website.maintenanceMessage || 'We are currently performing scheduled maintenance.',
+      maintenanceMessage: synced.maintenanceMessage || websiteSettings.maintenanceMessage || 'We are currently performing scheduled maintenance.',
       maintenanceType: synced.maintenanceType,
       readOnlyMode: synced.readOnlyMode,
       emergencyModeActive: synced.emergencyModeActive,
       activeControls: getActiveControls(synced),
-      registrationEnabled: website.registrationEnabled && modules.patientRegistration !== false && !(synced.security as Record<string, unknown>)?.disableNewRegistrations,
-      patientRegistration: website.patientRegistration && modules.patientRegistration !== false,
-      hospitalRegistration: website.hospitalRegistration && modules.hospitalRegistration !== false,
-      clinicRegistration: website.clinicRegistration && modules.clinicRegistration !== false,
-      doctorRegistration: website.doctorRegistration && modules.doctorRegistration !== false,
-      searchEnabled: website.searchEnabled && modules.publicSearch !== false,
-      appointmentBookingEnabled: website.appointmentBookingEnabled && modules.appointmentBooking !== false,
+      registrationEnabled: websiteSettings.registrationEnabled !== false && modules.patientRegistration !== false && !securitySettings.disableNewRegistrations,
+      patientRegistration: websiteSettings.patientRegistration !== false && modules.patientRegistration !== false,
+      hospitalRegistration: websiteSettings.hospitalRegistration !== false && modules.hospitalRegistration !== false,
+      clinicRegistration: websiteSettings.clinicRegistration !== false && modules.clinicRegistration !== false,
+      doctorRegistration: websiteSettings.doctorRegistration !== false && modules.doctorRegistration !== false,
+      searchEnabled: websiteSettings.searchEnabled !== false && modules.publicSearch !== false,
+      appointmentBookingEnabled: websiteSettings.appointmentBookingEnabled !== false && modules.appointmentBooking !== false,
       paymentsEnabled: modules.onlinePayment !== false,
       advertisementsEnabled: modules.advertisement !== false,
       communicationEnabled: modules.messaging !== false,
@@ -65,14 +76,14 @@ router.get('/platform-status', async (_req, res, next) => {
       emergencyAnnouncements: announcements,
       emergencyAnnouncement: announcements[0]?.message || (synced.emergencyAnnouncementActive ? synced.emergencyAnnouncement : null),
       mobile: {
-        appName: mobile.appName,
-        minimumSupportedVersion: mobile.minimumSupportedVersion,
-        latestVersion: mobile.latestVersion,
-        forceUpdate: mobile.forceUpdate,
-        maintenanceMode: mobile.maintenanceMode || maintenanceMode,
-        maintenanceMessage: mobile.maintenanceMessage,
-        androidAppLink: mobile.androidAppLink,
-        iosAppLink: mobile.iosAppLink,
+        appName: mobileSettings.appName,
+        minimumSupportedVersion: mobileSettings.minimumSupportedVersion,
+        latestVersion: mobileSettings.latestVersion,
+        forceUpdate: mobileSettings.forceUpdate,
+        maintenanceMode: mobileSettings.maintenanceMode || maintenanceMode,
+        maintenanceMessage: mobileSettings.maintenanceMessage,
+        androidAppLink: mobileSettings.androidAppLink,
+        iosAppLink: mobileSettings.iosAppLink,
       },
     });
   } catch (err) {

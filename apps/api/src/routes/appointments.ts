@@ -73,6 +73,9 @@ router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookApp
       });
     });
 
+    const { scheduleAppointmentReminders } = await import('../services/appointments/reminder-service');
+    scheduleAppointmentReminders(appointment.id).catch(console.error);
+
     sendSuccess(res, appointment, 'Appointment booked', 201);
   } catch (err) {
     next(err);
