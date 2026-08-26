@@ -12,7 +12,7 @@ import {
   verifyPasswordResetOtp,
   resetPasswordWithToken,
 } from '../lib/password-reset';
-import { verifyGoogleIdToken, isGoogleAuthConfigured } from '../lib/google-auth';
+import { verifyGoogleIdToken, resolveGoogleClientId } from '../lib/google-auth';
 import { computeProfileCompletion, profileToResponse } from '../lib/patient-profile';
 
 const router = Router();
@@ -177,11 +177,16 @@ router.get('/me', authenticate, async (req: AuthRequest, res, next) => {
 
 // ─── Google Authentication (Patients) ────────────────────────────────────────
 
-router.get('/google/config', async (_req, res) => {
-  sendSuccess(res, {
-    enabled: isGoogleAuthConfigured(),
-    clientId: process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || null,
-  });
+router.get('/google/config', async (_req, res, next) => {
+  try {
+    const config = await resolveGoogleClientId();
+    sendSuccess(res, {
+      enabled: config.enabled,
+      clientId: config.clientId,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/google', validateBody(z.object({
