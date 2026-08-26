@@ -17,6 +17,7 @@ import {
   applySecretUpdates,
   diffSettings,
 } from '../../lib/settings';
+import { clearGoogleClientIdCache } from '../../lib/google-auth';
 
 const router = Router();
 
@@ -54,6 +55,10 @@ async function saveCategorySettings(
       changedBy: req.user?.email,
       changedAt: new Date().toISOString(),
     } as Prisma.InputJsonValue);
+  }
+
+  if (category === 'api-integration') {
+    clearGoogleClientIdCache();
   }
 
   return { row, settings: maskSecrets(category, updated) };
