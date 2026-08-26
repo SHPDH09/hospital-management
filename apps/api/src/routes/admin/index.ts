@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { JwtPayload } from '@healthcare/shared';
 import { prisma } from '../../lib/prisma';
 import { hashPassword, signAccessToken, signRefreshToken } from '../../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../../lib/response';
@@ -23,6 +24,37 @@ import supportRoutes from './support';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
+
+// Build a Prisma update payload from an allowlist of fields, coercing the
+// listed numeric fields and skipping keys the caller did not send.
+function pickEditable(
+  body: Record<string, unknown>,
+  allowed: readonly string[],
+  numeric: readonly string[] = [],
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (!(key in body)) continue;
+    const raw = body[key];
+    if (numeric.includes(key)) {
+      data[key] = raw === '' || raw === null || raw === undefined ? null : Number(raw);
+    } else {
+      data[key] = raw;
+    }
+  }
+  return data;
+}
+
+// Issue an impersonation access + refresh token pair for a target user and
+// persist the refresh token (valid for 7 days).
+async function issueImpersonationTokens(payload: JwtPayload) {
+  const accessToken = signAccessToken(payload);
+  const refreshToken = signRefreshToken({ userId: payload.userId });
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  await prisma.refreshToken.create({ data: { token: refreshToken, userId: payload.userId, expiresAt } });
+  return { accessToken, refreshToken };
+}
 router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
@@ -191,14 +223,10 @@ router.post('/organizations/:id/impersonate', async (req: AuthRequest, res, next
     });
     if (!staff) throw new AppError('No hospital admin found for this organization', 404);
 
-    const accessToken = signAccessToken({
+    const { accessToken, refreshToken } = await issueImpersonationTokens({
       userId: staff.userId, email: staff.user.email, role: 'HOSPITAL_ADMIN',
       organizationId: id, branchId: staff.branchId || undefined,
     });
-    const refreshToken = signRefreshToken({ userId: staff.userId });
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-    await prisma.refreshToken.create({ data: { token: refreshToken, userId: staff.userId, expiresAt } });
     await logAudit(req, 'IMPERSONATE', 'Organization', id, { targetEmail: staff.user.email });
 
     sendSuccess(res, {
@@ -239,6 +267,50 @@ router.patch('/doctors/:id/status', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+const DOCTOR_EDITABLE = ['fullName', 'specialization', 'qualification', 'experience', 'consultationFee', 'registrationNumber', 'bio'] as const;
+
+router.patch('/doctors/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const data = pickEditable(req.body, DOCTOR_EDITABLE, ['experience', 'consultationFee']);
+    const doctor = await prisma.doctor.update({ where: { id }, data });
+    await logAudit(req, 'UPDATE', 'Doctor', id, data as Prisma.InputJsonObject);
+    sendSuccess(res, doctor);
+  } catch (err) { next(err); }
+});
+
+router.delete('/doctors/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const doctor = await prisma.doctor.findUnique({ where: { id } });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+    // Deleting the user cascades to the doctor profile, appointments and slots.
+    await prisma.user.delete({ where: { id: doctor.userId } });
+    await logAudit(req, 'DELETE', 'Doctor', id);
+    sendSuccess(res, null, 'Doctor deleted');
+  } catch (err) { next(err); }
+});
+
+router.post('/doctors/:id/impersonate', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const doctor = await prisma.doctor.findUnique({ where: { id }, include: { user: true } });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+
+    const { accessToken, refreshToken } = await issueImpersonationTokens({
+      userId: doctor.userId, email: doctor.user.email, role: 'DOCTOR',
+      organizationId: doctor.organizationId, branchId: doctor.branchId || undefined,
+    });
+    await logAudit(req, 'IMPERSONATE', 'Doctor', id, { targetEmail: doctor.user.email });
+
+    sendSuccess(res, {
+      accessToken, refreshToken,
+      user: { id: doctor.user.id, email: doctor.user.email, role: doctor.user.role },
+      redirectTo: '/crm',
+    }, 'Impersonation token issued');
+  } catch (err) { next(err); }
+});
+
 // ─── Patients ────────────────────────────────────────────────────────────────
 
 router.get('/patients', async (req, res, next) => {
@@ -267,6 +339,49 @@ router.patch('/patients/:id/status', async (req: AuthRequest, res, next) => {
     await prisma.user.update({ where: { id: patient.userId }, data: { isActive: req.body.isActive } });
     await logAudit(req, 'STATUS_CHANGE', 'Patient', id, req.body);
     sendSuccess(res, { id, isActive: req.body.isActive });
+  } catch (err) { next(err); }
+});
+
+const PATIENT_EDITABLE = ['fullName', 'city', 'state', 'country', 'address', 'alternatePhone', 'bloodGroup', 'emergencyContactName', 'emergencyContact'] as const;
+
+router.patch('/patients/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const data = pickEditable(req.body, PATIENT_EDITABLE);
+    const patient = await prisma.patient.update({ where: { id }, data });
+    await logAudit(req, 'UPDATE', 'Patient', id, data as Prisma.InputJsonObject);
+    sendSuccess(res, patient);
+  } catch (err) { next(err); }
+});
+
+router.delete('/patients/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({ where: { id } });
+    if (!patient) throw new AppError('Patient not found', 404);
+    // Deleting the user cascades to the patient profile, appointments, bills and reviews.
+    await prisma.user.delete({ where: { id: patient.userId } });
+    await logAudit(req, 'DELETE', 'Patient', id);
+    sendSuccess(res, null, 'Patient deleted');
+  } catch (err) { next(err); }
+});
+
+router.post('/patients/:id/impersonate', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({ where: { id }, include: { user: true } });
+    if (!patient) throw new AppError('Patient not found', 404);
+
+    const { accessToken, refreshToken } = await issueImpersonationTokens({
+      userId: patient.userId, email: patient.user.email, role: 'PATIENT',
+    });
+    await logAudit(req, 'IMPERSONATE', 'Patient', id, { targetEmail: patient.user.email });
+
+    sendSuccess(res, {
+      accessToken, refreshToken,
+      user: { id: patient.user.id, email: patient.user.email, role: patient.user.role },
+      redirectTo: '/patient',
+    }, 'Impersonation token issued');
   } catch (err) { next(err); }
 });
 

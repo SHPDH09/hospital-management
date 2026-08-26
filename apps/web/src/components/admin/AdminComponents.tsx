@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { getStatusColor } from '@/lib/utils';
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
@@ -78,11 +78,73 @@ export function LoadingState() {
   return <div className="text-center py-16 text-gray-500">Loading...</div>;
 }
 
-export function ActionBtn({ onClick, children, variant = 'primary' }: { onClick: () => void; children: ReactNode; variant?: 'primary' | 'danger' | 'success' }) {
-  const colors = { primary: 'text-primary-600', danger: 'text-red-600', success: 'text-green-600' };
+export function ActionBtn({ onClick, children, variant = 'primary' }: { onClick: () => void; children: ReactNode; variant?: 'primary' | 'danger' | 'success' | 'muted' }) {
+  const colors = { primary: 'text-primary-600', danger: 'text-red-600', success: 'text-green-600', muted: 'text-gray-600' };
   return (
     <button onClick={onClick} className={`text-xs font-medium hover:underline ${colors[variant]}`}>
       {children}
     </button>
+  );
+}
+
+export type EditField = { name: string; label: string; type?: 'text' | 'number' | 'textarea' };
+
+export function EditModal({ title, fields, initial, onClose, onSave }: {
+  title: string;
+  fields: EditField[];
+  initial: Record<string, unknown>;
+  onClose: () => void;
+  onSave: (values: Record<string, unknown>) => Promise<void> | void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {};
+    for (const f of fields) seed[f.name] = initial[f.name] == null ? '' : String(initial[f.name]);
+    return seed;
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setField = (name: string, value: string) => setValues((s) => ({ ...s, [name]: value }));
+
+  const submit = async () => {
+    setSaving(true);
+    setError(null);
+    const out: Record<string, unknown> = {};
+    for (const f of fields) {
+      const raw = values[f.name];
+      out[f.name] = f.type === 'number' ? (raw === '' ? null : Number(raw)) : raw;
+    }
+    try {
+      await onSave(out);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          {fields.map((f) => (
+            <div key={f.name}>
+              <label className="block text-xs font-medium text-gray-500 mb-1">{f.label}</label>
+              {f.type === 'textarea' ? (
+                <textarea className="input w-full" rows={3} value={values[f.name]} onChange={(e) => setField(f.name, e.target.value)} />
+              ) : (
+                <input className="input w-full" type={f.type === 'number' ? 'number' : 'text'} value={values[f.name]} onChange={(e) => setField(f.name, e.target.value)} />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <button className="btn-secondary text-sm" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn-primary text-sm" onClick={submit} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
   );
 }
