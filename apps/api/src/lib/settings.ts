@@ -323,6 +323,8 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
     numberFormat: 'en-IN',
   },
   'api-integration': {
+    googleOAuthEnabled: true,
+    googleOAuthClientId: '',
     googleMapsApiKey: '',
     webhooks: [],
     thirdPartyIntegrations: [],
@@ -421,7 +423,7 @@ export const SECRET_PATHS: Record<string, string[]> = {
   email: ['smtpPassword', 'apiKey'],
   sms: ['apiKey'],
   whatsapp: ['apiCredentials'],
-  'api-integration': ['googleMapsApiKey'],
+  'api-integration': ['googleMapsApiKey', 'googleOAuthClientId'],
 };
 
 const MASK = '********';

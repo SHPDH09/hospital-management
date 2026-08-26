@@ -833,6 +833,8 @@ const categoryFields: Record<string, { title: string; fields: FieldDef[] }> = {
   'api-integration': {
     title: 'API & Integration Settings',
     fields: [
+      { key: 'googleOAuthEnabled', label: 'Enable Google Login (Patients)', type: 'toggle' },
+      { key: 'googleOAuthClientId', label: 'Google OAuth Client ID', type: 'secret', placeholder: 'xxxx.apps.googleusercontent.com' },
       { key: 'googleMapsApiKey', label: 'Google Maps API Key', type: 'secret' },
     ],
   },
