@@ -12,6 +12,7 @@
     "db:push:raw": "prisma db push --accept-data-loss",
     "db:migrate": "npm run db:prepare && prisma migrate dev",
     "db:push": "npm run db:prepare && prisma db push",
+    "db:sync": "node scripts/sync-database.mjs",
     "db:seed": "npm run db:prepare && tsx prisma/seed.ts",
     "db:test": "npm run db:prepare && prisma db execute --stdin <<< 'SELECT 1'",
     "admin:create": "tsx scripts/create-admin.ts"

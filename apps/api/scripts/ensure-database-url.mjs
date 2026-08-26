@@ -23,6 +23,9 @@ function buildUrl(host) {
 }
 
 if (!DB_PASSWORD) {
+  if (process.env.DATABASE_URL) {
+    process.exit(0);
+  }
   if (!existsSync(envPath)) {
     console.error('Missing DB_PASSWORD and no .env file found.');
     process.exit(1);
