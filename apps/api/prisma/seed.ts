@@ -13,16 +13,19 @@ async function main() {
       features: ['Basic Listing', 'Basic Dashboard', 'Up to 2 Doctors'], userLimit: 5, doctorLimit: 2, patientLimit: 50, branchLimit: 1, appointmentLimit: 100 },
     { code: 'basic', tier: 'BASIC' as const, name: 'Basic', monthlyPrice: 999, yearlyPrice: 9999, trialDays: 15, isDefault: false, sortOrder: 2,
       features: ['Patient Management', 'Appointments', 'Basic Dashboard', 'Billing'], userLimit: 20, doctorLimit: 10, patientLimit: 500, branchLimit: 2, appointmentLimit: 1000 },
-    { code: 'professional', tier: 'PROFESSIONAL' as const, name: 'Professional', monthlyPrice: 2499, yearlyPrice: 24999, trialDays: 14, isDefault: false, sortOrder: 3,
-      features: ['Everything in Basic', 'Staff Management', 'Reports', 'Inventory', 'Communication'], userLimit: 100, doctorLimit: 50, patientLimit: 5000, branchLimit: 10, appointmentLimit: 10000 },
-    { code: 'enterprise', tier: 'ENTERPRISE' as const, name: 'Enterprise', monthlyPrice: null, yearlyPrice: null, trialDays: 30, isDefault: false, sortOrder: 4,
-      features: ['Multi-branch', 'Advanced Analytics', 'API Access', 'Custom Branding', 'Dedicated Support'], userLimit: null, doctorLimit: null, patientLimit: null, branchLimit: null, appointmentLimit: null },
+    { code: 'professional', tier: 'PROFESSIONAL' as const, name: 'Professional', monthlyPrice: 3499, yearlyPrice: 34990, trialDays: 14, isDefault: false, sortOrder: 3,
+      features: ['Everything in Basic', 'Staff Management', 'Reports', 'Inventory', 'Communication', 'WhatsApp Reminders'], userLimit: 100, doctorLimit: 50, patientLimit: 5000, branchLimit: 5, appointmentLimit: 10000 },
+    { code: 'advanced', tier: 'PROFESSIONAL' as const, name: 'Advanced', monthlyPrice: 4999, yearlyPrice: 49990, trialDays: 14, isDefault: false, sortOrder: 4,
+      description: 'AI-powered analytics, multi-branch, lab & pharmacy for growing hospitals',
+      features: ['Everything in Professional', 'AI Analytics & Insights', 'Multi-branch Management', 'Lab Integration', 'Pharmacy Module', 'Insurance/TPA', 'API & Webhooks', 'Priority Support'], userLimit: 250, doctorLimit: 100, patientLimit: 25000, branchLimit: 15, appointmentLimit: 50000 },
+    { code: 'enterprise', tier: 'ENTERPRISE' as const, name: 'Enterprise', monthlyPrice: 9999, yearlyPrice: 99990, trialDays: 30, isDefault: false, sortOrder: 5,
+      features: ['Unlimited branches', 'Advanced Analytics', 'API Access', 'Custom Branding', 'Dedicated Account Manager', 'SLA & On-premise option'], userLimit: null, doctorLimit: null, patientLimit: null, branchLimit: null, appointmentLimit: null },
   ];
 
   const plans = await Promise.all(planDefs.map((p) =>
     prisma.subscriptionPlan.upsert({
       where: { code: p.code },
-      update: { isDefault: p.isDefault, monthlyPrice: p.monthlyPrice ?? undefined, yearlyPrice: p.yearlyPrice ?? undefined },
+      update: { isDefault: p.isDefault, monthlyPrice: p.monthlyPrice ?? undefined, yearlyPrice: p.yearlyPrice ?? undefined, features: p.features, sortOrder: p.sortOrder, description: (p as { description?: string }).description },
       create: { ...p, price: p.monthlyPrice ?? 0, features: p.features, isActive: true },
     })
   ));
