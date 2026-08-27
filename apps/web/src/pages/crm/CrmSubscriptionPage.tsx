@@ -117,7 +117,13 @@ export function CrmSubscriptionPage() {
         { planId: selectedPlan.id, billingCycle: cycle },
       );
       if (!res.success) {
-        setNotice({ kind: 'error', text: res.error || 'Payment could not be started' });
+        const err = res.error || 'Payment could not be started';
+        setNotice({
+          kind: 'error',
+          text: err.toLowerCase().includes('authentication')
+            ? 'Cashfree authentication failed. Platform admin must verify App ID & Secret Key under Admin → Settings → Payment Gateway (Sandbox mode must match your Cashfree keys).'
+            : err,
+        });
         return;
       }
       if (res.data?.status === 'COMPLETED' || res.data?.isFree) {

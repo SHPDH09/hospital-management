@@ -353,6 +353,8 @@ function PaymentPage() {
   const { data, isLoading } = useQuery({ queryKey: ['settings', 'payment'], queryFn: () => api.get('/admin/settings/payment') });
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => { if (data?.data) setForm(data.data as Record<string, unknown>); }, [data]);
 
@@ -398,12 +400,25 @@ function PaymentPage() {
         {gateway('cashfree')}
         {gateway('razorpay')}
         {gateway('stripe')}
-        <button className="btn-primary text-sm" disabled={saving} onClick={async () => {
-          setSaving(true);
-          await api.put('/admin/settings/payment', form);
-          setSaving(false);
-          qc.invalidateQueries({ queryKey: ['settings', 'payment'] });
-        }}>Save Changes</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="btn-primary text-sm" disabled={saving} onClick={async () => {
+            setSaving(true);
+            setTestResult(null);
+            await api.put('/admin/settings/payment', form);
+            setSaving(false);
+            qc.invalidateQueries({ queryKey: ['settings', 'payment'] });
+          }}>Save Changes</button>
+          <button className="btn-secondary text-sm" disabled={testing} onClick={async () => {
+            setTesting(true);
+            setTestResult(null);
+            const res = await api.post<{ ok: boolean; message: string }>('/admin/settings/payment/test-cashfree');
+            setTestResult(res.data ? { ok: res.data.ok, message: res.data.message } : { ok: false, message: res.error || 'Test failed' });
+            setTesting(false);
+          }}>{testing ? 'Testing…' : 'Test Cashfree Connection'}</button>
+        </div>
+        {testResult && (
+          <p className={`text-sm ${testResult.ok ? 'text-green-600' : 'text-red-600'}`}>{testResult.message}</p>
+        )}
       </div>
     </SettingsLayout>
   );

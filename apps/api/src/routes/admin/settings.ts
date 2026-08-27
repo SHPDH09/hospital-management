@@ -17,7 +17,7 @@ import {
   applySecretUpdates,
   diffSettings,
 } from '../../lib/settings';
-import { invalidateCashfreeConfigCache } from '../../lib/cashfree';
+import { invalidateCashfreeConfigCache, testCashfreeConnection } from '../../lib/cashfree';
 
 const router = Router();
 
@@ -139,6 +139,22 @@ router.post('/email/test', async (req: AuthRequest, res, next) => {
       },
       'Test email sent successfully'
     );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Test Cashfree ───────────────────────────────────────────────────────────
+
+router.post('/payment/test-cashfree', async (req: AuthRequest, res, next) => {
+  try {
+    invalidateCashfreeConfigCache();
+    const result = await testCashfreeConnection();
+    await logAudit(req, 'TEST_CASHFREE', 'PlatformSetting', 'payment', {
+      ok: result.ok,
+      env: result.env,
+    } as Prisma.InputJsonValue);
+    sendSuccess(res, result, result.ok ? 'Cashfree connection OK' : 'Cashfree connection failed');
   } catch (err) {
     next(err);
   }
