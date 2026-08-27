@@ -356,21 +356,34 @@ function PaymentPage() {
 
   useEffect(() => { if (data?.data) setForm(data.data as Record<string, unknown>); }, [data]);
 
-  const gateway = (name: 'razorpay' | 'stripe') => {
+  const gateway = (name: 'razorpay' | 'stripe' | 'cashfree') => {
     const g = (form[name] || {}) as Record<string, unknown>;
     const setG = (k: string, v: unknown) => setForm((f) => ({ ...f, [name]: { ...(f[name] as object || {}), [k]: v } }));
+    const isCashfree = name === 'cashfree';
     return (
       <div key={name} className="border rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold capitalize">{name}</h3>
+          <h3 className="font-semibold capitalize">{name === 'cashfree' ? 'Cashfree (Subscriptions)' : name}</h3>
           <Toggle checked={Boolean(g.enabled)} onChange={(v) => setG('enabled', v)} label="" />
         </div>
+        {isCashfree && (
+          <p className="text-xs text-gray-500">Used for CRM subscription renewals. Credentials are encrypted at rest.</p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FieldInput field={{ key: 'testMode', label: 'Test Mode', type: 'toggle' }} value={g.testMode} onChange={(v) => setG('testMode', v)} />
+          <FieldInput field={{ key: 'testMode', label: isCashfree ? 'Sandbox Mode' : 'Test Mode', type: 'toggle' }} value={g.testMode} onChange={(v) => setG('testMode', v)} />
           <FieldInput field={{ key: 'currency', label: 'Currency' }} value={g.currency} onChange={(v) => setG('currency', v)} />
-          <FieldInput field={{ key: 'apiKey', label: 'API Key', type: 'secret' }} value={g.apiKey} onChange={(v) => setG('apiKey', v)} />
-          <FieldInput field={{ key: 'secretKey', label: 'Secret Key', type: 'secret' }} value={g.secretKey} onChange={(v) => setG('secretKey', v)} />
-          <FieldInput field={{ key: 'webhookSecret', label: 'Webhook Secret', type: 'secret' }} value={g.webhookSecret} onChange={(v) => setG('webhookSecret', v)} />
+          {isCashfree ? (
+            <>
+              <FieldInput field={{ key: 'appId', label: 'App ID', type: 'secret' }} value={g.appId} onChange={(v) => setG('appId', v)} />
+              <FieldInput field={{ key: 'secretKey', label: 'Secret Key', type: 'secret' }} value={g.secretKey} onChange={(v) => setG('secretKey', v)} />
+            </>
+          ) : (
+            <>
+              <FieldInput field={{ key: 'apiKey', label: 'API Key', type: 'secret' }} value={g.apiKey} onChange={(v) => setG('apiKey', v)} />
+              <FieldInput field={{ key: 'secretKey', label: 'Secret Key', type: 'secret' }} value={g.secretKey} onChange={(v) => setG('secretKey', v)} />
+              <FieldInput field={{ key: 'webhookSecret', label: 'Webhook Secret', type: 'secret' }} value={g.webhookSecret} onChange={(v) => setG('webhookSecret', v)} />
+            </>
+          )}
         </div>
       </div>
     );
@@ -382,6 +395,7 @@ function PaymentPage() {
     <SettingsLayout title="Payment Gateway">
       <div className="card p-6 space-y-4">
         <p className="text-sm text-gray-500">Credentials are encrypted at rest and masked in the UI.</p>
+        {gateway('cashfree')}
         {gateway('razorpay')}
         {gateway('stripe')}
         <button className="btn-primary text-sm" disabled={saving} onClick={async () => {

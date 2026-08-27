@@ -137,6 +137,7 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
   payment: {
     razorpay: { enabled: false, testMode: true, apiKey: '', secretKey: '', webhookSecret: '', currency: 'INR', methods: ['card', 'upi', 'netbanking'] },
     stripe: { enabled: false, testMode: true, apiKey: '', secretKey: '', webhookSecret: '', currency: 'INR', methods: ['card'] },
+    cashfree: { enabled: false, testMode: true, appId: '', secretKey: '', currency: 'INR', methods: ['card', 'upi', 'netbanking', 'wallet'] },
     otherGateways: [],
   },
   email: {
@@ -417,7 +418,7 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
 
 /** Dot-paths for secret fields per category */
 export const SECRET_PATHS: Record<string, string[]> = {
-  payment: ['razorpay.apiKey', 'razorpay.secretKey', 'razorpay.webhookSecret', 'stripe.apiKey', 'stripe.secretKey', 'stripe.webhookSecret'],
+  payment: ['razorpay.apiKey', 'razorpay.secretKey', 'razorpay.webhookSecret', 'stripe.apiKey', 'stripe.secretKey', 'stripe.webhookSecret', 'cashfree.appId', 'cashfree.secretKey'],
   email: ['smtpPassword', 'apiKey'],
   sms: ['apiKey'],
   whatsapp: ['apiCredentials'],

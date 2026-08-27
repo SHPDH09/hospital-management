@@ -17,6 +17,7 @@ import {
   applySecretUpdates,
   diffSettings,
 } from '../../lib/settings';
+import { invalidateCashfreeConfigCache } from '../../lib/cashfree';
 
 const router = Router();
 
@@ -55,6 +56,8 @@ async function saveCategorySettings(
       changedAt: new Date().toISOString(),
     } as Prisma.InputJsonValue);
   }
+
+  if (category === 'payment') invalidateCashfreeConfigCache();
 
   return { row, settings: maskSecrets(category, updated) };
 }

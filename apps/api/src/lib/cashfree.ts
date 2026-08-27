@@ -1,23 +1,71 @@
 import crypto from 'crypto';
+import { prisma } from './prisma';
 import { AppError } from './response';
+import { decryptSecret, mergeWithDefaults, settingsKey } from './settings';
 
 // Cashfree Payment Gateway client.
 //
-// Credentials are read ONLY from environment variables and are never logged,
-// returned to the client, or persisted to the database:
-//   CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_ENV (production | sandbox)
+// Credentials are read from environment variables first, then from encrypted
+// platform payment settings (Admin → Settings → Payment Gateway → Cashfree).
 const API_VERSION = '2023-08-01';
 
-export function getCashfreeConfig() {
-  const appId = process.env.CASHFREE_APP_ID;
-  const secretKey = process.env.CASHFREE_SECRET_KEY;
-  const env = (process.env.CASHFREE_ENV || 'sandbox').toLowerCase();
-  const baseUrl = env === 'production' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
-  return { appId, secretKey, env, baseUrl };
+export interface CashfreeConfig {
+  appId?: string;
+  secretKey?: string;
+  env: string;
+  baseUrl: string;
 }
 
-export function isCashfreeConfigured(): boolean {
-  const { appId, secretKey } = getCashfreeConfig();
+let cachedConfig: CashfreeConfig | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 60_000;
+
+function baseUrlForEnv(env: string): string {
+  return env === 'production' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
+}
+
+async function loadCashfreeFromSettings(): Promise<{ appId?: string; secretKey?: string; env: string }> {
+  const row = await prisma.platformSetting.findUnique({ where: { key: settingsKey('payment') } });
+  const payment = mergeWithDefaults('payment', row?.value as Record<string, unknown> | null);
+  const cf = payment.cashfree as Record<string, unknown> | undefined;
+  if (!cf?.enabled) return { env: 'sandbox' };
+
+  const appId = typeof cf.appId === 'string' ? cf.appId : '';
+  let secretKey = typeof cf.secretKey === 'string' ? cf.secretKey : '';
+  if (secretKey.startsWith('enc:')) secretKey = decryptSecret(secretKey);
+  const env = cf.testMode === false ? 'production' : 'sandbox';
+  return { appId: appId || undefined, secretKey: secretKey || undefined, env };
+}
+
+export function invalidateCashfreeConfigCache(): void {
+  cachedConfig = null;
+  cacheExpiry = 0;
+}
+
+export async function getCashfreeConfig(): Promise<CashfreeConfig> {
+  const envAppId = process.env.CASHFREE_APP_ID;
+  const envSecretKey = process.env.CASHFREE_SECRET_KEY;
+  const envEnv = (process.env.CASHFREE_ENV || 'sandbox').toLowerCase();
+  if (envAppId && envSecretKey) {
+    return { appId: envAppId, secretKey: envSecretKey, env: envEnv, baseUrl: baseUrlForEnv(envEnv) };
+  }
+
+  if (cachedConfig && Date.now() < cacheExpiry) return cachedConfig;
+
+  const fromDb = await loadCashfreeFromSettings();
+  const env = fromDb.env || 'sandbox';
+  cachedConfig = {
+    appId: fromDb.appId,
+    secretKey: fromDb.secretKey,
+    env,
+    baseUrl: baseUrlForEnv(env),
+  };
+  cacheExpiry = Date.now() + CACHE_TTL_MS;
+  return cachedConfig;
+}
+
+export async function isCashfreeConfigured(): Promise<boolean> {
+  const { appId, secretKey } = await getCashfreeConfig();
   return Boolean(appId && secretKey);
 }
 
@@ -37,7 +85,7 @@ export interface CashfreeOrder {
 }
 
 export async function createCashfreeOrder(input: CreateOrderInput): Promise<CashfreeOrder> {
-  const { appId, secretKey, baseUrl } = getCashfreeConfig();
+  const { appId, secretKey, baseUrl } = await getCashfreeConfig();
   if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
 
   const res = await fetch(`${baseUrl}/orders`, {
@@ -66,7 +114,6 @@ export async function createCashfreeOrder(input: CreateOrderInput): Promise<Cash
 
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    // Note: never include credentials in the error surfaced to clients/logs.
     throw new AppError((data.message as string) || 'Failed to create payment order', 502);
   }
   return {
@@ -77,7 +124,7 @@ export async function createCashfreeOrder(input: CreateOrderInput): Promise<Cash
 }
 
 export async function getCashfreeOrder(orderId: string): Promise<{ orderStatus: string; raw: Record<string, unknown> }> {
-  const { appId, secretKey, baseUrl } = getCashfreeConfig();
+  const { appId, secretKey, baseUrl } = await getCashfreeConfig();
   if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
 
   const res = await fetch(`${baseUrl}/orders/${encodeURIComponent(orderId)}`, {
@@ -89,7 +136,7 @@ export async function getCashfreeOrder(orderId: string): Promise<{ orderStatus: 
 }
 
 export async function getCashfreeOrderPayments(orderId: string): Promise<Record<string, unknown>[]> {
-  const { appId, secretKey, baseUrl } = getCashfreeConfig();
+  const { appId, secretKey, baseUrl } = await getCashfreeConfig();
   if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
   const res = await fetch(`${baseUrl}/orders/${encodeURIComponent(orderId)}/payments`, {
     headers: { 'x-client-id': appId, 'x-client-secret': secretKey, 'x-api-version': API_VERSION },
@@ -102,7 +149,7 @@ export async function getCashfreeOrderPayments(orderId: string): Promise<Record<
 export interface RefundInput { orderId: string; amount: number; refundId?: string; note?: string }
 
 export async function createCashfreeRefund(input: RefundInput): Promise<Record<string, unknown>> {
-  const { appId, secretKey, baseUrl } = getCashfreeConfig();
+  const { appId, secretKey, baseUrl } = await getCashfreeConfig();
   if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
   const refundId = input.refundId || `rf_${Date.now()}`;
   const res = await fetch(`${baseUrl}/orders/${encodeURIComponent(input.orderId)}/refunds`, {
@@ -116,8 +163,8 @@ export async function createCashfreeRefund(input: RefundInput): Promise<Record<s
 }
 
 // Verify a Cashfree webhook: signature = base64(HMAC_SHA256(timestamp + rawBody, secretKey)).
-export function verifyCashfreeWebhook(rawBody: string, signature?: string, timestamp?: string): boolean {
-  const { secretKey } = getCashfreeConfig();
+export async function verifyCashfreeWebhook(rawBody: string, signature?: string, timestamp?: string): Promise<boolean> {
+  const { secretKey } = await getCashfreeConfig();
   if (!secretKey || !signature || !timestamp) return false;
   const expected = crypto.createHmac('sha256', secretKey).update(timestamp + rawBody).digest('base64');
   try {
