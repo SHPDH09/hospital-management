@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import {
-  MessageCircle, Facebook, Instagram, Users, Send, Download, Plus,
-  CheckCircle2, XCircle, Loader2, Settings, Megaphone,
+  MessageCircle, Facebook, Instagram, Users, Plus, Trash2,
+  CheckCircle2, XCircle, Loader2, Settings, Megaphone, ExternalLink,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { PageHeader, AdminTable, LoadingState } from '@/components/admin/AdminComponents';
@@ -13,7 +13,7 @@ import { formatDate, cn } from '@/lib/utils';
 const subNav = [
   { to: '/admin/affiliate-marketing', label: 'Dashboard', end: true },
   { to: '/admin/affiliate-marketing/whatsapp', label: 'WhatsApp' },
-  { to: '/admin/affiliate-marketing/groups', label: 'Groups & Export' },
+  { to: '/admin/affiliate-marketing/contacts', label: 'Contact Lists' },
   { to: '/admin/affiliate-marketing/bulk-send', label: 'Bulk Messages' },
   { to: '/admin/affiliate-marketing/facebook', label: 'Facebook' },
   { to: '/admin/affiliate-marketing/instagram', label: 'Instagram' },
@@ -26,7 +26,7 @@ function AffLayout({ children }: { children: React.ReactNode }) {
     <DashboardLayout portal="admin">
       <PageHeader
         title="Affiliate Marketing"
-        subtitle="Connect WhatsApp, Facebook & Instagram — export groups, create groups, and send bulk campaigns"
+        subtitle="Connect WhatsApp Cloud API, Facebook & Instagram — manage contact lists and send bulk campaigns"
       />
       <nav className="flex flex-wrap gap-1 mb-6 border-b border-gray-200 pb-2">
         {subNav.map((item) => {
@@ -46,12 +46,11 @@ function AffLayout({ children }: { children: React.ReactNode }) {
 }
 
 interface WhatsAppStatus {
-  status: 'disconnected' | 'connecting' | 'qr' | 'connected';
-  qrDataUrl?: string;
+  status: 'disconnected' | 'connected';
   phone?: string;
   name?: string;
   lastError?: string;
-  mode?: 'local' | 'bridge';
+  mode?: 'cloud';
 }
 
 interface SocialStatus {
@@ -60,6 +59,13 @@ interface SocialStatus {
   accountId?: string;
   profilePicture?: string;
   connectedAt?: string;
+}
+
+interface ContactList {
+  id: string;
+  name: string;
+  phones: string[];
+  createdAt: string;
 }
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
@@ -110,7 +116,7 @@ function DashboardPage() {
         <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
         <div className="flex flex-wrap gap-3">
           <Link to="/admin/affiliate-marketing/whatsapp" className="btn-primary text-sm">Connect WhatsApp</Link>
-          <Link to="/admin/affiliate-marketing/groups" className="btn-secondary text-sm">Export Group Numbers</Link>
+          <Link to="/admin/affiliate-marketing/contacts" className="btn-secondary text-sm">Manage Contact Lists</Link>
           <Link to="/admin/affiliate-marketing/bulk-send" className="btn-secondary text-sm">Send Bulk Message</Link>
         </div>
       </div>
@@ -133,42 +139,53 @@ function DashboardPage() {
 
 function WhatsAppPage() {
   const qc = useQueryClient();
-  const [connecting, setConnecting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  const [form, setForm] = useState({
+    accessToken: '',
+    phoneNumberId: '',
+    businessAccountId: '',
+  });
 
   const { data: setupData } = useQuery({
     queryKey: ['affiliate-whatsapp-setup'],
     queryFn: () => api.get('/admin/affiliate-marketing/whatsapp/setup'),
   });
-  const setup = setupData?.data as {
-    mode?: string;
-    bridgeConfigured?: boolean;
-    bridgeUrl?: string;
-    setupMessage?: string | null;
-  } | undefined;
+  const setup = setupData?.data as { helpUrl?: string } | undefined;
 
   const { data, refetch, isLoading } = useQuery({
     queryKey: ['affiliate-whatsapp-status'],
     queryFn: () => api.get<WhatsAppStatus>('/admin/affiliate-marketing/whatsapp/status'),
-    refetchInterval: (q) => {
-      const status = (q.state.data?.data as WhatsAppStatus | undefined)?.status;
-      return status === 'qr' || status === 'connecting' ? 2000 : false;
-    },
   });
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['affiliate-settings'],
+    queryFn: () => api.get('/admin/affiliate-marketing/settings'),
+  });
+
+  useEffect(() => {
+    const s = settingsData?.data as { whatsappPhoneNumberId?: string } | undefined;
+    if (s?.whatsappPhoneNumberId) {
+      setForm((f) => ({ ...f, phoneNumberId: s.whatsappPhoneNumberId || '' }));
+    }
+  }, [settingsData]);
 
   const status = data?.data as WhatsAppStatus | undefined;
 
   const connect = async () => {
-    setConnecting(true);
+    setSaving(true);
     setNotice('');
-    const res = await api.post<WhatsAppStatus>('/admin/affiliate-marketing/whatsapp/connect');
-    setConnecting(false);
+    const res = await api.post<WhatsAppStatus>('/admin/affiliate-marketing/whatsapp/connect', form);
+    setSaving(false);
     if (!res.success) {
-      setNotice(res.error || 'Failed to start connection');
+      setNotice(res.error || 'Failed to connect WhatsApp');
       return;
     }
+    setForm((f) => ({ ...f, accessToken: '' }));
     qc.invalidateQueries({ queryKey: ['affiliate-whatsapp-status'] });
+    qc.invalidateQueries({ queryKey: ['affiliate-settings'] });
     refetch();
+    setNotice('WhatsApp connected successfully!');
   };
 
   const disconnect = async () => {
@@ -181,24 +198,6 @@ function WhatsAppPage() {
 
   return (
     <AffLayout>
-      {setup?.mode === 'serverless' && !setup?.bridgeConfigured && (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-semibold">Production setup required</p>
-          <p className="mt-2">Vercel cannot run WhatsApp Web directly. Deploy the <strong>WhatsApp Bridge</strong> service on Railway/VPS, then add the URL in Settings.</p>
-          <ol className="mt-3 list-decimal pl-5 space-y-1 text-amber-800">
-            <li>Deploy <code className="text-xs bg-amber-100 px-1 rounded">apps/whatsapp-bridge</code> on Railway (see README)</li>
-            <li>Set <code className="text-xs bg-amber-100 px-1 rounded">WHATSAPP_BRIDGE_URL</code> + <code className="text-xs bg-amber-100 px-1 rounded">WHATSAPP_BRIDGE_SECRET</code> in Vercel env</li>
-            <li>Or add Bridge URL in <Link to="/admin/affiliate-marketing/settings" className="underline font-medium">Settings</Link></li>
-          </ol>
-        </div>
-      )}
-
-      {setup?.bridgeConfigured && (
-        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          Bridge connected: <span className="font-mono text-xs">{setup.bridgeUrl}</span>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -206,64 +205,91 @@ function WhatsAppPage() {
               <MessageCircle className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">WhatsApp Web Connection</h3>
-              <p className="text-sm text-gray-500">Scan QR with your phone to link WhatsApp</p>
+              <h3 className="font-semibold text-gray-900">WhatsApp Cloud API</h3>
+              <p className="text-sm text-gray-500">Paste your Meta API credentials — no QR code, no extra server</p>
             </div>
           </div>
 
           <div className="mb-4">
             <StatusPill
               ok={status?.status === 'connected'}
-              label={status?.status === 'connected' ? `Connected · ${status.phone || ''}` : (status?.status || 'disconnected').toUpperCase()}
+              label={status?.status === 'connected' ? `Connected · ${status.phone || ''}` : 'Not connected'}
             />
           </div>
 
           {status?.status === 'connected' && (
             <div className="rounded-xl bg-green-50 border border-green-100 p-4 mb-4 text-sm text-green-800">
-              <p className="font-medium">{status.name || 'WhatsApp Account'}</p>
-              <p>+{status.phone}</p>
+              <p className="font-medium">{status.name || 'WhatsApp Business'}</p>
+              <p>{status.phone}</p>
             </div>
           )}
 
-          {status?.status === 'qr' && status.qrDataUrl && (
-            <div className="flex flex-col items-center rounded-xl border border-gray-200 bg-white p-6 mb-4">
-              <img src={status.qrDataUrl} alt="WhatsApp QR Code" className="h-64 w-64 rounded-lg" />
-              <p className="mt-4 text-sm text-gray-600 text-center">
-                Open WhatsApp → Linked Devices → Link a Device → Scan this QR code
-              </p>
-            </div>
-          )}
-
-          {(status?.status === 'connecting' || connecting) && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-              <Loader2 className="h-4 w-4 animate-spin" /> Generating QR code…
-            </div>
-          )}
-
-          {notice && <p className="text-sm text-red-600 mb-4">{notice}</p>}
           {status?.lastError && <p className="text-sm text-amber-700 mb-4">{status.lastError}</p>}
 
-          <div className="flex gap-3">
+          <div className="space-y-3">
+            <input
+              className="input w-full"
+              type="password"
+              placeholder="Permanent Access Token"
+              value={form.accessToken}
+              onChange={(e) => setForm((f) => ({ ...f, accessToken: e.target.value }))}
+            />
+            <input
+              className="input w-full"
+              placeholder="Phone Number ID"
+              value={form.phoneNumberId}
+              onChange={(e) => setForm((f) => ({ ...f, phoneNumberId: e.target.value }))}
+            />
+            <input
+              className="input w-full"
+              placeholder="Business Account ID (optional)"
+              value={form.businessAccountId}
+              onChange={(e) => setForm((f) => ({ ...f, businessAccountId: e.target.value }))}
+            />
+          </div>
+
+          {notice && <p className={cn('text-sm mt-3', notice.includes('success') ? 'text-green-600' : 'text-red-600')}>{notice}</p>}
+
+          <div className="flex gap-3 mt-4">
             {status?.status === 'connected' ? (
-              <button type="button" className="btn-secondary text-sm" onClick={disconnect}>Disconnect</button>
+              <>
+                <button type="button" className="btn-primary text-sm" onClick={connect} disabled={saving || !form.accessToken}>
+                  {saving ? 'Saving…' : 'Update Credentials'}
+                </button>
+                <button type="button" className="btn-secondary text-sm" onClick={disconnect}>Disconnect</button>
+              </>
             ) : (
-              <button type="button" className="btn-primary text-sm" onClick={connect} disabled={connecting || status?.status === 'qr'}>
-                {status?.status === 'qr' ? 'Waiting for scan…' : 'Generate QR & Connect'}
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                onClick={connect}
+                disabled={saving || !form.accessToken || !form.phoneNumberId}
+              >
+                {saving ? <><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Connecting…</> : 'Save & Connect'}
               </button>
             )}
           </div>
         </div>
 
         <div className="card p-6 bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100">
-          <h4 className="font-semibold text-emerald-900 mb-3">What you can do after connecting</h4>
-          <ul className="space-y-2 text-sm text-emerald-800">
-            <li className="flex items-start gap-2"><Users className="h-4 w-4 mt-0.5 shrink-0" /> Export phone numbers from any WhatsApp group</li>
-            <li className="flex items-start gap-2"><Plus className="h-4 w-4 mt-0.5 shrink-0" /> Create new groups from bulk phone numbers</li>
-            <li className="flex items-start gap-2"><Send className="h-4 w-4 mt-0.5 shrink-0" /> Send bulk WhatsApp messages to your contacts</li>
-          </ul>
+          <h4 className="font-semibold text-emerald-900 mb-3">Simple 3-step setup</h4>
+          <ol className="space-y-3 text-sm text-emerald-800 list-decimal pl-5">
+            <li>Go to <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer" className="underline font-medium inline-flex items-center gap-1">Meta Developers <ExternalLink className="h-3 w-3" /></a> and create an app with WhatsApp product</li>
+            <li>Copy your <strong>Access Token</strong> and <strong>Phone Number ID</strong> from WhatsApp → API Setup</li>
+            <li>Paste them above and click <strong>Save & Connect</strong></li>
+          </ol>
+          {setup?.helpUrl && (
+            <a href={setup.helpUrl} target="_blank" rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-1 text-sm text-emerald-700 underline font-medium">
+              Meta Cloud API documentation <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <div className="mt-5 rounded-lg bg-white/60 p-3 text-xs text-emerald-700">
+            Works on Vercel — no Railway, no QR scan, no bridge server needed.
+          </div>
           {status?.status === 'connected' && (
             <div className="mt-5 flex flex-wrap gap-2">
-              <Link to="/admin/affiliate-marketing/groups" className="btn-primary text-xs">Go to Groups</Link>
+              <Link to="/admin/affiliate-marketing/contacts" className="btn-primary text-xs">Contact Lists</Link>
               <Link to="/admin/affiliate-marketing/bulk-send" className="btn-secondary text-xs">Bulk Send</Link>
             </div>
           )}
@@ -273,119 +299,131 @@ function WhatsAppPage() {
   );
 }
 
-function GroupsPage() {
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [exportData, setExportData] = useState<{ count: number; csv: string; participants: { phone: string; name?: string }[] } | null>(null);
-  const [groupName, setGroupName] = useState('');
-  const [bulkPhones, setBulkPhones] = useState('');
+function ContactListsPage() {
+  const qc = useQueryClient();
+  const [listName, setListName] = useState('');
+  const [phones, setPhones] = useState('');
   const [notice, setNotice] = useState('');
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['affiliate-whatsapp-groups'],
-    queryFn: () => api.get('/admin/affiliate-marketing/whatsapp/groups'),
-    retry: false,
+  const { data, isLoading } = useQuery({
+    queryKey: ['affiliate-contact-lists'],
+    queryFn: () => api.get<ContactList[]>('/admin/affiliate-marketing/whatsapp/contact-lists'),
   });
 
-  const groups = (data?.data as { id: string; name: string; participantCount: number }[]) || [];
+  const lists = (data?.data as ContactList[] | undefined) || [];
 
-  const exportGroup = async () => {
-    if (!selectedGroup) return;
+  const createList = async () => {
     setNotice('');
-    const res = await api.get<{ count: number; csv: string; participants: { phone: string; name?: string }[] }>(
-      `/admin/affiliate-marketing/whatsapp/groups/${encodeURIComponent(selectedGroup)}/export`,
-    );
-    if (!res.success) {
-      setNotice(res.error || 'Export failed. Connect WhatsApp first.');
-      return;
-    }
-    setExportData(res.data || null);
-  };
-
-  const downloadCsv = () => {
-    if (!exportData?.csv) return;
-    const blob = new Blob([exportData.csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `whatsapp-group-${selectedGroup}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const createGroup = async () => {
-    setNotice('');
-    const res = await api.post('/admin/affiliate-marketing/whatsapp/groups/create', {
-      name: groupName,
-      phones: bulkPhones,
+    const res = await api.post('/admin/affiliate-marketing/whatsapp/contact-lists', {
+      name: listName,
+      phones,
     });
     if (!res.success) {
-      setNotice(res.error || 'Failed to create group');
+      setNotice(res.error || 'Failed to save list');
       return;
     }
-    setNotice(`Group "${groupName}" created with ${(res.data as { added: number })?.added || 0} members.`);
-    setGroupName('');
-    setBulkPhones('');
-    refetch();
+    setNotice(`List "${listName}" saved with ${parsePhoneCount(phones)} numbers.`);
+    setListName('');
+    setPhones('');
+    qc.invalidateQueries({ queryKey: ['affiliate-contact-lists'] });
+  };
+
+  const deleteList = async (id: string) => {
+    await api.delete(`/admin/affiliate-marketing/whatsapp/contact-lists/${id}`);
+    qc.invalidateQueries({ queryKey: ['affiliate-contact-lists'] });
+  };
+
+  const copyPhones = (list: ContactList) => {
+    navigator.clipboard.writeText(list.phones.join('\n'));
+    setNotice(`Copied ${list.phones.length} numbers from "${list.name}"`);
   };
 
   return (
     <AffLayout>
-      {notice && <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">{notice}</div>}
+      {notice && (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">{notice}</div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card p-6">
           <h3 className="font-semibold flex items-center gap-2 mb-4">
-            <Download className="h-5 w-5 text-emerald-600" /> Export Group Numbers
+            <Plus className="h-5 w-5 text-emerald-600" /> Create Contact List
           </h3>
-          {isLoading ? <LoadingState /> : (
-            <>
-              <select className="input w-full mb-3" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
-                <option value="">Select a WhatsApp group</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name} ({g.participantCount} members)</option>
-                ))}
-              </select>
-              <button type="button" className="btn-primary text-sm" onClick={exportGroup} disabled={!selectedGroup}>
-                Export Numbers
-              </button>
-              {exportData && (
-                <div className="mt-4 rounded-xl bg-gray-50 p-4">
-                  <p className="text-sm font-medium">{exportData.count} numbers exported</p>
-                  <button type="button" className="btn-secondary text-xs mt-2" onClick={downloadCsv}>Download CSV</button>
-                  <div className="mt-3 max-h-40 overflow-auto text-xs font-mono text-gray-600">
-                    {exportData.participants.slice(0, 20).map((p) => <div key={p.phone}>+{p.phone}</div>)}
-                    {exportData.participants.length > 20 && <div>…and {exportData.participants.length - 20} more</div>}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <p className="text-sm text-gray-500 mb-4">
+            Save phone numbers for bulk campaigns. Paste numbers from WhatsApp groups or spreadsheets.
+          </p>
+          <input className="input w-full mb-3" placeholder="List name (e.g. Dental Patients)" value={listName}
+            onChange={(e) => setListName(e.target.value)} />
+          <textarea className="input w-full mb-3" rows={8}
+            placeholder="Phone numbers (one per line or comma-separated)&#10;9876543210&#10;9123456789"
+            value={phones} onChange={(e) => setPhones(e.target.value)} />
+          <button type="button" className="btn-primary text-sm" onClick={createList} disabled={!listName || !phones.trim()}>
+            Save Contact List
+          </button>
         </div>
 
         <div className="card p-6">
           <h3 className="font-semibold flex items-center gap-2 mb-4">
-            <Plus className="h-5 w-5 text-emerald-600" /> Create Group from Bulk Numbers
+            <Users className="h-5 w-5 text-emerald-600" /> Saved Lists
           </h3>
-          <input className="input w-full mb-3" placeholder="Group name" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
-          <textarea className="input w-full mb-3" rows={6}
-            placeholder="Phone numbers (one per line or comma-separated)&#10;9876543210&#10;9123456789"
-            value={bulkPhones} onChange={(e) => setBulkPhones(e.target.value)} />
-          <button type="button" className="btn-primary text-sm" onClick={createGroup} disabled={!groupName || !bulkPhones.trim()}>
-            Create WhatsApp Group
-          </button>
+          {isLoading ? <LoadingState /> : lists.length === 0 ? (
+            <p className="text-sm text-gray-500">No contact lists yet. Create one to reuse numbers in bulk send.</p>
+          ) : (
+            <div className="space-y-3">
+              {lists.map((list) => (
+                <div key={list.id} className="rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-gray-900">{list.name}</p>
+                      <p className="text-xs text-gray-500">{list.phones.length} numbers · {formatDate(list.createdAt)}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <button type="button" className="btn-secondary text-xs px-2 py-1" onClick={() => copyPhones(list)}>
+                        Copy
+                      </button>
+                      <button type="button" className="text-red-500 hover:text-red-700 p-1" onClick={() => deleteList(list.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2 max-h-16 overflow-auto text-xs font-mono text-gray-500">
+                    {list.phones.slice(0, 5).map((p) => <div key={p}>+{p}</div>)}
+                    {list.phones.length > 5 && <div>…and {list.phones.length - 5} more</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </AffLayout>
   );
 }
 
+function parsePhoneCount(input: string): number {
+  return input.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).length;
+}
+
 function BulkSendPage() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [phones, setPhones] = useState('');
+  const [selectedList, setSelectedList] = useState('');
   const [delayMs, setDelayMs] = useState(2000);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ sentCount: number; failedCount: number } | null>(null);
+
+  const { data: listsData } = useQuery({
+    queryKey: ['affiliate-contact-lists'],
+    queryFn: () => api.get<ContactList[]>('/admin/affiliate-marketing/whatsapp/contact-lists'),
+  });
+  const lists = (listsData?.data as ContactList[] | undefined) || [];
+
+  useEffect(() => {
+    if (!selectedList) return;
+    const list = lists.find((l) => l.id === selectedList);
+    if (list) setPhones(list.phones.join('\n'));
+  }, [selectedList, lists]);
 
   const send = async () => {
     setSending(true);
@@ -403,6 +441,16 @@ function BulkSendPage() {
         <h3 className="font-semibold flex items-center gap-2 mb-4">
           <Megaphone className="h-5 w-5 text-emerald-600" /> Bulk WhatsApp Campaign
         </h3>
+
+        {lists.length > 0 && (
+          <select className="input w-full mb-3" value={selectedList} onChange={(e) => setSelectedList(e.target.value)}>
+            <option value="">Load from contact list (optional)</option>
+            {lists.map((l) => (
+              <option key={l.id} value={l.id}>{l.name} ({l.phones.length} numbers)</option>
+            ))}
+          </select>
+        )}
+
         <input className="input w-full mb-3" placeholder="Campaign title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
         <textarea className="input w-full mb-3" rows={5} placeholder="Your message…" value={message} onChange={(e) => setMessage(e.target.value)} />
         <textarea className="input w-full mb-3" rows={6} placeholder="Recipients — one phone per line" value={phones} onChange={(e) => setPhones(e.target.value)} />
@@ -418,6 +466,9 @@ function BulkSendPage() {
             Sent: {result.sentCount} · Failed: {result.failedCount}
           </p>
         )}
+        <p className="mt-3 text-xs text-gray-400">
+          Uses WhatsApp Cloud API. Recipients must have opted in to receive messages.
+        </p>
       </div>
     </AffLayout>
   );
@@ -505,31 +556,18 @@ function SettingsPage() {
     queryKey: ['affiliate-settings'],
     queryFn: () => api.get('/admin/affiliate-marketing/settings'),
   });
-  const [form, setForm] = useState({
-    metaAppId: '', metaAppSecret: '',
-    whatsappBridgeUrl: '', whatsappBridgeSecret: '',
-  });
+  const [form, setForm] = useState({ metaAppId: '', metaAppSecret: '' });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const s = data?.data as {
-      metaAppId?: string;
-      whatsappBridgeUrl?: string;
-    } | undefined;
-    if (s) {
-      setForm((f) => ({
-        ...f,
-        metaAppId: s.metaAppId || '',
-        whatsappBridgeUrl: s.whatsappBridgeUrl || '',
-      }));
-    }
+    const s = data?.data as { metaAppId?: string } | undefined;
+    if (s) setForm((f) => ({ ...f, metaAppId: s.metaAppId || '' }));
   }, [data]);
 
   const save = async () => {
     await api.put('/admin/affiliate-marketing/settings', form);
     setSaved(true);
     qc.invalidateQueries({ queryKey: ['affiliate-settings'] });
-    qc.invalidateQueries({ queryKey: ['affiliate-whatsapp-setup'] });
     setTimeout(() => setSaved(false), 3000);
   };
 
@@ -537,40 +575,20 @@ function SettingsPage() {
 
   return (
     <AffLayout>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <h3 className="font-semibold flex items-center gap-2 mb-4">
-            <Settings className="h-5 w-5" /> WhatsApp Bridge (Production)
-          </h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Deploy <code className="text-xs bg-gray-100 px-1 rounded">apps/whatsapp-bridge</code> on Railway or VPS.
-            Use the same secret on both bridge and main app.
-          </p>
-          <input className="input w-full mb-3" placeholder="Bridge URL — https://your-app.railway.app"
-            value={form.whatsappBridgeUrl}
-            onChange={(e) => setForm((f) => ({ ...f, whatsappBridgeUrl: e.target.value }))} />
-          <input className="input w-full mb-3" type="password" placeholder="Bridge Secret Key"
-            value={form.whatsappBridgeSecret}
-            onChange={(e) => setForm((f) => ({ ...f, whatsappBridgeSecret: e.target.value }))} />
-          <p className="text-xs text-gray-400 mb-4">
-            Vercel env alternative: <code>WHATSAPP_BRIDGE_URL</code> and <code>WHATSAPP_BRIDGE_SECRET</code>
-          </p>
-        </div>
-
-        <div className="card p-6">
-          <h3 className="font-semibold flex items-center gap-2 mb-4">
-            <Settings className="h-5 w-5" /> Meta (Facebook / Instagram)
-          </h3>
-          <p className="text-sm text-gray-500 mb-4">Required for Facebook & Instagram OAuth connection.</p>
-          <input className="input w-full mb-3" placeholder="Meta App ID" value={form.metaAppId}
-            onChange={(e) => setForm((f) => ({ ...f, metaAppId: e.target.value }))} />
-          <input className="input w-full mb-3" type="password" placeholder="Meta App Secret"
-            value={form.metaAppSecret} onChange={(e) => setForm((f) => ({ ...f, metaAppSecret: e.target.value }))} />
-        </div>
+      <div className="card p-6 max-w-lg">
+        <h3 className="font-semibold flex items-center gap-2 mb-4">
+          <Settings className="h-5 w-5" /> Meta (Facebook / Instagram)
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Required for Facebook & Instagram OAuth. WhatsApp uses its own credentials on the WhatsApp tab.
+        </p>
+        <input className="input w-full mb-3" placeholder="Meta App ID" value={form.metaAppId}
+          onChange={(e) => setForm((f) => ({ ...f, metaAppId: e.target.value }))} />
+        <input className="input w-full mb-3" type="password" placeholder="Meta App Secret"
+          value={form.metaAppSecret} onChange={(e) => setForm((f) => ({ ...f, metaAppSecret: e.target.value }))} />
+        <button type="button" className="btn-primary text-sm" onClick={save}>Save Settings</button>
+        {saved && <p className="mt-2 text-sm text-green-600">Settings saved.</p>}
       </div>
-
-      <button type="button" className="btn-primary text-sm mt-4" onClick={save}>Save All Settings</button>
-      {saved && <p className="mt-2 text-sm text-green-600">Settings saved. Redeploy Vercel if you changed env vars.</p>}
     </AffLayout>
   );
 }
@@ -580,7 +598,8 @@ export function AdminAffiliateMarketingPage() {
     <Routes>
       <Route index element={<DashboardPage />} />
       <Route path="whatsapp" element={<WhatsAppPage />} />
-      <Route path="groups" element={<GroupsPage />} />
+      <Route path="contacts" element={<ContactListsPage />} />
+      <Route path="groups" element={<Navigate to="/admin/affiliate-marketing/contacts" replace />} />
       <Route path="bulk-send" element={<BulkSendPage />} />
       <Route path="facebook" element={<SocialConnectPage platform="facebook" />} />
       <Route path="instagram" element={<SocialConnectPage platform="instagram" />} />

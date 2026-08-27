@@ -6,23 +6,21 @@ import { sendSuccess } from '../../lib/response';
 import { AuthRequest } from '../../middleware/auth';
 import { logAudit } from '../../lib/audit';
 import {
+  connectWhatsAppCloud,
+  deleteContactList,
   disconnectWhatsApp,
-  exportGroupParticipants,
-  createWhatsAppGroup,
+  getContactLists,
   getWhatsAppSetupInfo,
   getWhatsAppStatus,
-  listWhatsAppGroups,
   parsePhoneList,
+  saveContactList,
   sendBulkWhatsAppMessages,
-  startWhatsAppConnection,
 } from '../../lib/whatsapp-affiliate';
-import { invalidateBridgeConfigCache } from '../../lib/whatsapp-bridge-client';
 import {
   disconnectSocial,
   getAffiliateSettings,
   getMetaAuthUrl,
   getSocialConnection,
-  handleMetaCallback,
   saveAffiliateSettings,
 } from '../../lib/meta-affiliate';
 
@@ -64,9 +62,8 @@ router.get('/settings', async (_req, res, next) => {
       metaAppId: settings.metaAppId || '',
       metaAppSecret: settings.metaAppSecret ? '********' : '',
       hasMetaSecret: Boolean(settings.metaAppSecret),
-      whatsappBridgeUrl: settings.whatsappBridgeUrl || '',
-      whatsappBridgeSecret: settings.whatsappBridgeSecret ? '********' : '',
-      hasBridgeSecret: Boolean(settings.whatsappBridgeSecret),
+      whatsappPhoneNumberId: settings.whatsappPhoneNumberId || '',
+      hasWhatsAppToken: Boolean(settings.whatsappAccessToken),
       ...(await getWhatsAppSetupInfo()),
     });
   } catch (err) { next(err); }
@@ -77,8 +74,6 @@ router.put('/settings', async (req: AuthRequest, res, next) => {
     const body = z.object({
       metaAppId: z.string().optional(),
       metaAppSecret: z.string().optional(),
-      whatsappBridgeUrl: z.string().optional(),
-      whatsappBridgeSecret: z.string().optional(),
     }).parse(req.body);
 
     const current = await getAffiliateSettings();
@@ -88,19 +83,14 @@ router.put('/settings', async (req: AuthRequest, res, next) => {
       ...(body.metaAppSecret && body.metaAppSecret !== '********'
         ? { metaAppSecret: body.metaAppSecret }
         : {}),
-      ...(body.whatsappBridgeUrl !== undefined ? { whatsappBridgeUrl: body.whatsappBridgeUrl } : {}),
-      ...(body.whatsappBridgeSecret && body.whatsappBridgeSecret !== '********'
-        ? { whatsappBridgeSecret: body.whatsappBridgeSecret }
-        : {}),
     };
     await saveAffiliateSettings(nextSettings);
-    invalidateBridgeConfigCache();
     await logAudit(req, 'Affiliate Settings Updated', 'affiliate_settings', undefined, nextSettings);
     sendSuccess(res, { saved: true });
   } catch (err) { next(err); }
 });
 
-// ─── WhatsApp ────────────────────────────────────────────────────────────────
+// ─── WhatsApp Cloud API ──────────────────────────────────────────────────────
 
 router.get('/whatsapp/status', async (_req, res, next) => {
   try {
@@ -116,9 +106,15 @@ router.get('/whatsapp/setup', async (_req, res, next) => {
 
 router.post('/whatsapp/connect', async (req: AuthRequest, res, next) => {
   try {
-    const status = await startWhatsAppConnection();
-    await logAudit(req, 'WhatsApp Affiliate Connect Started', 'affiliate_whatsapp');
-    sendSuccess(res, status);
+    const body = z.object({
+      accessToken: z.string().min(1),
+      phoneNumberId: z.string().min(1),
+      businessAccountId: z.string().optional(),
+    }).parse(req.body);
+
+    const status = await connectWhatsAppCloud(body);
+    await logAudit(req, 'WhatsApp Cloud API Connected', 'affiliate_whatsapp');
+    sendSuccess(res, status, 'WhatsApp connected');
   } catch (err) { next(err); }
 });
 
@@ -130,25 +126,13 @@ router.post('/whatsapp/disconnect', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/whatsapp/groups', async (_req, res, next) => {
+router.get('/whatsapp/contact-lists', async (_req, res, next) => {
   try {
-    sendSuccess(res, await listWhatsAppGroups());
+    sendSuccess(res, await getContactLists());
   } catch (err) { next(err); }
 });
 
-router.get('/whatsapp/groups/:groupId/export', async (req, res, next) => {
-  try {
-    const participants = await exportGroupParticipants(req.params.groupId);
-    sendSuccess(res, {
-      groupId: req.params.groupId,
-      count: participants.length,
-      participants,
-      csv: ['phone,name,isAdmin', ...participants.map((p) => `${p.phone},${p.name || ''},${p.isAdmin ? 'yes' : 'no'}`)].join('\n'),
-    });
-  } catch (err) { next(err); }
-});
-
-router.post('/whatsapp/groups/create', async (req: AuthRequest, res, next) => {
+router.post('/whatsapp/contact-lists', async (req: AuthRequest, res, next) => {
   try {
     const body = z.object({
       name: z.string().min(1),
@@ -156,9 +140,18 @@ router.post('/whatsapp/groups/create', async (req: AuthRequest, res, next) => {
     }).parse(req.body);
 
     const phoneList = Array.isArray(body.phones) ? body.phones : parsePhoneList(body.phones);
-    const result = await createWhatsAppGroup(body.name, phoneList);
-    await logAudit(req, 'WhatsApp Group Created', 'affiliate_whatsapp', result.groupId, result);
-    sendSuccess(res, result, 'Group created');
+    const lists = await saveContactList(body.name, phoneList);
+    await logAudit(req, 'WhatsApp Contact List Created', 'affiliate_whatsapp', body.name);
+    sendSuccess(res, lists, 'Contact list saved');
+  } catch (err) { next(err); }
+});
+
+router.delete('/whatsapp/contact-lists/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = String(req.params.id);
+    const lists = await deleteContactList(id);
+    await logAudit(req, 'WhatsApp Contact List Deleted', 'affiliate_whatsapp', id);
+    sendSuccess(res, lists);
   } catch (err) { next(err); }
 });
 
