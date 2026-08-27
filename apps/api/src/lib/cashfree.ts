@@ -14,9 +14,10 @@ export interface CashfreeConfig {
   secretKey?: string;
   env: string;
   baseUrl: string;
+  domainWhitelisted?: boolean;
 }
 
-let cachedConfig: CashfreeConfig | null = null;
+let cachedConfig: (CashfreeConfig & { domainWhitelisted?: boolean }) | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL_MS = 60_000;
 
@@ -24,17 +25,35 @@ function baseUrlForEnv(env: string): string {
   return env === 'production' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
 }
 
-async function loadCashfreeFromSettings(): Promise<{ appId?: string; secretKey?: string; env: string }> {
+function decryptIfNeeded(value: string): string {
+  return value.startsWith('enc:') ? decryptSecret(value) : value;
+}
+
+function isProductionCredential(appId: string, secretKey: string): boolean {
+  return secretKey.includes('_prod_') || secretKey.startsWith('cfsk_ma_prod');
+}
+
+function isSandboxCredential(appId: string, secretKey: string): boolean {
+  return appId.startsWith('TEST') || secretKey.includes('_test_') || secretKey.startsWith('cfsk_ma_test');
+}
+
+async function loadCashfreeFromSettings(): Promise<{ appId?: string; secretKey?: string; env: string; domainWhitelisted: boolean }> {
   const row = await prisma.platformSetting.findUnique({ where: { key: settingsKey('payment') } });
   const payment = mergeWithDefaults('payment', row?.value as Record<string, unknown> | null);
   const cf = payment.cashfree as Record<string, unknown> | undefined;
-  if (!cf?.enabled) return { env: 'sandbox' };
+  if (!cf?.enabled) return { env: 'sandbox', domainWhitelisted: false };
 
-  const appId = typeof cf.appId === 'string' ? cf.appId : '';
-  let secretKey = typeof cf.secretKey === 'string' ? cf.secretKey : '';
-  if (secretKey.startsWith('enc:')) secretKey = decryptSecret(secretKey);
-  const env = cf.testMode === false ? 'production' : 'sandbox';
-  return { appId: appId || undefined, secretKey: secretKey || undefined, env };
+  const appId = decryptIfNeeded(typeof cf.appId === 'string' ? cf.appId : '');
+  const secretKey = decryptIfNeeded(typeof cf.secretKey === 'string' ? cf.secretKey : '');
+  let env = cf.testMode === false ? 'production' : 'sandbox';
+  if (isProductionCredential(appId, secretKey)) env = 'production';
+  if (isSandboxCredential(appId, secretKey)) env = 'sandbox';
+  return {
+    appId: appId || undefined,
+    secretKey: secretKey || undefined,
+    env,
+    domainWhitelisted: cf.domainWhitelisted === true,
+  };
 }
 
 export function invalidateCashfreeConfigCache(): void {
@@ -59,6 +78,7 @@ export async function getCashfreeConfig(): Promise<CashfreeConfig> {
     secretKey: fromDb.secretKey,
     env,
     baseUrl: baseUrlForEnv(env),
+    domainWhitelisted: fromDb.domainWhitelisted,
   };
   cacheExpiry = Date.now() + CACHE_TTL_MS;
   return cachedConfig;
@@ -66,7 +86,37 @@ export async function getCashfreeConfig(): Promise<CashfreeConfig> {
 
 export async function isCashfreeConfigured(): Promise<boolean> {
   const { appId, secretKey } = await getCashfreeConfig();
-  return Boolean(appId && secretKey);
+  return Boolean(appId && secretKey && !appId.startsWith('enc:') && !secretKey.startsWith('enc:'));
+}
+
+/** Verify Cashfree credentials by creating a minimal sandbox/production order. */
+export async function testCashfreeConnection(): Promise<{ ok: boolean; env: string; message: string }> {
+  const cfg = await getCashfreeConfig();
+  if (!cfg.appId || !cfg.secretKey) {
+    return { ok: false, env: cfg.env, message: 'Cashfree App ID and Secret Key are required.' };
+  }
+  if (cfg.appId.startsWith('enc:') || cfg.secretKey.startsWith('enc:')) {
+    return { ok: false, env: cfg.env, message: 'Cashfree credentials could not be decrypted. Re-save App ID and Secret Key in settings.' };
+  }
+  try {
+    await createCashfreeOrder({
+      orderId: `cf_test_${Date.now()}`,
+      amount: 1,
+      customer: { id: 'connection_test', email: 'test@healthcare.platform', phone: '9999999999' },
+      returnUrl: 'https://example.com/cashfree-test',
+    });
+    return { ok: true, env: cfg.env, message: `Cashfree ${cfg.env} credentials verified successfully.` };
+  } catch (err) {
+    const msg = err instanceof AppError ? err.message : 'Cashfree connection test failed';
+    if (msg.toLowerCase().includes('authentication')) {
+      return {
+        ok: false,
+        env: cfg.env,
+        message: `Cashfree rejected the credentials (${cfg.env} mode). Copy App ID and Secret from your Cashfree dashboard — Sandbox keys only work when Sandbox Mode is ON.`,
+      };
+    }
+    return { ok: false, env: cfg.env, message: msg };
+  }
 }
 
 export interface CreateOrderInput {
@@ -76,6 +126,8 @@ export interface CreateOrderInput {
   customer: { id: string; email?: string; phone?: string };
   returnUrl?: string;
   notifyUrl?: string;
+  /** When false, omits return_url so Cashfree checkout opens before domain is whitelisted. */
+  includeReturnUrl?: boolean;
 }
 
 export interface CashfreeOrder {
@@ -85,8 +137,13 @@ export interface CashfreeOrder {
 }
 
 export async function createCashfreeOrder(input: CreateOrderInput): Promise<CashfreeOrder> {
-  const { appId, secretKey, baseUrl } = await getCashfreeConfig();
+  const { appId, secretKey, baseUrl, domainWhitelisted } = await getCashfreeConfig();
   if (!appId || !secretKey) throw new AppError('Payment gateway is not configured', 503);
+
+  const orderMeta: Record<string, string> = {};
+  const useReturnUrl = Boolean(input.returnUrl && (domainWhitelisted || input.includeReturnUrl === true));
+  if (useReturnUrl && input.returnUrl) orderMeta.return_url = input.returnUrl;
+  if (input.notifyUrl) orderMeta.notify_url = input.notifyUrl;
 
   const res = await fetch(`${baseUrl}/orders`, {
     method: 'POST',
@@ -105,16 +162,20 @@ export async function createCashfreeOrder(input: CreateOrderInput): Promise<Cash
         customer_email: input.customer.email || undefined,
         customer_phone: input.customer.phone || '9999999999',
       },
-      order_meta: {
-        return_url: input.returnUrl,
-        notify_url: input.notifyUrl,
-      },
+      ...(Object.keys(orderMeta).length > 0 ? { order_meta: orderMeta } : {}),
     }),
   });
 
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    throw new AppError((data.message as string) || 'Failed to create payment order', 502);
+    const msg = (data.message as string) || 'Failed to create payment order';
+    if (msg.toLowerCase().includes('authentication')) {
+      throw new AppError(
+        'Cashfree authentication failed. Verify App ID and Secret Key in Admin → Settings → Payment Gateway, and ensure Sandbox Mode matches your Cashfree credentials.',
+        502,
+      );
+    }
+    throw new AppError(msg, 502);
   }
   return {
     orderId: String(data.order_id ?? input.orderId),

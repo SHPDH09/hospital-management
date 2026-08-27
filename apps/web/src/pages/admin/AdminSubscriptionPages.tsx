@@ -10,6 +10,7 @@ const subNav = [
   { to: '/admin/subscriptions', label: 'Overview', end: true },
   { to: '/admin/subscriptions/all', label: 'All Subscriptions' },
   { to: '/admin/subscriptions/plans', label: 'Plans' },
+  { to: '/admin/subscriptions/market-analysis', label: 'Market Analysis' },
   { to: '/admin/subscriptions/default', label: 'Default Plan' },
   { to: '/admin/subscriptions/expiring', label: 'Expiring Soon' },
   { to: '/admin/subscriptions/suspended', label: 'Suspended' },
@@ -438,6 +439,214 @@ function PlansPage() {
   );
 }
 
+// ─── Market Analysis ─────────────────────────────────────────────────────────
+
+interface MarketSuggestion {
+  planCode: string;
+  planName: string;
+  currentMonthly: number | null;
+  currentYearly: number | null;
+  suggestedMonthly: number;
+  suggestedYearly: number;
+  marketMonthlyMin: number;
+  marketMonthlyMax: number;
+  marketPosition: 'below_market' | 'competitive' | 'above_market' | 'premium';
+  gapPercent: number;
+  rationale: string;
+  competitorRefs: string[];
+  recommendedFeatures: string[];
+}
+
+interface CompetitorRow {
+  id: string;
+  name: string;
+  segment: string;
+  targetSize: string;
+  monthlyMin: number;
+  monthlyMax: number;
+  keyFeatures: string[];
+  source: string;
+}
+
+function positionBadge(pos: MarketSuggestion['marketPosition']) {
+  const map = {
+    below_market: { label: 'Below Market', cls: 'bg-amber-100 text-amber-800' },
+    competitive: { label: 'Competitive', cls: 'bg-green-100 text-green-800' },
+    above_market: { label: 'Above Market', cls: 'bg-blue-100 text-blue-800' },
+    premium: { label: 'Premium', cls: 'bg-purple-100 text-purple-800' },
+  };
+  const m = map[pos];
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${m.cls}`}>{m.label}</span>;
+}
+
+function MarketAnalysisPage() {
+  const qc = useQueryClient();
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['sub-market-analysis'],
+    queryFn: () => api.get('/admin/subscriptions/market-analysis'),
+  });
+  const [applying, setApplying] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const analysis = data?.data as {
+    analyzedAt?: string;
+    currency?: string;
+    market?: string;
+    competitors?: CompetitorRow[];
+    suggestions?: MarketSuggestion[];
+    summary?: {
+      totalCompetitors: number;
+      avgClinicMonthly: number;
+      avgHospitalMonthly: number;
+      recommendedAdjustments: number;
+      positioningAdvice: string;
+    };
+  } | undefined;
+
+  const applySuggestion = async (s: MarketSuggestion, createIfMissing = false) => {
+    setApplying(s.planCode);
+    setNotice(null);
+    const res = await api.post('/admin/subscriptions/market-analysis/apply', {
+      planCode: s.planCode,
+      monthlyPrice: s.suggestedMonthly,
+      yearlyPrice: s.suggestedYearly,
+      features: s.recommendedFeatures,
+      createIfMissing,
+    });
+    setApplying(null);
+    if (res.success) {
+      setNotice(`✓ ${res.message || 'Plan updated'}`);
+      qc.invalidateQueries({ queryKey: ['sub-plans'] });
+      refetch();
+    } else {
+      setNotice(`Error: ${res.error}`);
+    }
+  };
+
+  return (
+    <SubscriptionLayout>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-gray-500">Auto-analyzed against {analysis?.summary?.totalCompetitors ?? '—'} India healthcare SaaS competitors</p>
+          {analysis?.analyzedAt && (
+            <p className="text-xs text-gray-400">Last analyzed: {new Date(analysis.analyzedAt).toLocaleString()}</p>
+          )}
+        </div>
+        <button type="button" className="btn-secondary text-sm" onClick={() => refetch()}>↻ Refresh Analysis</button>
+      </div>
+
+      {notice && (
+        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{notice}</div>
+      )}
+
+      {isLoading ? <LoadingState /> : analysis && (
+        <>
+          {/* Summary KPIs */}
+          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            {[
+              { label: 'Competitors Tracked', value: analysis.summary?.totalCompetitors, color: 'text-indigo-600' },
+              { label: 'Avg Clinic Price/mo', value: formatCurrency(analysis.summary?.avgClinicMonthly ?? 0), color: 'text-green-600' },
+              { label: 'Avg Hospital Price/mo', value: formatCurrency(analysis.summary?.avgHospitalMonthly ?? 0), color: 'text-blue-600' },
+              { label: 'Plans to Adjust', value: analysis.summary?.recommendedAdjustments, color: 'text-amber-600' },
+            ].map((k) => (
+              <div key={k.label} className="card p-4 text-center">
+                <p className="text-xs text-gray-500">{k.label}</p>
+                <p className={`mt-1 text-xl font-bold ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-sm text-indigo-900">
+            <p className="font-semibold">AI Market Insight</p>
+            <p className="mt-1">{analysis.summary?.positioningAdvice}</p>
+          </div>
+
+          {/* Plan suggestions */}
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Suggested Plan Pricing</h3>
+          <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {analysis.suggestions?.map((s) => {
+              const missing = s.currentMonthly == null;
+              const needsUpdate = Math.abs(s.gapPercent) > 10 && s.planCode !== 'free';
+              return (
+                <div key={s.planCode} className={cn('card p-5', s.planCode === 'advanced' ? 'ring-2 ring-violet-300' : undefined)}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">{s.planName}</h4>
+                      {s.planCode === 'advanced' && <span className="text-[10px] font-semibold uppercase text-violet-600">New Advanced Tier</span>}
+                    </div>
+                    {positionBadge(s.marketPosition)}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-400">Your Price</p>
+                      <p className="font-semibold">{missing ? '—' : formatCurrency(s.currentMonthly ?? 0)}<span className="text-xs text-gray-400">/mo</span></p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Suggested</p>
+                      <p className="font-semibold text-primary-600">{formatCurrency(s.suggestedMonthly)}<span className="text-xs text-gray-400">/mo</span></p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs text-gray-400">Market Range</p>
+                      <p className="text-sm">{formatCurrency(s.marketMonthlyMin)} – {formatCurrency(s.marketMonthlyMax)}/mo</p>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-xs text-gray-600 leading-relaxed">{s.rationale}</p>
+
+                  <ul className="mt-2 space-y-0.5">
+                    {s.recommendedFeatures.slice(0, 4).map((f) => (
+                      <li key={f} className="text-xs text-gray-500">✓ {f}</li>
+                    ))}
+                  </ul>
+
+                  {(needsUpdate || missing) && s.planCode !== 'free' && (
+                    <button
+                      type="button"
+                      className="btn-admin mt-4 w-full text-xs"
+                      disabled={applying === s.planCode}
+                      onClick={() => applySuggestion(s, missing)}
+                    >
+                      {applying === s.planCode ? 'Applying…' : missing ? `Create ${s.planName} Plan` : `Apply Suggested Price`}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Competitor table */}
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Competitor Benchmarks — India HMS Market</h3>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-4 py-3">Platform</th>
+                  <th className="px-4 py-3">Segment</th>
+                  <th className="px-4 py-3">Target</th>
+                  <th className="px-4 py-3">Monthly Range</th>
+                  <th className="px-4 py-3">Key Features</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.competitors?.map((c) => (
+                  <tr key={c.id} className="border-t border-gray-100">
+                    <td className="px-4 py-3 font-medium">{c.name}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.segment}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{c.targetSize}</td>
+                    <td className="px-4 py-3 font-medium">{formatCurrency(c.monthlyMin)} – {formatCurrency(c.monthlyMax)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{c.keyFeatures.slice(0, 3).join(' · ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </SubscriptionLayout>
+  );
+}
+
 // ─── Default Plan ────────────────────────────────────────────────────────────
 
 function DefaultPlanPage() {
@@ -536,6 +745,7 @@ export function AdminSubscriptionsPage() {
       <Route index element={<OverviewPage />} />
       <Route path="all" element={<AllSubscriptionsPage />} />
       <Route path="plans" element={<PlansPage />} />
+      <Route path="market-analysis" element={<MarketAnalysisPage />} />
       <Route path="default" element={<DefaultPlanPage />} />
       <Route path="expiring" element={<AllSubscriptionsPage filter="&expiring=true" />} />
       <Route path="suspended" element={<AllSubscriptionsPage filter="&status=SUSPENDED" />} />

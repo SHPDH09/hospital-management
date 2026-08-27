@@ -9,12 +9,17 @@ import { authenticate, requireRoles, AuthRequest, CRM_ROLES, ORG_ADMIN_ROLES } f
 import { validateBody, validateQuery } from '../../middleware/validate';
 import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
-import { createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
-import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal } from '../../lib/subscription-renewal';
+import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal, isFreePlan, requiresCustomQuote } from '../../lib/subscription-renewal';
+import { getCashfreeConfig, createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
+import { getAppUrl, cashfreeWhitelistMeta } from '../../lib/app-url';
+import { getSubscriptionAccessForOrg } from '../../lib/subscription-access';
+import { subscriptionGuard } from '../../middleware/subscription-guard';
+import { calculateSubscriptionTotal, getSubscriptionTaxRate, yearlySavingsPercent } from '../../lib/subscription-billing';
 import doctorScheduleRoutes from './doctor-schedule';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
+router.use(subscriptionGuard);
 
 const pagination = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -505,9 +510,28 @@ router.patch('/advertisements/:id', validateBody(z.object({
 
 // ─── Subscription ────────────────────────────────────────────────────────────
 
+router.get('/subscription/access', async (req: AuthRequest, res, next) => {
+  try {
+    const orgId = await requireOrgId(req);
+    const access = await getSubscriptionAccessForOrg(orgId);
+    sendSuccess(res, access);
+  } catch (err) { next(err); }
+});
+
+router.get('/subscription/plans', async (_req: AuthRequest, res, next) => {
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    sendSuccess(res, plans);
+  } catch (err) { next(err); }
+});
+
 router.get('/subscription', async (req: AuthRequest, res, next) => {
   try {
     const orgId = await requireOrgId(req);
+    const access = await getSubscriptionAccessForOrg(orgId);
     const subscription = await prisma.subscription.findFirst({
       where: { organizationId: orgId },
       orderBy: { createdAt: 'desc' },
@@ -524,8 +548,12 @@ router.get('/subscription', async (req: AuthRequest, res, next) => {
       if (subscription.endDate) {
         daysRemaining = Math.ceil((subscription.endDate.getTime() - Date.now()) / 86_400_000);
       }
-      renewalAmount = renewalAmountFor(subscription.plan, subscription.billingCycle);
+      renewalAmount = renewalAmountFor(subscription.plan, subscription.billingCycle, subscription.price);
     }
+
+    const cfConfig = await getCashfreeConfig();
+    const freeRenewal = subscription ? isFreePlan(subscription.plan) : false;
+    const customQuote = subscription ? requiresCustomQuote(subscription.plan, renewalAmount) : false;
 
     sendSuccess(res, {
       subscription,
@@ -533,8 +561,140 @@ router.get('/subscription', async (req: AuthRequest, res, next) => {
       renewalAmount,
       autoRenew: subscription?.autoRenew ?? false,
       paymentConfigured: await isCashfreeConfigured(),
-      freeRenewal: renewalAmount <= 0,
+      cashfreeMode: cfConfig.env === 'production' ? 'production' : 'sandbox',
+      freeRenewal,
+      requiresCustomQuote: customQuote,
+      access,
     });
+  } catch (err) { next(err); }
+});
+
+// Pricing quote with GST breakdown (step 2 — before payment).
+router.get('/subscription/checkout-quote', async (req: AuthRequest, res, next) => {
+  try {
+    const orgId = await requireOrgId(req);
+    const planId = typeof req.query.planId === 'string' ? req.query.planId : undefined;
+    const billingCycle = (req.query.billingCycle === 'YEARLY' ? 'YEARLY' : 'MONTHLY') as 'MONTHLY' | 'YEARLY';
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' }, include: { plan: true },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const targetPlan = planId
+      ? await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } })
+      : subscription.plan;
+    if (!targetPlan) throw new AppError('Plan not found', 404);
+
+    const subtotal = renewalAmountFor(targetPlan, billingCycle, subscription.price);
+    const tax = await getSubscriptionTaxRate();
+    const breakdown = calculateSubscriptionTotal(subtotal, tax.rate, tax.name, tax.enabled);
+    breakdown.billingCycle = billingCycle;
+
+    const monthly = targetPlan.monthlyPrice ?? targetPlan.price ?? 0;
+    const yearly = targetPlan.yearlyPrice ?? monthly * 12;
+
+    const cfConfig = await getCashfreeConfig();
+    const cfMode = cfConfig.env === 'production' ? 'production' : 'sandbox';
+
+    sendSuccess(res, {
+      plan: {
+        id: targetPlan.id,
+        code: targetPlan.code,
+        name: targetPlan.name,
+        tier: targetPlan.tier,
+        features: targetPlan.features,
+        trialDays: targetPlan.trialDays,
+      },
+      isCurrentPlan: targetPlan.id === subscription.planId,
+      isFree: isFreePlan(targetPlan) && subtotal <= 0,
+      ...breakdown,
+      yearlySavingsPercent: yearlySavingsPercent(monthly, yearly),
+      paymentConfigured: await isCashfreeConfigured(),
+      cashfreeMode: cfMode,
+      ...cashfreeWhitelistMeta(cfMode, cfConfig.domainWhitelisted),
+    });
+  } catch (err) { next(err); }
+});
+
+// Complete checkout
+router.post('/subscription/checkout', validateBody(z.object({
+  planId: z.string().uuid().optional(),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']),
+})), async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' },
+      include: { plan: true, organization: { select: { name: true, email: true, phone: true } } },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const targetPlan = req.body.planId
+      ? await prisma.subscriptionPlan.findFirst({ where: { id: req.body.planId, isActive: true } })
+      : subscription.plan;
+    if (!targetPlan) throw new AppError('Plan not found', 404);
+
+    const cycle = req.body.billingCycle;
+    const subtotal = renewalAmountFor(targetPlan, cycle, subscription.price);
+    const tax = await getSubscriptionTaxRate();
+    const breakdown = calculateSubscriptionTotal(subtotal, tax.rate, tax.name, tax.enabled);
+    breakdown.billingCycle = cycle;
+
+    if (isFreePlan(targetPlan) && subtotal <= 0) {
+      const payment = await prisma.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id, organizationId: orgId, planId: targetPlan.id,
+          amount: 0, currency: 'INR', billingCycle: cycle, status: 'PENDING',
+          gateway: 'free', invoiceNumber: generateInvoiceNumber(),
+        },
+      });
+      await applySubscriptionRenewal(payment.id, { method: 'free' });
+      return sendSuccess(res, { status: 'COMPLETED', planName: targetPlan.name, ...breakdown }, 'Plan activated');
+    }
+
+    if (breakdown.total <= 0) throw new AppError('This plan requires a custom quote. Contact support.', 400);
+    if (!await isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Contact your platform admin.', 503);
+
+    const payment = await prisma.subscriptionPayment.create({
+      data: {
+        subscriptionId: subscription.id, organizationId: orgId, planId: targetPlan.id,
+        amount: breakdown.total, currency: 'INR', billingCycle: cycle, status: 'PENDING',
+        gateway: 'cashfree', invoiceNumber: generateInvoiceNumber(),
+      },
+    });
+
+    const orderId = `sub_${payment.id}`;
+    const appUrl = getAppUrl();
+    const apiUrl = process.env.API_PUBLIC_URL || '';
+    const cfConfig = await getCashfreeConfig();
+    const order = await createCashfreeOrder({
+      orderId,
+      amount: breakdown.total,
+      currency: 'INR',
+      customer: { id: orgId, email: subscription.organization.email || undefined, phone: subscription.organization.phone || undefined },
+      returnUrl: `${appUrl}/crm/subscription?order_id={order_id}&payment_id=${payment.id}`,
+      notifyUrl: apiUrl ? `${apiUrl}/api/v1/webhooks/cashfree` : undefined,
+    });
+
+    if (!order.paymentSessionId) {
+      throw new AppError('Could not start payment session. Check Cashfree credentials.', 502);
+    }
+
+    await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
+
+    const cfMode = cfConfig.env === 'production' ? 'production' : 'sandbox';
+    sendSuccess(res, {
+      paymentId: payment.id,
+      planId: targetPlan.id,
+      planName: targetPlan.name,
+      orderId: order.orderId,
+      paymentSessionId: order.paymentSessionId,
+      ...breakdown,
+      cashfreeMode: cfMode,
+      ...cashfreeWhitelistMeta(cfMode, cfConfig.domainWhitelisted),
+    }, 'Proceed to payment');
   } catch (err) { next(err); }
 });
 
@@ -564,10 +724,10 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
     if (!subscription) throw new AppError('No subscription found', 404);
 
     const cycle = req.body.billingCycle || subscription.billingCycle;
-    const amount = renewalAmountFor(subscription.plan, cycle);
+    const amount = renewalAmountFor(subscription.plan, cycle, subscription.price);
 
-    // Free/trial plans renew instantly without a payment gateway.
-    if (amount <= 0) {
+    // Only the Free tier renews instantly without payment.
+    if (isFreePlan(subscription.plan) && amount <= 0) {
       const payment = await prisma.subscriptionPayment.create({
         data: {
           subscriptionId: subscription.id, organizationId: orgId, planId: subscription.planId,
@@ -585,6 +745,10 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
       }, 'Subscription renewed');
     }
 
+    if (amount <= 0) {
+      throw new AppError('This plan requires a custom quote. Please contact support or choose a different plan.', 400);
+    }
+
     if (!await isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Add Cashfree credentials to enable online renewal.', 503);
 
     const payment = await prisma.subscriptionPayment.create({
@@ -596,7 +760,7 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
     });
 
     const orderId = `sub_${payment.id}`;
-    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const appUrl = getAppUrl();
     const apiUrl = process.env.API_PUBLIC_URL || '';
     const order = await createCashfreeOrder({
       orderId,
@@ -617,6 +781,84 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
       billingCycle: cycle,
       invoiceNumber: payment.invoiceNumber,
     }, 'Renewal order created. Complete payment to activate.');
+  } catch (err) { next(err); }
+});
+
+// Choose / upgrade to a different plan (creates payment for paid plans).
+router.post('/subscription/select-plan', validateBody(z.object({
+  planId: z.string().uuid(),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
+})), async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' },
+      include: { plan: true, organization: { select: { name: true, email: true, phone: true } } },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const newPlan = await prisma.subscriptionPlan.findFirst({ where: { id: req.body.planId, isActive: true } });
+    if (!newPlan) throw new AppError('Plan not found', 404);
+
+    const cycle = req.body.billingCycle || subscription.billingCycle;
+    const amount = renewalAmountFor(newPlan, cycle, subscription.price);
+
+    if (isFreePlan(newPlan) && amount <= 0) {
+      const payment = await prisma.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id, organizationId: orgId, planId: newPlan.id,
+          amount: 0, currency: newPlan.currency || 'INR', billingCycle: cycle, status: 'PENDING',
+          gateway: 'free', invoiceNumber: generateInvoiceNumber(),
+        },
+      });
+      await applySubscriptionRenewal(payment.id, { method: 'free' });
+      return sendSuccess(res, {
+        paymentId: payment.id, planId: newPlan.id, planName: newPlan.name,
+        amount: 0, billingCycle: cycle, status: 'COMPLETED',
+      }, `Switched to ${newPlan.name} plan`);
+    }
+
+    if (amount <= 0) {
+      throw new AppError('This plan requires a custom quote. Please contact support.', 400);
+    }
+
+    if (!await isCashfreeConfigured()) {
+      throw new AppError('Payment gateway is not configured. Add Cashfree credentials to subscribe to paid plans.', 503);
+    }
+
+    const payment = await prisma.subscriptionPayment.create({
+      data: {
+        subscriptionId: subscription.id, organizationId: orgId, planId: newPlan.id,
+        amount, currency: newPlan.currency || 'INR', billingCycle: cycle, status: 'PENDING',
+        gateway: 'cashfree', invoiceNumber: generateInvoiceNumber(),
+      },
+    });
+
+    const orderId = `sub_${payment.id}`;
+    const appUrl = getAppUrl();
+    const apiUrl = process.env.API_PUBLIC_URL || '';
+    const order = await createCashfreeOrder({
+      orderId,
+      amount,
+      currency: newPlan.currency || 'INR',
+      customer: { id: orgId, email: subscription.organization.email || undefined, phone: subscription.organization.phone || undefined },
+      returnUrl: `${appUrl}/crm/subscription?order_id={order_id}`,
+      notifyUrl: apiUrl ? `${apiUrl}/api/v1/webhooks/cashfree` : undefined,
+    });
+
+    await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
+
+    sendSuccess(res, {
+      paymentId: payment.id,
+      planId: newPlan.id,
+      planName: newPlan.name,
+      orderId: order.orderId,
+      paymentSessionId: order.paymentSessionId,
+      amount,
+      billingCycle: cycle,
+      invoiceNumber: payment.invoiceNumber,
+    }, `Subscribe to ${newPlan.name}. Complete payment to activate.`);
   } catch (err) { next(err); }
 });
 

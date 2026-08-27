@@ -15,9 +15,45 @@ export function generateInvoiceNumber(): string {
   return `INV-${stamp}-${rand}`;
 }
 
-export function renewalAmountFor(plan: { monthlyPrice?: number | null; yearlyPrice?: number | null; price?: number | null }, cycle: BillingCycle): number {
-  if (cycle === 'YEARLY') return plan.yearlyPrice ?? (plan.monthlyPrice ?? plan.price ?? 0) * 12;
-  return plan.monthlyPrice ?? plan.price ?? 0;
+export function isFreePlan(plan: { code?: string | null; tier?: string | null; monthlyPrice?: number | null; price?: number | null }): boolean {
+  const code = (plan.code || '').toLowerCase();
+  if (code === 'free') return true;
+  const monthly = plan.monthlyPrice ?? plan.price ?? 0;
+  return plan.tier === 'FREE' && monthly <= 0;
+}
+
+export function renewalAmountFor(
+  plan: { code?: string | null; tier?: string | null; monthlyPrice?: number | null; yearlyPrice?: number | null; price?: number | null },
+  cycle: BillingCycle,
+  subscriptionPrice?: number | null,
+): number {
+  let amount: number;
+  if (cycle === 'YEARLY') {
+    amount = plan.yearlyPrice ?? (plan.monthlyPrice ?? plan.price ?? 0) * 12;
+  } else {
+    amount = plan.monthlyPrice ?? plan.price ?? 0;
+  }
+
+  // Fall back to the price stored on the subscription record.
+  if (amount <= 0 && subscriptionPrice && subscriptionPrice > 0) {
+    return cycle === 'YEARLY' ? subscriptionPrice * 12 : subscriptionPrice;
+  }
+
+  // Enterprise / custom tiers without explicit pricing use platform defaults.
+  if (amount <= 0 && plan.tier === 'ENTERPRISE') {
+    return cycle === 'YEARLY' ? 99990 : 9999;
+  }
+
+  return amount;
+}
+
+export function requiresCustomQuote(
+  plan: { code?: string | null; tier?: string | null; monthlyPrice?: number | null; price?: number | null },
+  amount: number,
+): boolean {
+  if (isFreePlan(plan)) return false;
+  if (amount > 0) return false;
+  return plan.tier === 'ENTERPRISE' || (plan.code || '').toLowerCase() === 'enterprise';
 }
 
 // Applies a successful renewal payment to its subscription. Idempotent: a
@@ -43,7 +79,15 @@ export async function applySubscriptionRenewal(
 
     await tx.subscription.update({
       where: { id: sub.id },
-      data: { status: 'ACTIVE', endDate: newEnd, billingCycle: payment.billingCycle, changeSource: 'PAYMENT', suspendReason: null },
+      data: {
+        status: 'ACTIVE',
+        endDate: newEnd,
+        billingCycle: payment.billingCycle,
+        planId: payment.planId || sub.planId,
+        price: payment.amount,
+        changeSource: 'PAYMENT',
+        suspendReason: null,
+      },
     });
 
     const updatedPayment = await tx.subscriptionPayment.update({

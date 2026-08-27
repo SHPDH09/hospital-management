@@ -58,9 +58,9 @@ export async function runSubscriptionReminders(graceDays = 3) {
     }
   }
 
-  // Expire subscriptions that are past their end date.
+  // Expire subscriptions that are past their end date (ACTIVE + TRIAL).
   const expired = await prisma.subscription.updateMany({
-    where: { status: 'ACTIVE', endDate: { lt: now } },
+    where: { status: { in: ['ACTIVE', 'TRIAL'] }, endDate: { lt: now } },
     data: { status: 'EXPIRED' },
   });
   result.expired = expired.count;

@@ -719,44 +719,133 @@ function AnnouncementsPage() {
   );
 }
 
+function maintenanceRowStatus(row: Record<string, unknown>): { label: string; className: string } {
+  if (!row.isActive) return { label: 'Cancelled', className: 'bg-gray-100 text-gray-600' };
+  const now = Date.now();
+  const start = new Date(String(row.startAt)).getTime();
+  const end = new Date(String(row.endAt)).getTime();
+  if (now >= start && now <= end) return { label: 'Active Now', className: 'bg-red-100 text-red-700' };
+  if (now < start) return { label: 'Upcoming', className: 'bg-amber-100 text-amber-800' };
+  return { label: 'Completed', className: 'bg-green-100 text-green-700' };
+}
+
 function ScheduledPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['emergency-scheduled'], queryFn: () => api.get('/admin/emergency/scheduled-maintenance') });
   const [form, setForm] = useState({
     title: '', description: '', maintenanceType: 'full', startAt: '', endAt: '', reason: '',
   });
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const save = async () => {
-    await api.post('/admin/emergency/scheduled-maintenance', form);
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const res = await api.post('/admin/emergency/scheduled-maintenance', form);
+      if (!res.success) {
+        setFeedback({ type: 'error', message: res.error || 'Failed to schedule maintenance' });
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ['emergency-scheduled'] });
+      qc.invalidateQueries({ queryKey: ['platform-status'] });
+      setFeedback({
+        type: 'success',
+        message: 'Maintenance scheduled. All active users will receive an in-app notification, and a banner will appear on every dashboard and the homepage.',
+      });
+      setForm({ title: '', description: '', maintenanceType: 'full', startAt: '', endAt: '', reason: '' });
+    } catch {
+      setFeedback({ type: 'error', message: 'Something went wrong. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancel = async (id: string) => {
+    if (cancelReason.length < 3) return;
+    await api.delete(`/admin/emergency/scheduled-maintenance/${id}`, { reason: cancelReason });
+    setCancelReason('');
     qc.invalidateQueries({ queryKey: ['emergency-scheduled'] });
+    qc.invalidateQueries({ queryKey: ['platform-status'] });
+    setFeedback({ type: 'success', message: 'Scheduled maintenance cancelled.' });
   };
 
   const rows = (data?.data as Record<string, unknown>[]) || [];
+  const canSubmit = form.title.trim().length > 0 && form.startAt && form.endAt && form.reason.length >= 3;
 
   return (
     <EmergLayout>
-      <div className="card p-6 mb-6 space-y-3">
-        <h3 className="font-semibold">Schedule Maintenance</h3>
-        <input className="input w-full" placeholder="Title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+      <div className="rounded-xl border border-blue-100 bg-blue-50/80 p-4 mb-6 text-sm text-blue-900">
+        <p className="font-semibold">How notifications work</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-blue-800/90">
+          <li>All active users receive an in-app notification when maintenance is scheduled.</li>
+          <li>Admin, CRM, and Patient dashboards show a professional banner with the schedule.</li>
+          <li>Visitors on the homepage see a popup and top notice before maintenance begins.</li>
+          <li>Maintenance mode activates automatically when the scheduled window starts.</li>
+        </ul>
+      </div>
+
+      {feedback && (
+        <div className={cn(
+          'mb-6 rounded-xl border px-4 py-3 text-sm',
+          feedback.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800',
+        )}>
+          {feedback.message}
+        </div>
+      )}
+
+      <div className="card p-6 mb-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Schedule Maintenance</h3>
+          <p className="text-sm text-gray-500 mt-1">Plan downtime in advance and notify every dashboard automatically.</p>
+        </div>
+        <input className="input w-full" placeholder="Title — e.g. Database Upgrade" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+        <textarea className="input w-full" rows={3} placeholder="Description shown to users — e.g. We are upgrading our servers for better performance. Some services may be unavailable."
+          value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         <select className="input w-full" value={form.maintenanceType} onChange={(e) => setForm((f) => ({ ...f, maintenanceType: e.target.value }))}>
-          <option value="full">Full Maintenance</option>
-          <option value="partial">Partial Maintenance</option>
+          <option value="full">Full Platform Maintenance</option>
+          <option value="partial">Partial Module Maintenance</option>
         </select>
-        <div className="grid grid-cols-2 gap-3">
-          <input type="datetime-local" className="input" value={form.startAt} onChange={(e) => setForm((f) => ({ ...f, startAt: e.target.value }))} />
-          <input type="datetime-local" className="input" value={form.endAt} onChange={(e) => setForm((f) => ({ ...f, endAt: e.target.value }))} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-500">Start (IST)</label>
+            <input type="datetime-local" className="input w-full mt-1" value={form.startAt} onChange={(e) => setForm((f) => ({ ...f, startAt: e.target.value }))} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500">End (IST)</label>
+            <input type="datetime-local" className="input w-full mt-1" value={form.endAt} onChange={(e) => setForm((f) => ({ ...f, endAt: e.target.value }))} />
+          </div>
         </div>
         <ReasonField value={form.reason} onChange={(v) => setForm((f) => ({ ...f, reason: v }))} />
-        <button className="btn-primary text-sm" onClick={save} disabled={!form.title || form.reason.length < 3}>Schedule</button>
+        <button className="btn-primary text-sm" onClick={save} disabled={!canSubmit || saving}>
+          {saving ? 'Scheduling…' : 'Schedule & Notify All Users'}
+        </button>
       </div>
+
       {isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'title', label: 'Title' },
-          { key: 'maintenanceType', label: 'Type' },
-          { key: 'startAt', label: 'Start', render: (r) => formatDate(String(r.startAt)) },
-          { key: 'endAt', label: 'End', render: (r) => formatDate(String(r.endAt)) },
-          { key: 'isActive', label: 'Active', render: (r) => r.isActive ? 'Yes' : 'No' },
-        ]} rows={rows} />
+        <div className="space-y-4">
+          <h3 className="font-semibold text-gray-900">Scheduled Windows</h3>
+          <AdminTable columns={[
+            { key: 'title', label: 'Title' },
+            { key: 'status', label: 'Status', render: (r) => {
+              const s = maintenanceRowStatus(r);
+              return <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', s.className)}>{s.label}</span>;
+            }},
+            { key: 'maintenanceType', label: 'Type', render: (r) => r.maintenanceType === 'full' ? 'Full' : 'Partial' },
+            { key: 'startAt', label: 'Start', render: (r) => formatDate(String(r.startAt)) },
+            { key: 'endAt', label: 'End', render: (r) => formatDate(String(r.endAt)) },
+            { key: 'actions', label: '', render: (r) => r.isActive && maintenanceRowStatus(r).label !== 'Completed' ? (
+              <button type="button" className="text-xs font-medium text-red-600 hover:text-red-800"
+                onClick={() => cancel(String(r.id))} disabled={cancelReason.length < 3}>
+                Cancel
+              </button>
+            ) : null },
+          ]} rows={rows} emptyMessage="No maintenance windows scheduled yet" />
+          {rows.some((r) => r.isActive) && (
+            <ReasonField value={cancelReason} onChange={setCancelReason} />
+          )}
+        </div>
       )}
     </EmergLayout>
   );

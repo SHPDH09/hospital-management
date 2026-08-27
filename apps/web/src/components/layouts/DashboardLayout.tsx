@@ -1,13 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Stethoscope, LogOut, Heart, Menu, X, ChevronRight,
-  Shield, Bell, Search,
+  Shield, Bell, Search, Lock, AlertCircle,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { adminNavGroups } from '@/config/adminNav';
 import { crmNavGroups } from '@/config/crmNav';
+import { api } from '@/lib/api';
+import { usePlatformStatus } from '@/hooks/usePlatformStatus';
+import { MaintenanceDashboardBanner } from '@/components/MaintenanceNotice';
 
 const patientNav = [
   { to: '/patient', icon: LayoutDashboard, label: 'Dashboard' },
@@ -40,6 +44,24 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
   const title = portal === 'crm' ? 'Hospital CRM' : portal === 'admin' ? 'Super Admin' : 'Patient Portal';
   const groups = portal === 'admin' ? adminNavGroups : portal === 'crm' ? crmNavGroups : null;
   const isAdmin = portal === 'admin';
+  const isCrm = portal === 'crm';
+
+  const { data: platformStatus } = usePlatformStatus();
+  const maintenance = platformStatus?.maintenance;
+
+  const { data: accessData } = useQuery({
+    queryKey: ['crm-subscription-access'],
+    queryFn: () => api.get('/crm/subscription/access'),
+    enabled: isCrm,
+    staleTime: 60_000,
+  });
+  const access = accessData?.data as {
+    accessLevel?: string;
+    isRestricted?: boolean;
+    bannerMessage?: string | null;
+    bannerType?: 'info' | 'warning' | 'error' | null;
+  } | undefined;
+  const isBasicOnly = access?.accessLevel === 'basic';
   const displayName =
     user?.staff?.fullName || user?.doctor?.fullName || user?.patient?.fullName || user?.email?.split('@')[0] || 'User';
 
@@ -110,12 +132,23 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
                     const active = isActive(item.to);
-                    return (
-                      <Link key={item.to} to={item.to} onClick={() => setSidebarOpen(false)} className={navLinkClass(active)}>
-                        {renderIcon(item.icon, active)}
+                    const crmItem = item as { access?: 'basic' };
+                    const locked = isBasicOnly && !crmItem.access;
+                    const className = locked
+                      ? 'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed opacity-60'
+                      : navLinkClass(active);
+                    const inner = (
+                      <>
+                        {renderIcon(item.icon, active && !locked)}
                         <span className="truncate">{item.label}</span>
-                        {active && <ChevronRight className="ml-auto h-4 w-4 text-white/80" />}
-                      </Link>
+                        {locked && <Lock className="ml-auto h-3.5 w-3.5 text-slate-500" />}
+                        {active && !locked && <ChevronRight className="ml-auto h-4 w-4 text-white/80" />}
+                      </>
+                    );
+                    return locked ? (
+                      <div key={item.to} title="Subscribe to unlock" className={className}>{inner}</div>
+                    ) : (
+                      <Link key={item.to} to={item.to} onClick={() => setSidebarOpen(false)} className={className}>{inner}</Link>
                     );
                   })}
                 </div>
@@ -193,7 +226,28 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
             Back to Website
           </Link>
         </header>
-        <main className="p-4 lg:p-8">{children}</main>
+        <main className="p-4 lg:p-8">
+          <MaintenanceDashboardBanner maintenance={maintenance} />
+          {isCrm && access?.bannerMessage && (
+            <div className={cn(
+              'mb-6 flex flex-wrap items-start gap-3 rounded-xl border p-4 text-sm',
+              access.bannerType === 'error' && 'border-red-200 bg-red-50 text-red-800',
+              access.bannerType === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800',
+              access.bannerType === 'info' && 'border-blue-200 bg-blue-50 text-blue-800',
+              !access.bannerType && 'border-gray-200 bg-gray-50 text-gray-800',
+            )}>
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold">{access.isRestricted ? 'Subscription Expired' : 'Subscription Notice'}</p>
+                <p className="mt-1">{access.bannerMessage}</p>
+              </div>
+              {access.isRestricted && (
+                <Link to="/crm/subscription" className="btn-primary shrink-0 text-xs">Choose a Plan</Link>
+              )}
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

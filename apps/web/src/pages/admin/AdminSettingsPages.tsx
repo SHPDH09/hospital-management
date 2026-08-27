@@ -351,8 +351,17 @@ function BrandingPage() {
 function PaymentPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['settings', 'payment'], queryFn: () => api.get('/admin/settings/payment') });
+  const { data: whitelistData } = useQuery({
+    queryKey: ['settings', 'cashfree-whitelist'],
+    queryFn: () => api.get<{ whitelistDomain: string; whitelistDashboardUrl: string; requiresDomainWhitelist: boolean; policyPages: string[] }>('/admin/settings/payment/cashfree-whitelist'),
+  });
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const whitelist = whitelistData?.data;
 
   useEffect(() => { if (data?.data) setForm(data.data as Record<string, unknown>); }, [data]);
 
@@ -376,6 +385,7 @@ function PaymentPage() {
             <>
               <FieldInput field={{ key: 'appId', label: 'App ID', type: 'secret' }} value={g.appId} onChange={(v) => setG('appId', v)} />
               <FieldInput field={{ key: 'secretKey', label: 'Secret Key', type: 'secret' }} value={g.secretKey} onChange={(v) => setG('secretKey', v)} />
+              <FieldInput field={{ key: 'domainWhitelisted', label: 'Domain whitelisted in Cashfree (auto-return after pay)', type: 'toggle' }} value={g.domainWhitelisted} onChange={(v) => setG('domainWhitelisted', v)} />
             </>
           ) : (
             <>
@@ -395,15 +405,54 @@ function PaymentPage() {
     <SettingsLayout title="Payment Gateway">
       <div className="card p-6 space-y-4">
         <p className="text-sm text-gray-500">Credentials are encrypted at rest and masked in the UI.</p>
+
+        {whitelist?.requiresDomainWhitelist && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
+            <p className="font-semibold">Optional: Cashfree domain whitelisting (auto-return after payment)</p>
+            <p>
+              Live payments work without whitelisting. Enable &quot;Domain whitelisted&quot; above only after you add{' '}
+              <code className="rounded bg-white px-1.5 py-0.5 text-xs">{whitelist.whitelistDomain}</code> in Cashfree → Developers → Whitelisting.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => {
+                  navigator.clipboard.writeText(whitelist.whitelistDomain);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? 'Copied!' : 'Copy URL'}
+              </button>
+              <a href={whitelist.whitelistDashboardUrl} target="_blank" rel="noreferrer" className="btn-primary text-xs">
+                Open Cashfree Whitelisting →
+              </a>
+            </div>
+          </div>
+        )}
         {gateway('cashfree')}
         {gateway('razorpay')}
         {gateway('stripe')}
-        <button className="btn-primary text-sm" disabled={saving} onClick={async () => {
-          setSaving(true);
-          await api.put('/admin/settings/payment', form);
-          setSaving(false);
-          qc.invalidateQueries({ queryKey: ['settings', 'payment'] });
-        }}>Save Changes</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="btn-primary text-sm" disabled={saving} onClick={async () => {
+            setSaving(true);
+            setTestResult(null);
+            await api.put('/admin/settings/payment', form);
+            setSaving(false);
+            qc.invalidateQueries({ queryKey: ['settings', 'payment'] });
+          }}>Save Changes</button>
+          <button className="btn-secondary text-sm" disabled={testing} onClick={async () => {
+            setTesting(true);
+            setTestResult(null);
+            const res = await api.post<{ ok: boolean; message: string }>('/admin/settings/payment/test-cashfree');
+            setTestResult(res.data ? { ok: res.data.ok, message: res.data.message } : { ok: false, message: res.error || 'Test failed' });
+            setTesting(false);
+          }}>{testing ? 'Testing…' : 'Test Cashfree Connection'}</button>
+        </div>
+        {testResult && (
+          <p className={`text-sm ${testResult.ok ? 'text-green-600' : 'text-red-600'}`}>{testResult.message}</p>
+        )}
       </div>
     </SettingsLayout>
   );
