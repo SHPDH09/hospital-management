@@ -40,6 +40,7 @@ Optional:
 | Error | Fix |
 |-------|-----|
 | `Internal server error` on login | Set `DATABASE_URL` on Vercel; allow RDS port 5432 from Vercel; run `npm run db:setup` |
+| `Database error (P2022)` | Schema drift — run `npm run db:fix-drift && npm run db:push` against your RDS database |
 | `Authentication failed` | Wrong RDS password in `DATABASE_URL` |
 | `404` on `/login/admin` | Redeploy with latest `vercel.json` SPA rewrites |
 | CORS error | Set `CORS_ORIGIN` to your Vercel URL |
