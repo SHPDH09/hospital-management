@@ -32,20 +32,60 @@ export async function getActiveScheduledMaintenance(now = new Date()): Promise<S
 
 export async function getUpcomingScheduledMaintenance(now = new Date()): Promise<ScheduledMaintenance | null> {
   return prisma.scheduledMaintenance.findFirst({
-    where: { isActive: true, startAt: { gt: now } },
+    where: {
+      isActive: true,
+      startAt: { gt: now },
+      endAt: { gt: now },
+    },
     orderBy: { startAt: 'asc' },
   });
+}
+
+/** Public maintenance info without mutating emergency state (safe for frequent polling). */
+export async function getMaintenancePublicInfo(now = new Date()): Promise<MaintenancePublicInfo> {
+  const active = await getActiveScheduledMaintenance(now);
+  if (active) {
+    const message = active.description || active.title;
+    return {
+      status: 'active',
+      title: active.title,
+      message,
+      maintenanceType: active.maintenanceType,
+      startAt: active.startAt.toISOString(),
+      endAt: active.endAt.toISOString(),
+      hoursRemaining: hoursBetween(now, active.endAt),
+      scheduledId: active.id,
+    };
+  }
+
+  const upcoming = await getUpcomingScheduledMaintenance(now);
+  if (upcoming) {
+    return {
+      status: 'upcoming',
+      title: upcoming.title,
+      message: upcoming.description || `Scheduled maintenance begins ${upcoming.startAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}.`,
+      maintenanceType: upcoming.maintenanceType,
+      startAt: upcoming.startAt.toISOString(),
+      endAt: upcoming.endAt.toISOString(),
+      hoursUntilStart: hoursBetween(now, upcoming.startAt),
+      scheduledId: upcoming.id,
+    };
+  }
+
+  return { status: 'none' };
 }
 
 /** Auto-enable/disable maintenance from scheduled windows and return public-facing info. */
 export async function processScheduledMaintenances(): Promise<MaintenancePublicInfo> {
   const now = new Date();
-  const active = await getActiveScheduledMaintenance(now);
-  const upcoming = active ? null : await getUpcomingScheduledMaintenance(now);
+  const info = await getMaintenancePublicInfo(now);
   const state = await getEmergencyState();
   const scheduledId = state.scheduledMaintenanceId as string | undefined;
 
-  if (active) {
+  if (info.status === 'active' && info.scheduledId) {
+    const active = await prisma.scheduledMaintenance.findUnique({ where: { id: info.scheduledId } });
+    if (!active) return info;
+
     const message = active.description || active.title;
     const shouldUpdate = !state.maintenanceMode
       || state.scheduledMaintenanceId !== active.id
@@ -62,17 +102,7 @@ export async function processScheduledMaintenances(): Promise<MaintenancePublicI
       }));
       await notifyMaintenanceActive(active);
     }
-
-    return {
-      status: 'active',
-      title: active.title,
-      message,
-      maintenanceType: active.maintenanceType,
-      startAt: active.startAt.toISOString(),
-      endAt: active.endAt.toISOString(),
-      hoursRemaining: hoursBetween(now, active.endAt),
-      scheduledId: active.id,
-    };
+    return info;
   }
 
   if (scheduledId) {
@@ -91,20 +121,7 @@ export async function processScheduledMaintenances(): Promise<MaintenancePublicI
     }
   }
 
-  if (upcoming) {
-    return {
-      status: 'upcoming',
-      title: upcoming.title,
-      message: upcoming.description || `Scheduled maintenance begins ${upcoming.startAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}.`,
-      maintenanceType: upcoming.maintenanceType,
-      startAt: upcoming.startAt.toISOString(),
-      endAt: upcoming.endAt.toISOString(),
-      hoursUntilStart: hoursBetween(now, upcoming.startAt),
-      scheduledId: upcoming.id,
-    };
-  }
-
-  return { status: 'none' };
+  return info;
 }
 
 export async function notifyMaintenanceScheduled(item: ScheduledMaintenance) {

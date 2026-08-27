@@ -47,7 +47,7 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
   const isCrm = portal === 'crm';
 
   const { data: platformStatus } = usePlatformStatus();
-  const maintenance = platformStatus?.data?.maintenance;
+  const maintenance = platformStatus?.maintenance;
 
   const { data: accessData } = useQuery({
     queryKey: ['crm-subscription-access'],

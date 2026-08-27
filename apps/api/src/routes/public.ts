@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma, readDb } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 import { getEmergencyState, computeSystemStatus, getActiveControls } from '../lib/emergency';
-import { processScheduledMaintenances } from '../lib/maintenance-scheduler';
+import { getMaintenancePublicInfo, processScheduledMaintenances } from '../lib/maintenance-scheduler';
 import { mergeWithDefaults, settingsKey } from '../lib/settings';
 import { SettingCategory } from '../lib/settings';
 import { paramId } from '../lib/params';
@@ -13,6 +13,14 @@ async function getSettingCategory(category: SettingCategory) {
   const row = await prisma.platformSetting.findUnique({ where: { key: settingsKey(category) } });
   return mergeWithDefaults(category, row?.value as Record<string, unknown> | null);
 }
+
+router.get('/maintenance-status', async (_req, res, next) => {
+  try {
+    sendSuccess(res, await getMaintenancePublicInfo());
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/platform-status', async (_req, res, next) => {
   try {

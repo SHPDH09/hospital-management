@@ -728,14 +728,25 @@ router.post('/scheduled-maintenance', async (req: AuthRequest, res, next) => {
       reason: z.string().min(3),
     }).parse(req.body);
 
+    const startAt = new Date(body.startAt);
+    const endAt = new Date(body.endAt);
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+      res.status(400).json({ success: false, message: 'Invalid start or end date' });
+      return;
+    }
+    if (endAt <= startAt) {
+      res.status(400).json({ success: false, message: 'End time must be after start time' });
+      return;
+    }
+
     const item = await prisma.scheduledMaintenance.create({
       data: {
         title: body.title,
         description: body.description,
         maintenanceType: body.maintenanceType,
         affectedModules: body.affectedModules || [],
-        startAt: new Date(body.startAt),
-        endAt: new Date(body.endAt),
+        startAt,
+        endAt,
         createdByEmail: req.user?.email,
       },
     });

@@ -12,8 +12,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
 
-  const { data: statusRes } = usePlatformStatus();
-  const status = statusRes?.data;
+  const { data: status } = usePlatformStatus();
   const platformName = status?.platformName || 'HealthCare';
   const maintenance = status?.maintenance;
 
