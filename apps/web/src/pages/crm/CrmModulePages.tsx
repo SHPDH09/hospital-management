@@ -469,12 +469,14 @@ export function CrmSubscriptionPage() {
   const [notice, setNotice] = useState<{ kind: 'info' | 'error' | 'success'; text: string } | null>(null);
 
   const payload = data?.data as {
-    subscription?: Record<string, unknown> & { payments?: RenewalPayment[] };
+    subscription?: Record<string, unknown> & { payments?: RenewalPayment[]; price?: number };
     daysRemaining?: number | null;
     renewalAmount?: number;
     autoRenew?: boolean;
     paymentConfigured?: boolean;
+    cashfreeMode?: 'sandbox' | 'production';
     freeRenewal?: boolean;
+    requiresCustomQuote?: boolean;
     access?: { isTrial?: boolean; isExpired?: boolean; isRestricted?: boolean };
   } | undefined;
 
@@ -484,10 +486,18 @@ export function CrmSubscriptionPage() {
   const plan = sub?.plan as Record<string, unknown> | undefined;
   const daysRemaining = payload?.daysRemaining ?? null;
   const renewalAmount = payload?.renewalAmount ?? 0;
-  const freeRenewal = payload?.freeRenewal ?? renewalAmount <= 0;
+  const freeRenewal = payload?.freeRenewal === true;
+  const requiresCustomQuote = payload?.requiresCustomQuote === true;
+  const cashfreeMode = payload?.cashfreeMode === 'production' ? 'production' : 'sandbox';
   const payments = (sub?.payments as RenewalPayment[] | undefined) ?? [];
   const expiringSoon = daysRemaining != null && daysRemaining <= 7;
-  const needsPaymentGateway = !freeRenewal && !payload?.paymentConfigured;
+  const needsPaymentGateway = !freeRenewal && !requiresCustomQuote && renewalAmount > 0 && !payload?.paymentConfigured;
+
+  const planMonthly = Number(plan?.monthlyPrice ?? plan?.price ?? sub?.price ?? 0);
+  const planYearly = Number(plan?.yearlyPrice ?? 0);
+  const displayMonthly = planMonthly > 0 ? planMonthly : (renewalAmount > 0 && cycle === 'MONTHLY' ? renewalAmount : 0);
+  const displayYearly = planYearly > 0 ? planYearly : (renewalAmount > 0 && cycle === 'YEARLY' ? renewalAmount : planMonthly * 12);
+  const isEnterprisePlan = String(plan?.code || '').toLowerCase() === 'enterprise' || plan?.tier === 'ENTERPRISE';
 
   const renewNow = async () => {
     setBusy(true);
@@ -507,7 +517,7 @@ export function CrmSubscriptionPage() {
       if (sessionId) {
         const cf = await loadCashfreeSdk();
         if (cf) {
-          cf({ mode: 'production' }).checkout({ paymentSessionId: sessionId, redirectTarget: '_self' });
+          cf({ mode: cashfreeMode }).checkout({ paymentSessionId: sessionId, redirectTarget: '_self' });
           return;
         }
         setNotice({ kind: 'info', text: 'Renewal order created. Redirecting to payment…' });
@@ -547,7 +557,7 @@ export function CrmSubscriptionPage() {
       if (sessionId) {
         const cf = await loadCashfreeSdk();
         if (cf) {
-          cf({ mode: 'production' }).checkout({ paymentSessionId: sessionId, redirectTarget: '_self' });
+          cf({ mode: cashfreeMode }).checkout({ paymentSessionId: sessionId, redirectTarget: '_self' });
           return;
         }
       }
@@ -587,7 +597,12 @@ export function CrmSubscriptionPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">{String(plan?.name)}</h3>
-                  <p className="mt-1 text-2xl font-bold text-primary-600">{formatCurrency(Number(plan?.monthlyPrice || plan?.price || 0))}<span className="text-sm font-normal text-gray-500">/month</span></p>
+                  <p className="mt-1 text-2xl font-bold text-primary-600">
+                    {freeRenewal ? formatCurrency(0) : isEnterprisePlan && displayMonthly <= 0 ? 'Custom pricing' : formatCurrency(cycle === 'YEARLY' ? displayYearly : displayMonthly)}
+                    {!freeRenewal && !(isEnterprisePlan && displayMonthly <= 0) && (
+                      <span className="text-sm font-normal text-gray-500">/{cycle === 'YEARLY' ? 'year' : 'month'}</span>
+                    )}
+                  </p>
                 </div>
                 <StatusBadge status={String(sub.status)} />
               </div>
@@ -610,15 +625,29 @@ export function CrmSubscriptionPage() {
               {/* Renew */}
               <div className="mt-5 border-t border-gray-100 pt-5">
                 <div className="flex flex-wrap items-center gap-3">
-                  <select className="input w-auto" value={cycle} onChange={(e) => setCycle(e.target.value as 'MONTHLY' | 'YEARLY')}>
-                    <option value="MONTHLY">Monthly · {formatCurrency(Number(plan?.monthlyPrice || plan?.price || 0))}</option>
-                    <option value="YEARLY">Yearly · {formatCurrency(Number(plan?.yearlyPrice || 0))}</option>
-                  </select>
-                  <button className="btn-primary text-sm" disabled={busy || needsPaymentGateway} onClick={renewNow}>{busy ? 'Starting…' : freeRenewal ? 'Renew Free Plan' : 'Renew Now'}</button>
+                  {!requiresCustomQuote && (
+                    <select className="input w-auto" value={cycle} onChange={(e) => setCycle(e.target.value as 'MONTHLY' | 'YEARLY')}>
+                      <option value="MONTHLY">Monthly · {formatCurrency(displayMonthly)}</option>
+                      <option value="YEARLY">Yearly · {formatCurrency(displayYearly)}</option>
+                    </select>
+                  )}
+                  {requiresCustomQuote ? (
+                    <span className="text-sm text-gray-600">Contact support for Enterprise pricing, or choose a plan below.</span>
+                  ) : (
+                    <button className="btn-primary text-sm" disabled={busy || needsPaymentGateway} onClick={renewNow}>
+                      {busy ? 'Starting…' : freeRenewal ? 'Renew Free Plan' : `Renew Now · ${formatCurrency(cycle === 'YEARLY' ? displayYearly : displayMonthly)}`}
+                    </button>
+                  )}
                   {freeRenewal && <span className="text-xs text-green-600">Free plan — renews instantly, no payment required.</span>}
                   {needsPaymentGateway && <span className="text-xs text-gray-400">Cashfree not configured — add credentials in Admin → Settings → Payment Gateway.</span>}
                 </div>
-                <p className="mt-2 text-xs text-gray-400">{freeRenewal ? 'Your free/trial plan renews immediately on this server.' : 'Payments are processed by Cashfree. Your subscription is activated only after the payment is verified on our servers.'}</p>
+                <p className="mt-2 text-xs text-gray-400">
+                  {freeRenewal
+                    ? 'Your free/trial plan renews immediately on this server.'
+                    : requiresCustomQuote
+                      ? 'Enterprise plans are billed based on your agreement with the platform.'
+                      : `Payments are processed by Cashfree (${cashfreeMode} mode). Your subscription is activated only after payment is verified.`}
+                </p>
               </div>
 
               {Array.isArray(plan?.features) && <ul className="mt-5 grid grid-cols-1 gap-1 text-sm text-gray-600 sm:grid-cols-2">{(plan.features as string[]).map((f) => <li key={f} className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary-500" />{f}</li>)}</ul>}
