@@ -6,8 +6,7 @@ Set these in **Vercel → Project → Settings → Environment Variables**:
 
 | Variable | Example | Required |
 |----------|---------|----------|
-| `DATABASE_URL` | `postgresql://postgres:PASSWORD@database-1.cluster-covwo0uikrnc.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require` | ✅ Yes (or use `DB_PASSWORD` below) |
-| `DB_PASSWORD` | your RDS password | Alternative to full `DATABASE_URL` |
+| `DATABASE_URL` | `postgresql://USER:PASSWORD@HOST/neondb?sslmode=require` | ✅ Yes |
 | `JWT_SECRET` | long-random-string | ✅ Yes |
 | `JWT_REFRESH_SECRET` | another-long-random-string | ✅ Yes |
 | `ADMIN_EMAIL` | `rk331159@gmail.com` | For admin seed |
