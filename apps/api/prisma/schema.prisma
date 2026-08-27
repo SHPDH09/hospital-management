@@ -2180,3 +2180,43 @@ model PatientPhoneOtp {
   @@index([userId, phone])
   @@map("patient_phone_otps")
 }
+
+model AffiliateSocialConnection {
+  id               String    @id @default(uuid())
+  platform         String
+  status           String    @default("disconnected")
+  accountName      String?
+  accountId        String?
+  profilePicture   String?
+  accessToken      String?
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+  metadata         Json?
+  connectedByEmail String?
+  connectedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([platform])
+  @@map("affiliate_social_connections")
+}
+
+model AffiliateBulkCampaign {
+  id               String   @id @default(uuid())
+  title            String
+  channel          String   @default("whatsapp")
+  message          String
+  recipients       Json
+  groupId          String?
+  groupName        String?
+  status           String   @default("draft")
+  sentCount        Int      @default(0)
+  failedCount      Int      @default(0)
+  results          Json?
+  createdByEmail   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([channel, status])
+  @@map("affiliate_bulk_campaigns")
+}

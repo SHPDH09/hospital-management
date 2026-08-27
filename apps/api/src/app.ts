@@ -17,6 +17,7 @@ import adminRoutes from './routes/admin/index';
 import crmRoutes from './routes/crm';
 import publicRoutes from './routes/public';
 import webhookRoutes from './routes/webhooks';
+import affiliateOauthRoutes from './routes/affiliate-oauth';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';
 
@@ -85,6 +86,7 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/crm', crmRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/affiliate-oauth', affiliateOauthRoutes);
 app.use('/api/v1/webhooks', webhookRoutes);
 
 app.use(notFoundHandler);
