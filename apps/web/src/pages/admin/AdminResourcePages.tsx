@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Lock, ShieldCheck, Search, RotateCcw } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
+import {
+  PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn,
+  EditModal, EditField, DetailModal, RowActions,
+} from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
-import { handleImpersonate } from './AdminDashboard';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const PC_BASE = '/api/v1/admin/payment-console';
@@ -19,6 +21,25 @@ function useAdminList(endpoint: string, params = '') {
   return useQuery({ queryKey: [endpoint, params], queryFn: () => api.get(`${endpoint}${params}`) });
 }
 
+type Row = Record<string, unknown>;
+
+async function loginAs(path: string) {
+  const res = await api.post<{ accessToken: string; refreshToken: string; redirectTo: string }>(path);
+  if (res.success && res.data) {
+    api.setTokens(res.data.accessToken, res.data.refreshToken);
+    window.location.href = res.data.redirectTo;
+  } else {
+    alert(res.error || 'Could not log in as this user');
+  }
+}
+
+async function confirmDelete(path: string, label: string, onDone: () => void) {
+  if (!window.confirm(`Delete this ${label}? This action cannot be undone.`)) return;
+  const res = await api.delete(path);
+  if (res.success) onDone();
+  else alert(res.error || 'Delete failed');
+}
+
 // ─── Organizations (Hospitals / Clinics) ─────────────────────────────────────
 
 export function AdminHospitalsPage() {
@@ -29,14 +50,47 @@ export function AdminClinicsPage() {
   return <OrgListPage type="CLINIC" title="Clinic Management" subtitle="Manage all clinics on the platform" />;
 }
 
+const ORG_EDIT_FIELDS: EditField[] = [
+  { name: 'name', label: 'Name' },
+  { name: 'email', label: 'Email' },
+  { name: 'phone', label: 'Phone' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+  { name: 'address', label: 'Address', type: 'textarea' },
+];
+
+const ORG_CREATE_FIELDS: EditField[] = [
+  { name: 'name', label: 'Name', required: true },
+  { name: 'ownerName', label: 'Owner / Admin Name', required: true },
+  { name: 'email', label: 'Login Email', type: 'email', required: true },
+  { name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Min 8 characters' },
+  { name: 'phone', label: 'Phone' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+  { name: 'address', label: 'Address', type: 'textarea' },
+];
+
 function OrgListPage({ type, title, subtitle }: { type: string; title: string; subtitle: string }) {
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [viewing, setViewing] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/organizations', `?type=${type}&search=${search}&limit=50`);
+  const entity = type === 'CLINIC' ? 'Clinic' : 'Hospital';
+
+  const openDetails = async (row: Row) => {
+    const res = await api.get(`/admin/organizations/${row.id}`);
+    if (res.success && res.data) setViewing(res.data as Row);
+    else alert(res.error || 'Could not load details');
+  };
 
   return (
     <DashboardLayout portal="admin">
       <PageHeader title={title} subtitle={subtitle} actions={
-        <input className="input text-sm" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <>
+          <input className="input text-sm" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button type="button" className="btn-primary text-sm whitespace-nowrap" onClick={() => setCreating(true)}>+ Add {entity}</button>
+        </>
       } />
       {isLoading ? <LoadingState /> : (
         <AdminTable
@@ -45,22 +99,70 @@ function OrgListPage({ type, title, subtitle }: { type: string; title: string; s
             { key: 'city', label: 'City' },
             { key: 'verificationStatus', label: 'Status', render: (r) => <StatusBadge status={r.verificationStatus as string} /> },
             { key: 'doctors', label: 'Doctors', render: (r) => String((r._count as { doctors?: number })?.doctors || 0) },
-            { key: 'actions', label: 'Actions', render: (r) => (
-              <div className="flex flex-wrap gap-2">
+            { key: 'actions', label: 'Actions', nowrap: false, render: (r) => (
+              <RowActions>
+                <ActionBtn onClick={() => openDetails(r)}>View Details</ActionBtn>
+                <ActionBtn onClick={() => setEditing(r)}>Edit</ActionBtn>
                 {r.verificationStatus === 'PENDING' && (
                   <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => refetch())}>Approve</ActionBtn>
                 )}
                 {r.verificationStatus === 'APPROVED' && (
-                  <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: false, verificationStatus: 'SUSPENDED' }).then(() => refetch())}>Suspend</ActionBtn>
+                  <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: false, verificationStatus: 'SUSPENDED' }).then(() => refetch())}>Block</ActionBtn>
                 )}
                 {r.verificationStatus === 'SUSPENDED' && (
-                  <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: true, verificationStatus: 'APPROVED' }).then(() => refetch())}>Activate</ActionBtn>
+                  <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { isActive: true, verificationStatus: 'APPROVED' }).then(() => refetch())}>Unblock</ActionBtn>
                 )}
-                <ActionBtn onClick={() => handleImpersonate(r.id as string)}>Login as Admin</ActionBtn>
-              </div>
+                <ActionBtn onClick={() => loginAs(`/admin/organizations/${r.id}/impersonate`)}>Login as Admin</ActionBtn>
+                <ActionBtn variant="danger" onClick={() => confirmDelete(`/admin/organizations/${r.id}`, 'organization', refetch)}>Delete</ActionBtn>
+              </RowActions>
             )},
           ]}
-          rows={(data?.data as Record<string, unknown>[]) || []}
+          rows={(data?.data as Row[]) || []}
+        />
+      )}
+      {viewing && (
+        <DetailModal
+          title={String(viewing.name)}
+          fields={[
+            { label: 'Type', value: String(viewing.type) },
+            { label: 'Status', value: <StatusBadge status={String(viewing.verificationStatus)} /> },
+            { label: 'Email', value: String(viewing.email || '—') },
+            { label: 'Phone', value: String(viewing.phone || '—') },
+            { label: 'City', value: String(viewing.city || '—') },
+            { label: 'Address', value: String(viewing.address || '—') },
+            { label: 'Doctors', value: String((viewing._count as { doctors?: number })?.doctors || 0) },
+            { label: 'Appointments', value: String((viewing._count as { appointments?: number })?.appointments || 0) },
+          ]}
+          onClose={() => setViewing(null)}
+          actions={<ActionBtn onClick={() => loginAs(`/admin/organizations/${viewing.id}/impersonate`)}>Login as Admin</ActionBtn>}
+        />
+      )}
+      {editing && (
+        <EditModal
+          title="Edit Organization"
+          fields={ORG_EDIT_FIELDS}
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSave={async (values) => {
+            const res = await api.patch(`/admin/organizations/${editing.id}`, values);
+            if (!res.success) throw new Error(res.error || 'Update failed');
+            setEditing(null);
+            refetch();
+          }}
+        />
+      )}
+      {creating && (
+        <EditModal
+          title={`Add ${entity}`}
+          fields={ORG_CREATE_FIELDS}
+          submitLabel={`Create ${entity}`}
+          onClose={() => setCreating(false)}
+          onSave={async (values) => {
+            const res = await api.post('/admin/organizations', { ...values, type });
+            if (!res.success) throw new Error(res.error || 'Create failed');
+            setCreating(false);
+            refetch();
+          }}
         />
       )}
     </DashboardLayout>
@@ -69,23 +171,98 @@ function OrgListPage({ type, title, subtitle }: { type: string; title: string; s
 
 // ─── Doctors ─────────────────────────────────────────────────────────────────
 
+const DOCTOR_EDIT_FIELDS: EditField[] = [
+  { name: 'fullName', label: 'Full Name' },
+  { name: 'specialization', label: 'Specialization' },
+  { name: 'qualification', label: 'Qualification' },
+  { name: 'experience', label: 'Experience (years)', type: 'number' },
+  { name: 'consultationFee', label: 'Consultation Fee', type: 'number' },
+  { name: 'registrationNumber', label: 'Registration Number' },
+];
+
 export function AdminDoctorsPage() {
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [viewing, setViewing] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/doctors', '?limit=50');
+  const { data: orgData } = useAdminList('/admin/organizations', '?limit=100');
+  const orgOptions = ((orgData?.data as Row[]) || []).map((o) => ({ value: String(o.id), label: String(o.name) }));
+  const doctorCreateFields: EditField[] = [
+    { name: 'organizationId', label: 'Organization', type: 'select', options: orgOptions, required: true },
+    { name: 'fullName', label: 'Full Name', required: true },
+    { name: 'email', label: 'Login Email', type: 'email', required: true },
+    { name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Min 8 characters' },
+    { name: 'specialization', label: 'Specialization' },
+    { name: 'qualification', label: 'Qualification' },
+    { name: 'experience', label: 'Experience (years)', type: 'number' },
+    { name: 'consultationFee', label: 'Consultation Fee', type: 'number' },
+  ];
+
+  const openDetails = async (row: Row) => {
+    const res = await api.get(`/admin/doctors/${row.id}`);
+    if (res.success && res.data) setViewing(res.data as Row);
+    else alert(res.error || 'Could not load details');
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Doctor Management" subtitle="Approve, verify, suspend doctors platform-wide" />
+      <PageHeader title="Doctor Management" subtitle="View, edit, block, impersonate or remove doctors" actions={
+        <button type="button" className="btn-primary text-sm whitespace-nowrap" onClick={() => setCreating(true)}>+ Add Doctor</button>
+      } />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'fullName', label: 'Name' },
           { key: 'specialization', label: 'Specialization' },
           { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name || '-') },
-          { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'SUSPENDED'} /> },
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <ActionBtn variant={r.isActive ? 'danger' : 'success'} onClick={() => api.patch(`/admin/doctors/${r.id}/status`, { isActive: !r.isActive }).then(() => refetch())}>
-              {r.isActive ? 'Suspend' : 'Activate'}
-            </ActionBtn>
+          { key: 'isActive', label: 'Status', render: (r) => <StatusBadge status={r.isActive ? 'ACTIVE' : 'BLOCKED'} /> },
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => (
+            <RowActions>
+              <ActionBtn onClick={() => openDetails(r)}>View Details</ActionBtn>
+              <ActionBtn onClick={() => setEditing(r)}>Edit</ActionBtn>
+              <ActionBtn variant={r.isActive ? 'danger' : 'success'} onClick={() => api.patch(`/admin/doctors/${r.id}/status`, { isActive: !r.isActive }).then(() => refetch())}>
+                {r.isActive ? 'Block' : 'Unblock'}
+              </ActionBtn>
+              <ActionBtn onClick={() => loginAs(`/admin/doctors/${r.id}/impersonate`)}>Login as Doctor</ActionBtn>
+              <ActionBtn variant="danger" onClick={() => confirmDelete(`/admin/doctors/${r.id}`, 'doctor', refetch)}>Delete</ActionBtn>
+            </RowActions>
           )},
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+        ]} rows={(data?.data as Row[]) || []} />
+      )}
+      {viewing && (
+        <DetailModal
+          title={String(viewing.fullName)}
+          fields={[
+            { label: 'Email', value: String((viewing.user as { email?: string })?.email || '—') },
+            { label: 'Organization', value: String((viewing.organization as { name?: string })?.name || '—') },
+            { label: 'Specialization', value: String(viewing.specialization || '—') },
+            { label: 'Qualification', value: String(viewing.qualification || '—') },
+            { label: 'Experience', value: viewing.experience != null ? `${viewing.experience} years` : '—' },
+            { label: 'Fee', value: formatCurrency(Number(viewing.consultationFee || 0)) },
+            { label: 'Appointments', value: String((viewing._count as { appointments?: number })?.appointments || 0) },
+            { label: 'Status', value: <StatusBadge status={(viewing.user as { isActive?: boolean })?.isActive !== false ? 'ACTIVE' : 'BLOCKED'} /> },
+          ]}
+          onClose={() => setViewing(null)}
+        />
+      )}
+      {editing && (
+        <EditModal title="Edit Doctor" fields={DOCTOR_EDIT_FIELDS} initial={editing} onClose={() => setEditing(null)}
+          onSave={async (values) => {
+            const res = await api.patch(`/admin/doctors/${editing.id}`, values);
+            if (!res.success) throw new Error(res.error || 'Update failed');
+            setEditing(null);
+            refetch();
+          }}
+        />
+      )}
+      {creating && (
+        <EditModal title="Add Doctor" fields={doctorCreateFields} submitLabel="Create Doctor" onClose={() => setCreating(false)}
+          onSave={async (values) => {
+            const res = await api.post('/admin/doctors', values);
+            if (!res.success) throw new Error(res.error || 'Create failed');
+            setCreating(false);
+            refetch();
+          }}
+        />
       )}
     </DashboardLayout>
   );
@@ -93,22 +270,96 @@ export function AdminDoctorsPage() {
 
 // ─── Patients ────────────────────────────────────────────────────────────────
 
+const PATIENT_EDIT_FIELDS: EditField[] = [
+  { name: 'fullName', label: 'Full Name' },
+  { name: 'alternatePhone', label: 'Alternate Phone' },
+  { name: 'bloodGroup', label: 'Blood Group' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+  { name: 'address', label: 'Address', type: 'textarea' },
+];
+
+const PATIENT_CREATE_FIELDS: EditField[] = [
+  { name: 'fullName', label: 'Full Name', required: true },
+  { name: 'email', label: 'Login Email', type: 'email', required: true },
+  { name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Min 8 characters' },
+  { name: 'phone', label: 'Phone' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+];
+
 export function AdminPatientsPage() {
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [viewing, setViewing] = useState<Row | null>(null);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading, refetch } = useAdminList('/admin/patients', '?limit=50');
+
+  const openDetails = async (row: Row) => {
+    const res = await api.get(`/admin/patients/${row.id}`);
+    if (res.success && res.data) setViewing(res.data as Row);
+    else alert(res.error || 'Could not load details');
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Patient Management" subtitle="View and manage all patients" />
+      <PageHeader title="Patient Management" subtitle="View, edit, block, impersonate or remove patients" actions={
+        <button type="button" className="btn-primary text-sm whitespace-nowrap" onClick={() => setCreating(true)}>+ Add Patient</button>
+      } />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'fullName', label: 'Name' },
           { key: 'email', label: 'Email', render: (r) => String((r.user as { email?: string })?.email || '-') },
           { key: 'city', label: 'City' },
           { key: 'appointments', label: 'Appointments', render: (r) => String((r._count as { appointments?: number })?.appointments || 0) },
-          { key: 'actions', label: 'Actions', render: (r) => {
+          { key: 'status', label: 'Status', render: (r) => <StatusBadge status={(r.user as { isActive?: boolean })?.isActive ? 'ACTIVE' : 'BLOCKED'} /> },
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => {
             const active = (r.user as { isActive?: boolean })?.isActive;
-            return <ActionBtn variant={active ? 'danger' : 'success'} onClick={() => api.patch(`/admin/patients/${r.id}/status`, { isActive: !active }).then(() => refetch())}>{active ? 'Block' : 'Unblock'}</ActionBtn>;
+            return (
+              <RowActions>
+                <ActionBtn onClick={() => openDetails(r)}>View Details</ActionBtn>
+                <ActionBtn onClick={() => setEditing(r)}>Edit</ActionBtn>
+                <ActionBtn variant={active ? 'danger' : 'success'} onClick={() => api.patch(`/admin/patients/${r.id}/status`, { isActive: !active }).then(() => refetch())}>{active ? 'Block' : 'Unblock'}</ActionBtn>
+                <ActionBtn onClick={() => loginAs(`/admin/patients/${r.id}/impersonate`)}>Login as Patient</ActionBtn>
+                <ActionBtn variant="danger" onClick={() => confirmDelete(`/admin/patients/${r.id}`, 'patient', refetch)}>Delete</ActionBtn>
+              </RowActions>
+            );
           }},
-        ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+        ]} rows={(data?.data as Row[]) || []} />
+      )}
+      {viewing && (
+        <DetailModal
+          title={String(viewing.fullName)}
+          fields={[
+            { label: 'Email', value: String((viewing.user as { email?: string })?.email || '—') },
+            { label: 'Phone', value: String((viewing.user as { phone?: string })?.phone || '—') },
+            { label: 'City', value: String(viewing.city || '—') },
+            { label: 'State', value: String(viewing.state || '—') },
+            { label: 'Blood Group', value: String(viewing.bloodGroup || '—') },
+            { label: 'Appointments', value: String((viewing._count as { appointments?: number })?.appointments || 0) },
+            { label: 'Status', value: <StatusBadge status={(viewing.user as { isActive?: boolean })?.isActive ? 'ACTIVE' : 'BLOCKED'} /> },
+          ]}
+          onClose={() => setViewing(null)}
+        />
+      )}
+      {editing && (
+        <EditModal title="Edit Patient" fields={PATIENT_EDIT_FIELDS} initial={editing} onClose={() => setEditing(null)}
+          onSave={async (values) => {
+            const res = await api.patch(`/admin/patients/${editing.id}`, values);
+            if (!res.success) throw new Error(res.error || 'Update failed');
+            setEditing(null);
+            refetch();
+          }}
+        />
+      )}
+      {creating && (
+        <EditModal title="Add Patient" fields={PATIENT_CREATE_FIELDS} submitLabel="Create Patient" onClose={() => setCreating(false)}
+          onSave={async (values) => {
+            const res = await api.post('/admin/patients', values);
+            if (!res.success) throw new Error(res.error || 'Create failed');
+            setCreating(false);
+            refetch();
+          }}
+        />
       )}
     </DashboardLayout>
   );
@@ -117,10 +368,18 @@ export function AdminPatientsPage() {
 // ─── Appointments ────────────────────────────────────────────────────────────
 
 export function AdminAppointmentsPage() {
+  const [viewing, setViewing] = useState<Row | null>(null);
   const { data, isLoading, refetch } = useAdminList('/admin/appointments', '?limit=50');
+
+  const openDetails = async (row: Row) => {
+    const res = await api.get(`/admin/appointments/${row.id}`);
+    if (res.success && res.data) setViewing(res.data as Row);
+    else alert(res.error || 'Could not load details');
+  };
+
   return (
     <DashboardLayout portal="admin">
-      <PageHeader title="Appointment Management" subtitle="Platform-wide appointment visibility" />
+      <PageHeader title="Appointment Management" subtitle="Platform-wide appointment visibility and control" />
       {isLoading ? <LoadingState /> : (
         <AdminTable columns={[
           { key: 'date', label: 'Date', render: (r) => formatDate(r.appointmentDate as string) },
@@ -129,16 +388,37 @@ export function AdminAppointmentsPage() {
           { key: 'doctor', label: 'Doctor', render: (r) => String((r.doctor as { fullName?: string })?.fullName) },
           { key: 'org', label: 'Organization', render: (r) => String((r.organization as { name?: string })?.name) },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
-          { key: 'actions', label: 'Actions', render: (r) => r.status !== 'CANCELLED' && (
-            <ActionBtn variant="danger" onClick={() => api.patch(`/admin/appointments/${r.id}/status`, { status: 'CANCELLED' }).then(() => refetch())}>Cancel</ActionBtn>
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => (
+            <RowActions>
+              <ActionBtn onClick={() => openDetails(r)}>View Details</ActionBtn>
+              {r.status !== 'CANCELLED' && (
+                <ActionBtn variant="danger" onClick={() => api.patch(`/admin/appointments/${r.id}/status`, { status: 'CANCELLED' }).then(() => refetch())}>Cancel</ActionBtn>
+              )}
+            </RowActions>
           )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+      )}
+      {viewing && (
+        <DetailModal
+          title="Appointment Details"
+          fields={[
+            { label: 'Date', value: formatDate(String(viewing.appointmentDate)) },
+            { label: 'Time', value: String(viewing.startTime) },
+            { label: 'Patient', value: String((viewing.patient as { fullName?: string })?.fullName || '—') },
+            { label: 'Doctor', value: String((viewing.doctor as { fullName?: string })?.fullName || '—') },
+            { label: 'Hospital', value: String((viewing.organization as { name?: string })?.name || '—') },
+            { label: 'Status', value: <StatusBadge status={String(viewing.status)} /> },
+            { label: 'Type', value: String(viewing.type || 'consultation') },
+            { label: 'Notes', value: String(viewing.notes || '—') },
+          ]}
+          onClose={() => setViewing(null)}
+        />
       )}
     </DashboardLayout>
   );
 }
 
-// ─── Payments ────────────────────────────────────────────────────────────────
+// ─── Payments (PIN-protected Cashfree console) ───────────────────────────────
 
 interface PaymentResult {
   id: string; orderId?: string | null; paymentId?: string | null; invoiceNumber?: string | null;
@@ -182,21 +462,17 @@ function PaymentPinGate({ isSet, onUnlock }: { isSet: boolean; onUnlock: (token:
         </div>
         <h2 className="mt-4 text-lg font-semibold text-gray-900">{isSet ? 'Enter Payment PIN' : 'Set up Payment PIN'}</h2>
         <p className="mt-1 text-sm text-gray-500">
-          {isSet ? 'This section is protected. Enter your PIN to continue.' : 'Create a 4-6 digit PIN to secure the payment console. You will need it each time you open this section.'}
+          {isSet ? 'This section is protected. Enter your PIN to continue.' : 'Create a 4-6 digit PIN to secure the payment console.'}
         </p>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        <input
-          className="input mt-4 text-center tracking-[0.5em]" type="password" inputMode="numeric" maxLength={6}
+        <input className="input mt-4 text-center tracking-[0.5em]" type="password" inputMode="numeric" maxLength={6}
           placeholder="••••" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          onKeyDown={(e) => { if (e.key === 'Enter' && isSet) submit(); }}
-        />
+          onKeyDown={(e) => { if (e.key === 'Enter' && isSet) submit(); }} />
         {!isSet && (
-          <input
-            className="input mt-2 text-center tracking-[0.5em]" type="password" inputMode="numeric" maxLength={6}
-            placeholder="Confirm PIN" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))}
-          />
+          <input className="input mt-2 text-center tracking-[0.5em]" type="password" inputMode="numeric" maxLength={6}
+            placeholder="Confirm PIN" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))} />
         )}
-        <button className="btn-primary mt-4 w-full" disabled={busy} onClick={submit}>
+        <button type="button" className="btn-primary mt-4 w-full" disabled={busy} onClick={submit}>
           {busy ? 'Please wait…' : isSet ? 'Unlock' : 'Create PIN & Continue'}
         </button>
       </div>
@@ -245,9 +521,8 @@ export function AdminPaymentsPage() {
   return (
     <DashboardLayout portal="admin">
       <PageHeader title="Payment Console" subtitle="Search Cashfree transactions and issue refunds" actions={
-        unlocked ? <button className="btn-secondary text-sm" onClick={lock}><Lock className="h-4 w-4" /> Lock</button> : undefined
+        unlocked ? <button type="button" className="btn-secondary text-sm" onClick={lock}><Lock className="h-4 w-4" /> Lock</button> : undefined
       } />
-
       {pinLoading ? <LoadingState /> : !unlocked ? (
         <PaymentPinGate isSet={pinIsSet} onUnlock={onUnlock} />
       ) : (
@@ -259,14 +534,13 @@ export function AdminPaymentsPage() {
               </select>
               <input className="input flex-1" placeholder="Search by phone, email, Cashfree ID, UPI, transaction no…"
                 value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doSearch(); }} />
-              <button className="btn-primary text-sm" disabled={searching || query.trim().length < 2} onClick={doSearch}>
+              <button type="button" className="btn-primary text-sm" disabled={searching || query.trim().length < 2} onClick={doSearch}>
                 <Search className="h-4 w-4" /> {searching ? 'Searching…' : 'Search'}
               </button>
             </div>
             {note && <p className="mt-2 text-xs text-amber-600">{note}</p>}
             {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
           </div>
-
           {results && (
             results.length === 0 ? (
               <div className="card p-10 text-center text-gray-500">No transactions found</div>

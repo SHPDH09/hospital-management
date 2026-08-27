@@ -4,7 +4,7 @@ import {
   AlertCircle, TrendingUp, UserPlus, Headphones, Sparkles, ShieldCheck, BarChart3,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { StatGrid, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
+import { StatGrid, AdminTable, StatusBadge, LoadingState, ActionBtn, RowActions } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
@@ -114,12 +114,12 @@ export function AdminDashboard() {
                 { key: 'type', label: 'Type' },
                 { key: 'city', label: 'City' },
                 { key: 'verificationStatus', label: 'Status', render: (r) => <StatusBadge status={r.verificationStatus as string} /> },
-                { key: 'actions', label: 'Actions', render: (r) => (
-                  <div className="flex gap-2">
+                { key: 'actions', label: 'Actions', nowrap: false, render: (r) => (
+                  <RowActions>
                     <ActionBtn variant="success" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'APPROVED', isPubliclyListed: true }).then(() => window.location.reload())}>Approve</ActionBtn>
                     <ActionBtn variant="danger" onClick={() => api.patch(`/admin/organizations/${r.id}/status`, { verificationStatus: 'REJECTED' }).then(() => window.location.reload())}>Reject</ActionBtn>
                     <ActionBtn onClick={() => handleImpersonate(r.id as string)}>Login as Admin</ActionBtn>
-                  </div>
+                  </RowActions>
                 )},
               ]}
               rows={(orgs?.data as Record<string, unknown>[]) || []}

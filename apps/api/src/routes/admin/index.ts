@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { JwtPayload } from '@healthcare/shared';
 import { prisma } from '../../lib/prisma';
-import { hashPassword, signAccessToken, signRefreshToken } from '../../lib/auth';
+import { hashPassword, signAccessToken, signRefreshToken, slugify } from '../../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../../lib/response';
 import { paramId } from '../../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../middleware/auth';
@@ -24,6 +25,34 @@ import paymentConsoleRoutes from './payment-console';
 
 const router = Router();
 router.use(authenticate, requireRoles(...PLATFORM_ROLES));
+
+function pickEditable(
+  body: Record<string, unknown>,
+  allowed: readonly string[],
+  numeric: readonly string[] = [],
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (!(key in body)) continue;
+    const raw = body[key];
+    if (numeric.includes(key)) {
+      data[key] = raw === '' || raw === null || raw === undefined ? null : Number(raw);
+    } else {
+      data[key] = raw;
+    }
+  }
+  return data;
+}
+
+async function issueImpersonationTokens(payload: JwtPayload) {
+  const accessToken = signAccessToken(payload);
+  const refreshToken = signRefreshToken({ userId: payload.userId });
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  await prisma.refreshToken.create({ data: { token: refreshToken, userId: payload.userId, expiresAt } });
+  return { accessToken, refreshToken };
+}
+
 router.use('/subscriptions', subscriptionRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/locations', locationRoutes);
@@ -135,6 +164,67 @@ router.get('/organizations', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const createOrgSchema = z.object({
+  name: z.string().min(2),
+  type: z.enum(['HOSPITAL', 'CLINIC', 'DIAGNOSTIC_CENTER', 'PHARMACY']).default('HOSPITAL'),
+  email: z.string().email(),
+  password: z.string().min(8),
+  ownerName: z.string().min(2),
+  phone: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  address: z.string().optional(),
+  pinCode: z.string().optional(),
+});
+
+router.post('/organizations', validateBody(createOrgSchema), async (req: AuthRequest, res, next) => {
+  try {
+    const data = req.body;
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) throw new AppError('Email already registered', 409);
+
+    let slug = slugify(data.name);
+    if (await prisma.organization.findUnique({ where: { slug } })) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const defaultPlan = await prisma.subscriptionPlan.findFirst({ where: { isDefault: true } })
+      || await prisma.subscriptionPlan.findFirst({ where: { code: 'basic' } });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { email: data.email, phone: data.phone, passwordHash, role: 'HOSPITAL_ADMIN', emailVerified: true },
+      });
+      const organization = await tx.organization.create({
+        data: {
+          name: data.name, slug, type: data.type, email: data.email, phone: data.phone,
+          address: data.address, city: data.city, state: data.state, pinCode: data.pinCode,
+          ownerName: data.ownerName, verificationStatus: 'APPROVED', isActive: true, isPubliclyListed: true,
+        },
+      });
+      await tx.staff.create({
+        data: { userId: user.id, organizationId: organization.id, fullName: data.ownerName, role: 'HOSPITAL_ADMIN' },
+      });
+      if (defaultPlan) {
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 1);
+        await tx.subscription.create({
+          data: {
+            organizationId: organization.id, planId: defaultPlan.id, status: 'ACTIVE',
+            billingCycle: 'MONTHLY', price: defaultPlan.monthlyPrice ?? defaultPlan.price,
+            endDate, changeSource: 'SYSTEM',
+          },
+        });
+      }
+      return organization;
+    });
+
+    await logAudit(req, 'CREATE', 'Organization', result.id, { name: data.name, type: data.type });
+    sendSuccess(res, result, `${data.type === 'CLINIC' ? 'Clinic' : 'Organization'} created`, 201);
+  } catch (err) { next(err); }
+});
+
 router.get('/organizations/:id', async (req, res, next) => {
   try {
     const id = paramId(req.params.id);
@@ -193,14 +283,10 @@ router.post('/organizations/:id/impersonate', async (req: AuthRequest, res, next
     });
     if (!staff) throw new AppError('No hospital admin found for this organization', 404);
 
-    const accessToken = signAccessToken({
+    const { accessToken, refreshToken } = await issueImpersonationTokens({
       userId: staff.userId, email: staff.user.email, role: 'HOSPITAL_ADMIN',
       organizationId: id, branchId: staff.branchId || undefined,
     });
-    const refreshToken = signRefreshToken({ userId: staff.userId });
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-    await prisma.refreshToken.create({ data: { token: refreshToken, userId: staff.userId, expiresAt } });
     await logAudit(req, 'IMPERSONATE', 'Organization', id, { targetEmail: staff.user.email });
 
     sendSuccess(res, {
@@ -231,6 +317,63 @@ router.get('/doctors', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const createDoctorSchema = z.object({
+  organizationId: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(8),
+  fullName: z.string().min(2),
+  specialization: z.string().optional(),
+  qualification: z.string().optional(),
+  experience: z.coerce.number().int().nonnegative().optional(),
+  consultationFee: z.coerce.number().nonnegative().optional(),
+  registrationNumber: z.string().optional(),
+});
+
+router.post('/doctors', validateBody(createDoctorSchema), async (req: AuthRequest, res, next) => {
+  try {
+    const data = req.body;
+    const org = await prisma.organization.findUnique({ where: { id: data.organizationId }, select: { id: true } });
+    if (!org) throw new AppError('Organization not found', 404);
+    if (await prisma.user.findUnique({ where: { email: data.email } })) {
+      throw new AppError('Email already registered', 409);
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const doctor = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { email: data.email, passwordHash, role: 'DOCTOR', emailVerified: true } });
+      return tx.doctor.create({
+        data: {
+          userId: user.id, organizationId: data.organizationId, fullName: data.fullName,
+          specialization: data.specialization, qualification: data.qualification,
+          experience: data.experience, consultationFee: data.consultationFee ?? 0,
+          registrationNumber: data.registrationNumber,
+        },
+        include: { organization: { select: { name: true } }, user: { select: { email: true, isActive: true } } },
+      });
+    });
+
+    await logAudit(req, 'CREATE', 'Doctor', doctor.id, { fullName: data.fullName, email: data.email });
+    sendSuccess(res, doctor, 'Doctor created', 201);
+  } catch (err) { next(err); }
+});
+
+router.get('/doctors/:id', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const doctor = await prisma.doctor.findUnique({
+      where: { id },
+      include: {
+        organization: { select: { id: true, name: true, city: true, type: true } },
+        department: true,
+        user: { select: { email: true, phone: true, isActive: true, lastLoginAt: true } },
+        _count: { select: { appointments: true, reviews: true } },
+      },
+    });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+    sendSuccess(res, doctor);
+  } catch (err) { next(err); }
+});
+
 router.patch('/doctors/:id/status', async (req: AuthRequest, res, next) => {
   try {
     const id = paramId(req.params.id);
@@ -238,6 +381,49 @@ router.patch('/doctors/:id/status', async (req: AuthRequest, res, next) => {
     const doctor = await prisma.doctor.update({ where: { id }, data: { isActive } });
     await logAudit(req, 'STATUS_CHANGE', 'Doctor', id, { isActive });
     sendSuccess(res, doctor);
+  } catch (err) { next(err); }
+});
+
+const DOCTOR_EDITABLE = ['fullName', 'specialization', 'qualification', 'experience', 'consultationFee', 'registrationNumber', 'bio'] as const;
+
+router.patch('/doctors/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const data = pickEditable(req.body, DOCTOR_EDITABLE, ['experience', 'consultationFee']);
+    const doctor = await prisma.doctor.update({ where: { id }, data });
+    await logAudit(req, 'UPDATE', 'Doctor', id, data as Prisma.InputJsonObject);
+    sendSuccess(res, doctor);
+  } catch (err) { next(err); }
+});
+
+router.delete('/doctors/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const doctor = await prisma.doctor.findUnique({ where: { id } });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+    await prisma.user.delete({ where: { id: doctor.userId } });
+    await logAudit(req, 'DELETE', 'Doctor', id);
+    sendSuccess(res, null, 'Doctor deleted');
+  } catch (err) { next(err); }
+});
+
+router.post('/doctors/:id/impersonate', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const doctor = await prisma.doctor.findUnique({ where: { id }, include: { user: true } });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+
+    const { accessToken, refreshToken } = await issueImpersonationTokens({
+      userId: doctor.userId, email: doctor.user.email, role: 'DOCTOR',
+      organizationId: doctor.organizationId, branchId: doctor.branchId || undefined,
+    });
+    await logAudit(req, 'IMPERSONATE', 'Doctor', id, { targetEmail: doctor.user.email });
+
+    sendSuccess(res, {
+      accessToken, refreshToken,
+      user: { id: doctor.user.id, email: doctor.user.email, role: doctor.user.role },
+      redirectTo: '/crm',
+    }, 'Impersonation token issued');
   } catch (err) { next(err); }
 });
 
@@ -261,6 +447,51 @@ router.get('/patients', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const createPatientSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  fullName: z.string().min(2),
+  phone: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+});
+
+router.post('/patients', validateBody(createPatientSchema), async (req: AuthRequest, res, next) => {
+  try {
+    const data = req.body;
+    if (await prisma.user.findUnique({ where: { email: data.email } })) {
+      throw new AppError('Email already registered', 409);
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const patient = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { email: data.email, phone: data.phone, passwordHash, role: 'PATIENT', emailVerified: true } });
+      return tx.patient.create({
+        data: { userId: user.id, fullName: data.fullName, city: data.city, state: data.state },
+        include: { user: { select: { email: true, isActive: true } } },
+      });
+    });
+
+    await logAudit(req, 'CREATE', 'Patient', patient.id, { fullName: data.fullName, email: data.email });
+    sendSuccess(res, patient, 'Patient created', 201);
+  } catch (err) { next(err); }
+});
+
+router.get('/patients/:id', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({
+      where: { id },
+      include: {
+        user: { select: { email: true, phone: true, isActive: true, lastLoginAt: true } },
+        _count: { select: { appointments: true } },
+      },
+    });
+    if (!patient) throw new AppError('Patient not found', 404);
+    sendSuccess(res, patient);
+  } catch (err) { next(err); }
+});
+
 router.patch('/patients/:id/status', async (req: AuthRequest, res, next) => {
   try {
     const id = paramId(req.params.id);
@@ -269,6 +500,48 @@ router.patch('/patients/:id/status', async (req: AuthRequest, res, next) => {
     await prisma.user.update({ where: { id: patient.userId }, data: { isActive: req.body.isActive } });
     await logAudit(req, 'STATUS_CHANGE', 'Patient', id, req.body);
     sendSuccess(res, { id, isActive: req.body.isActive });
+  } catch (err) { next(err); }
+});
+
+const PATIENT_EDITABLE = ['fullName', 'city', 'state', 'country', 'address', 'alternatePhone', 'bloodGroup', 'emergencyContactName', 'emergencyContact'] as const;
+
+router.patch('/patients/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const data = pickEditable(req.body, PATIENT_EDITABLE);
+    const patient = await prisma.patient.update({ where: { id }, data });
+    await logAudit(req, 'UPDATE', 'Patient', id, data as Prisma.InputJsonObject);
+    sendSuccess(res, patient);
+  } catch (err) { next(err); }
+});
+
+router.delete('/patients/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({ where: { id } });
+    if (!patient) throw new AppError('Patient not found', 404);
+    await prisma.user.delete({ where: { id: patient.userId } });
+    await logAudit(req, 'DELETE', 'Patient', id);
+    sendSuccess(res, null, 'Patient deleted');
+  } catch (err) { next(err); }
+});
+
+router.post('/patients/:id/impersonate', async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const patient = await prisma.patient.findUnique({ where: { id }, include: { user: true } });
+    if (!patient) throw new AppError('Patient not found', 404);
+
+    const { accessToken, refreshToken } = await issueImpersonationTokens({
+      userId: patient.userId, email: patient.user.email, role: 'PATIENT',
+    });
+    await logAudit(req, 'IMPERSONATE', 'Patient', id, { targetEmail: patient.user.email });
+
+    sendSuccess(res, {
+      accessToken, refreshToken,
+      user: { id: patient.user.id, email: patient.user.email, role: patient.user.role },
+      redirectTo: '/patient',
+    }, 'Impersonation token issued');
   } catch (err) { next(err); }
 });
 
@@ -293,6 +566,22 @@ router.get('/appointments', async (req, res, next) => {
       prisma.appointment.count({ where }),
     ]);
     sendPaginated(res, appointments, { page, limit, total });
+  } catch (err) { next(err); }
+});
+
+router.get('/appointments/:id', async (req, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const apt = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        patient: { select: { id: true, fullName: true } },
+        doctor: { select: { id: true, fullName: true, specialization: true } },
+        organization: { select: { id: true, name: true, city: true } },
+      },
+    });
+    if (!apt) throw new AppError('Appointment not found', 404);
+    sendSuccess(res, apt);
   } catch (err) { next(err); }
 });
 

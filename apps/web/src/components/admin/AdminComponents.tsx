@@ -77,10 +77,41 @@ export function LoadingState() {
 export function ActionBtn({ onClick, children, variant = 'primary' }: { onClick: () => void; children: ReactNode; variant?: 'primary' | 'danger' | 'success' }) {
   const colors = { primary: 'text-primary-600', danger: 'text-red-600', success: 'text-green-600' };
   return (
-    <button onClick={onClick} className={`text-xs font-medium hover:underline ${colors[variant]}`}>
+    <button type="button" onClick={onClick} className={`text-xs font-medium hover:underline ${colors[variant]}`}>
       {children}
     </button>
   );
+}
+
+export function DetailModal({ title, fields, onClose, actions }: {
+  title: string;
+  fields: { label: string; value: ReactNode }[];
+  onClose: () => void;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="card w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <dl className="space-y-3 text-sm">
+          {fields.map((f) => (
+            <div key={f.label} className="grid grid-cols-3 gap-2">
+              <dt className="text-gray-500 font-medium">{f.label}</dt>
+              <dd className="col-span-2 text-gray-900 break-words">{f.value ?? '—'}</dd>
+            </div>
+          ))}
+        </dl>
+        {actions && <div className="mt-6 flex flex-wrap gap-2 justify-end">{actions}</div>}
+        <div className="mt-4 flex justify-end">
+          <button type="button" className="btn-secondary text-sm" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function RowActions({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-x-3 gap-y-1">{children}</div>;
 }
 
 export type EditField = {
