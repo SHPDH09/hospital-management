@@ -16,6 +16,11 @@ function getErrorMessage(err: Error): string {
     if (err.code === 'P2021') {
       return 'Database tables not found. Run: npm run db:setup';
     }
+    if (err.code === 'P2022') {
+      const column = (err.meta as { column?: string })?.column;
+      const detail = column ? ` Missing column: ${column}.` : '';
+      return `Database schema is out of date (P2022).${detail} Run: npm run db:fix-drift && npm run db:push`;
+    }
     if (err.code === 'P1001' || err.code === 'P1000') {
       return 'Cannot reach database. Verify RDS credentials and network access from Vercel.';
     }
