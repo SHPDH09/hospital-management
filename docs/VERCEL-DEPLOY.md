@@ -20,14 +20,16 @@ Optional:
 ## First Deploy Checklist
 
 1. Push latest code and redeploy
-2. Add environment variables above in Vercel dashboard
-3. Run database setup (from local machine or EC2 with DATABASE_URL):
+2. Add environment variables above in Vercel dashboard (**DATABASE_URL is required** — set the full Neon/RDS connection string)
+3. Optional: run database setup from local machine with the same DATABASE_URL:
    ```bash
-   npm run db:setup
+   npm run db:fix-drift
    ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run admin:create
    ```
 4. Test API: `https://your-app.vercel.app/health`
 5. Test login: `https://your-app.vercel.app/login/admin`
+
+> **Note:** Vercel injects `DATABASE_URL` directly — you do NOT need `DB_PASSWORD` if `DATABASE_URL` is set.
 
 ## Architecture on Vercel
 
