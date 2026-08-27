@@ -158,4 +158,80 @@ BEGIN
   END IF;
 END $$;
 
+-- ---------------------------------------------------------------------------
+-- subscriptions: auto-renew preference (Cashfree renewal flow)
+-- ---------------------------------------------------------------------------
+ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "autoRenew" BOOLEAN NOT NULL DEFAULT false;
+
+-- ---------------------------------------------------------------------------
+-- subscription_payments: Cashfree renewal / payment transactions
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "subscription_payments" (
+    "id" TEXT NOT NULL,
+    "subscriptionId" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "planId" TEXT,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'INR',
+    "billingCycle" "BillingCycle" NOT NULL DEFAULT 'MONTHLY',
+    "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+    "gateway" TEXT NOT NULL DEFAULT 'cashfree',
+    "gatewayOrderId" TEXT,
+    "gatewayPaymentId" TEXT,
+    "method" TEXT,
+    "invoiceNumber" TEXT,
+    "periodStart" TIMESTAMP(3),
+    "periodEnd" TIMESTAMP(3),
+    "failureReason" TEXT,
+    "paidAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "subscription_payments_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "subscription_payments_gatewayOrderId_key"
+  ON "subscription_payments"("gatewayOrderId");
+CREATE INDEX IF NOT EXISTS "subscription_payments_organizationId_createdAt_idx"
+  ON "subscription_payments"("organizationId", "createdAt");
+CREATE INDEX IF NOT EXISTS "subscription_payments_subscriptionId_createdAt_idx"
+  ON "subscription_payments"("subscriptionId", "createdAt");
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_payments_subscriptionId_fkey') THEN
+    ALTER TABLE "subscription_payments"
+      ADD CONSTRAINT "subscription_payments_subscriptionId_fkey"
+      FOREIGN KEY ("subscriptionId") REFERENCES "subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- doctors.verificationStatus: convert legacy TEXT column to enum (if needed)
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'doctors'
+      AND column_name = 'verificationStatus'
+      AND udt_name = 'text'
+  ) THEN
+    UPDATE "doctors"
+    SET "verificationStatus" = 'PENDING'
+    WHERE "verificationStatus" IS NULL
+       OR "verificationStatus" NOT IN ('PENDING', 'VERIFIED', 'REJECTED');
+
+    ALTER TABLE "doctors" ALTER COLUMN "verificationStatus" DROP DEFAULT;
+    ALTER TABLE "doctors"
+      ALTER COLUMN "verificationStatus" TYPE "DoctorVerificationStatus"
+      USING "verificationStatus"::"DoctorVerificationStatus";
+    ALTER TABLE "doctors"
+      ALTER COLUMN "verificationStatus" SET NOT NULL;
+    ALTER TABLE "doctors"
+      ALTER COLUMN "verificationStatus" SET DEFAULT 'PENDING'::"DoctorVerificationStatus";
+  END IF;
+END $$;
+
 COMMIT;
