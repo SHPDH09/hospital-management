@@ -1,14 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
-import { AppError } from './response';
-import {
-  bridgeRequest,
-  getBridgeConfig,
-  getBridgeSetupMessage,
-  isBridgeConfigured,
-  isServerless,
-} from './whatsapp-bridge-client';
 
 export type WhatsAppConnectionStatus = 'disconnected' | 'connecting' | 'qr' | 'connected';
 
@@ -18,7 +10,6 @@ export interface WhatsAppStatus {
   phone?: string;
   name?: string;
   lastError?: string;
-  mode?: 'local' | 'bridge';
 }
 
 export interface WhatsAppGroupInfo {
@@ -40,7 +31,7 @@ interface BulkSendResult {
   error?: string;
 }
 
-const SESSION_DIR = path.join(__dirname, '..', '..', '.data', 'affiliate-whatsapp');
+const SESSION_DIR = process.env.SESSION_DIR || path.join(process.cwd(), '.data', 'whatsapp-session');
 
 let sock: Awaited<ReturnType<typeof createSocket>> | null = null;
 let connectionStatus: WhatsAppConnectionStatus = 'disconnected';
@@ -49,11 +40,6 @@ let connectedPhone: string | null = null;
 let connectedName: string | null = null;
 let lastError: string | null = null;
 let connectingPromise: Promise<void> | null = null;
-
-async function useBridge(): Promise<boolean> {
-  if (await isBridgeConfigured()) return true;
-  return isServerless();
-}
 
 function ensureSessionDir() {
   fs.mkdirSync(SESSION_DIR, { recursive: true });
@@ -89,7 +75,7 @@ async function createSocket() {
     version,
     auth: state,
     printQRInTerminal: false,
-    browser: ['Healthcare Affiliate', 'Chrome', '1.0.0'],
+    browser: ['Healthcare Affiliate Bridge', 'Chrome', '1.0.0'],
     syncFullHistory: false,
     logger: (await import('pino')).default({ level: 'silent' }),
   });
@@ -132,36 +118,21 @@ async function createSocket() {
   return socket;
 }
 
-function localStatus(): WhatsAppStatus {
+export function getWhatsAppStatus(): WhatsAppStatus {
   return {
     status: connectionStatus,
     qrDataUrl: qrDataUrl || undefined,
     phone: connectedPhone || undefined,
     name: connectedName || undefined,
     lastError: lastError || undefined,
-    mode: 'local',
   };
 }
 
-export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
-  if (await useBridge()) {
-    const status = await bridgeRequest<WhatsAppStatus>('/status');
-    return { ...status, mode: 'bridge' };
-  }
-  return localStatus();
-}
-
 export async function startWhatsAppConnection(): Promise<WhatsAppStatus> {
-  if (await useBridge()) {
-    const status = await bridgeRequest<WhatsAppStatus>('/connect', { method: 'POST' });
-    return { ...status, mode: 'bridge' };
-  }
-
-  if (connectionStatus === 'connected' && sock) return localStatus();
-
+  if (connectionStatus === 'connected' && sock) return getWhatsAppStatus();
   if (connectingPromise) {
     await connectingPromise;
-    return localStatus();
+    return getWhatsAppStatus();
   }
 
   connectingPromise = (async () => {
@@ -184,15 +155,10 @@ export async function startWhatsAppConnection(): Promise<WhatsAppStatus> {
   })();
 
   await connectingPromise;
-  return localStatus();
+  return getWhatsAppStatus();
 }
 
 export async function disconnectWhatsApp(): Promise<void> {
-  if (await useBridge()) {
-    await bridgeRequest('/disconnect', { method: 'POST' });
-    return;
-  }
-
   if (sock) {
     try { await sock.logout(); } catch { /* ignore */ }
     try { sock.end(undefined); } catch { /* ignore */ }
@@ -207,15 +173,12 @@ export async function disconnectWhatsApp(): Promise<void> {
 
 function requireSocket() {
   if (!sock || connectionStatus !== 'connected') {
-    throw new AppError('WhatsApp is not connected. Scan the QR code first.', 400);
+    throw new Error('WhatsApp is not connected. Scan the QR code first.');
   }
   return sock;
 }
 
 export async function listWhatsAppGroups(): Promise<WhatsAppGroupInfo[]> {
-  if (await useBridge()) {
-    return bridgeRequest<WhatsAppGroupInfo[]>('/groups');
-  }
   const socket = requireSocket();
   const groups = await socket.groupFetchAllParticipating();
   return Object.values(groups).map((g) => ({
@@ -226,10 +189,6 @@ export async function listWhatsAppGroups(): Promise<WhatsAppGroupInfo[]> {
 }
 
 export async function exportGroupParticipants(groupId: string): Promise<WhatsAppParticipant[]> {
-  if (await useBridge()) {
-    const data = await bridgeRequest<{ participants: WhatsAppParticipant[] }>(`/groups/${encodeURIComponent(groupId)}/export`);
-    return data.participants;
-  }
   const socket = requireSocket();
   const meta = await socket.groupMetadata(groupId);
   return meta.participants.map((p) => ({
@@ -241,36 +200,20 @@ export async function exportGroupParticipants(groupId: string): Promise<WhatsApp
 }
 
 export async function createWhatsAppGroup(name: string, phones: string[]): Promise<{ groupId: string; name: string; added: number }> {
-  if (await useBridge()) {
-    return bridgeRequest('/groups/create', {
-      method: 'POST',
-      body: JSON.stringify({ name, phones }),
-    });
-  }
   const socket = requireSocket();
   const unique = [...new Set(phones.map(normalizePhone).filter((p) => p.length >= 10))];
-  if (unique.length < 1) throw new AppError('At least one valid phone number is required', 400);
+  if (unique.length < 1) throw new Error('At least one valid phone number is required');
+
   const participants = unique.map(phoneToJid);
   const result = await socket.groupCreate(name, participants);
   return { groupId: result.id, name, added: participants.length };
 }
 
-export async function sendBulkWhatsAppMessages(
-  phones: string[],
-  message: string,
-  delayMs = 2000,
-): Promise<BulkSendResult[]> {
-  if (await useBridge()) {
-    const data = await bridgeRequest<{ results: BulkSendResult[] }>('/bulk-send', {
-      method: 'POST',
-      body: JSON.stringify({ phones, message, delayMs }),
-    });
-    return data.results;
-  }
+export async function sendBulkWhatsAppMessages(phones: string[], message: string, delayMs = 2000): Promise<BulkSendResult[]> {
   const socket = requireSocket();
   const unique = [...new Set(phones.map(normalizePhone).filter((p) => p.length >= 10))];
-  if (!unique.length) throw new AppError('No valid phone numbers provided', 400);
-  if (!message.trim()) throw new AppError('Message is required', 400);
+  if (!unique.length) throw new Error('No valid phone numbers provided');
+  if (!message.trim()) throw new Error('Message is required');
 
   const results: BulkSendResult[] = [];
   for (let i = 0; i < unique.length; i++) {
@@ -290,14 +233,4 @@ export async function sendBulkWhatsAppMessages(
 
 export function parsePhoneList(input: string): string[] {
   return input.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
-}
-
-export async function getWhatsAppSetupInfo() {
-  const bridge = await getBridgeConfig();
-  return {
-    mode: bridge ? 'bridge' : isServerless() ? 'serverless' : 'local',
-    bridgeConfigured: Boolean(bridge),
-    bridgeUrl: bridge?.url,
-    setupMessage: bridge ? null : getBridgeSetupMessage(),
-  };
 }

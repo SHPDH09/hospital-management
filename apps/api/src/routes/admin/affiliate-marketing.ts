@@ -9,12 +9,14 @@ import {
   disconnectWhatsApp,
   exportGroupParticipants,
   createWhatsAppGroup,
+  getWhatsAppSetupInfo,
   getWhatsAppStatus,
   listWhatsAppGroups,
   parsePhoneList,
   sendBulkWhatsAppMessages,
   startWhatsAppConnection,
 } from '../../lib/whatsapp-affiliate';
+import { invalidateBridgeConfigCache } from '../../lib/whatsapp-bridge-client';
 import {
   disconnectSocial,
   getAffiliateSettings,
@@ -30,11 +32,12 @@ const router = Router();
 
 router.get('/dashboard', async (_req, res, next) => {
   try {
-    const [whatsapp, facebook, instagram, campaigns] = await Promise.all([
-      Promise.resolve(getWhatsAppStatus()),
+    const [whatsapp, facebook, instagram, campaigns, setup] = await Promise.all([
+      getWhatsAppStatus(),
       getSocialConnection('facebook'),
       getSocialConnection('instagram'),
       prisma.affiliateBulkCampaign.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
+      getWhatsAppSetupInfo(),
     ]);
 
     sendSuccess(res, {
@@ -42,6 +45,7 @@ router.get('/dashboard', async (_req, res, next) => {
       facebook,
       instagram,
       recentCampaigns: campaigns,
+      setup,
       connectedChannels: [
         whatsapp.status === 'connected' ? 'whatsapp' : null,
         facebook.status === 'connected' ? 'facebook' : null,
@@ -60,6 +64,10 @@ router.get('/settings', async (_req, res, next) => {
       metaAppId: settings.metaAppId || '',
       metaAppSecret: settings.metaAppSecret ? '********' : '',
       hasMetaSecret: Boolean(settings.metaAppSecret),
+      whatsappBridgeUrl: settings.whatsappBridgeUrl || '',
+      whatsappBridgeSecret: settings.whatsappBridgeSecret ? '********' : '',
+      hasBridgeSecret: Boolean(settings.whatsappBridgeSecret),
+      ...(await getWhatsAppSetupInfo()),
     });
   } catch (err) { next(err); }
 });
@@ -69,6 +77,8 @@ router.put('/settings', async (req: AuthRequest, res, next) => {
     const body = z.object({
       metaAppId: z.string().optional(),
       metaAppSecret: z.string().optional(),
+      whatsappBridgeUrl: z.string().optional(),
+      whatsappBridgeSecret: z.string().optional(),
     }).parse(req.body);
 
     const current = await getAffiliateSettings();
@@ -78,8 +88,13 @@ router.put('/settings', async (req: AuthRequest, res, next) => {
       ...(body.metaAppSecret && body.metaAppSecret !== '********'
         ? { metaAppSecret: body.metaAppSecret }
         : {}),
+      ...(body.whatsappBridgeUrl !== undefined ? { whatsappBridgeUrl: body.whatsappBridgeUrl } : {}),
+      ...(body.whatsappBridgeSecret && body.whatsappBridgeSecret !== '********'
+        ? { whatsappBridgeSecret: body.whatsappBridgeSecret }
+        : {}),
     };
     await saveAffiliateSettings(nextSettings);
+    invalidateBridgeConfigCache();
     await logAudit(req, 'Affiliate Settings Updated', 'affiliate_settings', undefined, nextSettings);
     sendSuccess(res, { saved: true });
   } catch (err) { next(err); }
@@ -89,7 +104,13 @@ router.put('/settings', async (req: AuthRequest, res, next) => {
 
 router.get('/whatsapp/status', async (_req, res, next) => {
   try {
-    sendSuccess(res, getWhatsAppStatus());
+    sendSuccess(res, await getWhatsAppStatus());
+  } catch (err) { next(err); }
+});
+
+router.get('/whatsapp/setup', async (_req, res, next) => {
+  try {
+    sendSuccess(res, await getWhatsAppSetupInfo());
   } catch (err) { next(err); }
 });
 

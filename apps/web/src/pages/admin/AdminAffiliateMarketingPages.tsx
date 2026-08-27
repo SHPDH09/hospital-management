@@ -51,6 +51,7 @@ interface WhatsAppStatus {
   phone?: string;
   name?: string;
   lastError?: string;
+  mode?: 'local' | 'bridge';
 }
 
 interface SocialStatus {
@@ -135,6 +136,17 @@ function WhatsAppPage() {
   const [connecting, setConnecting] = useState(false);
   const [notice, setNotice] = useState('');
 
+  const { data: setupData } = useQuery({
+    queryKey: ['affiliate-whatsapp-setup'],
+    queryFn: () => api.get('/admin/affiliate-marketing/whatsapp/setup'),
+  });
+  const setup = setupData?.data as {
+    mode?: string;
+    bridgeConfigured?: boolean;
+    bridgeUrl?: string;
+    setupMessage?: string | null;
+  } | undefined;
+
   const { data, refetch, isLoading } = useQuery({
     queryKey: ['affiliate-whatsapp-status'],
     queryFn: () => api.get<WhatsAppStatus>('/admin/affiliate-marketing/whatsapp/status'),
@@ -169,6 +181,24 @@ function WhatsAppPage() {
 
   return (
     <AffLayout>
+      {setup?.mode === 'serverless' && !setup?.bridgeConfigured && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Production setup required</p>
+          <p className="mt-2">Vercel cannot run WhatsApp Web directly. Deploy the <strong>WhatsApp Bridge</strong> service on Railway/VPS, then add the URL in Settings.</p>
+          <ol className="mt-3 list-decimal pl-5 space-y-1 text-amber-800">
+            <li>Deploy <code className="text-xs bg-amber-100 px-1 rounded">apps/whatsapp-bridge</code> on Railway (see README)</li>
+            <li>Set <code className="text-xs bg-amber-100 px-1 rounded">WHATSAPP_BRIDGE_URL</code> + <code className="text-xs bg-amber-100 px-1 rounded">WHATSAPP_BRIDGE_SECRET</code> in Vercel env</li>
+            <li>Or add Bridge URL in <Link to="/admin/affiliate-marketing/settings" className="underline font-medium">Settings</Link></li>
+          </ol>
+        </div>
+      )}
+
+      {setup?.bridgeConfigured && (
+        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          Bridge connected: <span className="font-mono text-xs">{setup.bridgeUrl}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -475,18 +505,31 @@ function SettingsPage() {
     queryKey: ['affiliate-settings'],
     queryFn: () => api.get('/admin/affiliate-marketing/settings'),
   });
-  const [form, setForm] = useState({ metaAppId: '', metaAppSecret: '' });
+  const [form, setForm] = useState({
+    metaAppId: '', metaAppSecret: '',
+    whatsappBridgeUrl: '', whatsappBridgeSecret: '',
+  });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const s = data?.data as { metaAppId?: string } | undefined;
-    if (s) setForm((f) => ({ ...f, metaAppId: s.metaAppId || '' }));
+    const s = data?.data as {
+      metaAppId?: string;
+      whatsappBridgeUrl?: string;
+    } | undefined;
+    if (s) {
+      setForm((f) => ({
+        ...f,
+        metaAppId: s.metaAppId || '',
+        whatsappBridgeUrl: s.whatsappBridgeUrl || '',
+      }));
+    }
   }, [data]);
 
   const save = async () => {
     await api.put('/admin/affiliate-marketing/settings', form);
     setSaved(true);
     qc.invalidateQueries({ queryKey: ['affiliate-settings'] });
+    qc.invalidateQueries({ queryKey: ['affiliate-whatsapp-setup'] });
     setTimeout(() => setSaved(false), 3000);
   };
 
@@ -494,18 +537,40 @@ function SettingsPage() {
 
   return (
     <AffLayout>
-      <div className="card p-6 max-w-lg">
-        <h3 className="font-semibold flex items-center gap-2 mb-4">
-          <Settings className="h-5 w-5" /> Meta / Affiliate Settings
-        </h3>
-        <p className="text-sm text-gray-500 mb-4">Required for Facebook & Instagram OAuth connection.</p>
-        <input className="input w-full mb-3" placeholder="Meta App ID" value={form.metaAppId}
-          onChange={(e) => setForm((f) => ({ ...f, metaAppId: e.target.value }))} />
-        <input className="input w-full mb-3" type="password" placeholder="Meta App Secret"
-          value={form.metaAppSecret} onChange={(e) => setForm((f) => ({ ...f, metaAppSecret: e.target.value }))} />
-        <button type="button" className="btn-primary text-sm" onClick={save}>Save Settings</button>
-        {saved && <p className="mt-2 text-sm text-green-600">Settings saved.</p>}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="card p-6">
+          <h3 className="font-semibold flex items-center gap-2 mb-4">
+            <Settings className="h-5 w-5" /> WhatsApp Bridge (Production)
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Deploy <code className="text-xs bg-gray-100 px-1 rounded">apps/whatsapp-bridge</code> on Railway or VPS.
+            Use the same secret on both bridge and main app.
+          </p>
+          <input className="input w-full mb-3" placeholder="Bridge URL — https://your-app.railway.app"
+            value={form.whatsappBridgeUrl}
+            onChange={(e) => setForm((f) => ({ ...f, whatsappBridgeUrl: e.target.value }))} />
+          <input className="input w-full mb-3" type="password" placeholder="Bridge Secret Key"
+            value={form.whatsappBridgeSecret}
+            onChange={(e) => setForm((f) => ({ ...f, whatsappBridgeSecret: e.target.value }))} />
+          <p className="text-xs text-gray-400 mb-4">
+            Vercel env alternative: <code>WHATSAPP_BRIDGE_URL</code> and <code>WHATSAPP_BRIDGE_SECRET</code>
+          </p>
+        </div>
+
+        <div className="card p-6">
+          <h3 className="font-semibold flex items-center gap-2 mb-4">
+            <Settings className="h-5 w-5" /> Meta (Facebook / Instagram)
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">Required for Facebook & Instagram OAuth connection.</p>
+          <input className="input w-full mb-3" placeholder="Meta App ID" value={form.metaAppId}
+            onChange={(e) => setForm((f) => ({ ...f, metaAppId: e.target.value }))} />
+          <input className="input w-full mb-3" type="password" placeholder="Meta App Secret"
+            value={form.metaAppSecret} onChange={(e) => setForm((f) => ({ ...f, metaAppSecret: e.target.value }))} />
+        </div>
       </div>
+
+      <button type="button" className="btn-primary text-sm mt-4" onClick={save}>Save All Settings</button>
+      {saved && <p className="mt-2 text-sm text-green-600">Settings saved. Redeploy Vercel if you changed env vars.</p>}
     </AffLayout>
   );
 }
