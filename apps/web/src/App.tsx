@@ -26,8 +26,9 @@ import {
   CrmProfilePage, CrmBranchesPage, CrmDepartmentsPage, CrmStaffPage, CrmRolesPage,
   CrmServicesPage, CrmHealthPackagesPage, CrmLeadsPage, CrmReviewsPage, CrmAdvertisementsPage,
   CrmCommunicationsPage, CrmSubscriptionPage, CrmSupportPage, CrmAnalyticsPage,
-  CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSchedulePage, CrmSettingsPage,
+  CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSettingsPage,
 } from '@/pages/crm/CrmModulePages';
+import { CrmSchedulePage } from '@/pages/crm/CrmScheduleModule';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,

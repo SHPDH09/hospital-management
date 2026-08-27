@@ -143,6 +143,27 @@ enum Gender {
   OTHER
 }
 
+enum DoctorVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum DoctorLeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DoctorLeaveType {
+  SICK
+  CASUAL
+  ANNUAL
+  EMERGENCY
+  OTHER
+}
+
 model User {
   id               String    @id @default(uuid())
   email            String    @unique
@@ -343,6 +364,7 @@ model Doctor {
   bio                String?
   photoUrl           String?
   languages          String[]
+  verificationStatus DoctorVerificationStatus @default(PENDING)
   isActive           Boolean  @default(true)
   averageRating      Float    @default(0)
   reviewCount        Int      @default(0)
@@ -355,12 +377,53 @@ model Doctor {
   department   Department?       @relation(fields: [departmentId], references: [id])
   appointments Appointment[]
   slots        AppointmentSlot[]
+  weeklySchedules DoctorWeeklySchedule[]
+  leaves       DoctorLeave[]
   reviews      Review[]
   advertisements Advertisement[]
 
   @@index([organizationId])
   @@index([specialization])
+  @@index([verificationStatus])
   @@map("doctors")
+}
+
+model DoctorWeeklySchedule {
+  id          String   @id @default(uuid())
+  doctorId    String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  slotMinutes Int      @default(30)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, dayOfWeek, startTime])
+  @@index([doctorId])
+  @@map("doctor_weekly_schedules")
+}
+
+model DoctorLeave {
+  id             String            @id @default(uuid())
+  doctorId       String
+  organizationId String
+  startDate      DateTime          @db.Date
+  endDate        DateTime          @db.Date
+  type           DoctorLeaveType   @default(CASUAL)
+  reason         String?
+  status         DoctorLeaveStatus @default(PENDING)
+  approvedById   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, startDate, endDate])
+  @@index([organizationId])
+  @@map("doctor_leaves")
 }
 
 model Staff {

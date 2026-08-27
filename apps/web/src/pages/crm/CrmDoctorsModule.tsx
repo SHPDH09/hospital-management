@@ -21,6 +21,7 @@ interface Doctor {
   registrationNumber?: string | null;
   bio?: string | null;
   isActive: boolean;
+  verificationStatus?: string;
   averageRating?: number | null;
   reviewCount?: number | null;
   languages?: string[];
@@ -56,6 +57,19 @@ function StatusBadge({ active }: { active: boolean }) {
   return (
     <span className={cn('badge', active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600')}>
       {active ? 'Active' : 'Inactive'}
+    </span>
+  );
+}
+
+function VerificationBadge({ status }: { status?: string }) {
+  const colors: Record<string, string> = {
+    VERIFIED: 'bg-green-50 text-green-700',
+    PENDING: 'bg-amber-50 text-amber-700',
+    REJECTED: 'bg-red-50 text-red-700',
+  };
+  return (
+    <span className={cn('badge', colors[status || 'PENDING'] || 'bg-gray-100 text-gray-600')}>
+      {status || 'PENDING'}
     </span>
   );
 }
@@ -101,6 +115,12 @@ export function CrmDoctorsPage() {
 
   const toggleActive = async (d: Doctor) => {
     await api.patch(`/doctors/${d.id}`, { isActive: !d.isActive });
+    listQuery.refetch();
+    statsQuery.refetch();
+  };
+
+  const verifyDoctor = async (d: Doctor, verificationStatus: 'VERIFIED' | 'REJECTED' | 'PENDING') => {
+    await api.patch(`/crm/doctors/${d.id}/verification`, { verificationStatus });
     listQuery.refetch();
     statsQuery.refetch();
   };
@@ -191,6 +211,7 @@ export function CrmDoctorsPage() {
                   <th className="px-4 py-3 font-medium">Department</th>
                   <th className="px-4 py-3 font-medium">Experience</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Verification</th>
                   <th className="px-4 py-3 font-medium">Rating</th>
                   <th className="px-4 py-3 font-medium">Appointments</th>
                   <th className="px-4 py-3 font-medium">Actions</th>
@@ -198,7 +219,7 @@ export function CrmDoctorsPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-500">No doctors found</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-500">No doctors found</td></tr>
                 ) : filtered.map((d) => (
                   <tr key={d.id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-3">
@@ -214,6 +235,14 @@ export function CrmDoctorsPage() {
                     <td className="px-4 py-3 text-gray-700">{d.department?.name || '—'}</td>
                     <td className="px-4 py-3 text-gray-700">{d.experience != null ? `${d.experience} yrs` : '—'}</td>
                     <td className="px-4 py-3"><StatusBadge active={d.isActive} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <VerificationBadge status={d.verificationStatus} />
+                        {d.verificationStatus !== 'VERIFIED' && (
+                          <button className="text-xs text-green-600 hover:underline" onClick={() => verifyDoctor(d, 'VERIFIED')}>Verify</button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3"><Rating value={d.averageRating} /></td>
                     <td className="px-4 py-3 text-gray-700">{d._count?.appointments ?? 0}</td>
                     <td className="px-4 py-3">
@@ -289,12 +318,14 @@ export function CrmDoctorsPage() {
 
 // ─── Doctor Profile ─────────────────────────────────────────────────────────
 
-type ProfileTab = 'overview' | 'appointments' | 'patients' | 'reviews';
+type ProfileTab = 'overview' | 'schedule' | 'leave' | 'appointments' | 'patients' | 'reviews';
 
 interface ProfileData {
   doctor: Doctor & {
     organization?: { name: string; city?: string } | null;
     user?: { email: string; phone?: string | null; isActive: boolean } | null;
+    weeklySchedules?: { dayOfWeek: number; startTime: string; endTime: string; slotMinutes: number; isActive: boolean }[];
+    leaves?: { id: string; startDate: string; endDate: string; type: string; status: string; reason?: string | null }[];
   };
   stats: {
     totalAppointments: number; completedAppointments: number; cancelledAppointments: number;
@@ -315,6 +346,8 @@ export function CrmDoctorProfilePage() {
 
   const tabs: { key: ProfileTab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'schedule', label: 'Schedule' },
+    { key: 'leave', label: 'Leave' },
     { key: 'appointments', label: 'Appointments' },
     { key: 'patients', label: 'Patients' },
     { key: 'reviews', label: 'Reviews' },
@@ -340,6 +373,7 @@ export function CrmDoctorProfilePage() {
                   <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-xl font-bold text-gray-900">{d.fullName}</h1>
                     <StatusBadge active={d.isActive} />
+                    <VerificationBadge status={d.verificationStatus} />
                   </div>
                   <p className="text-sm text-primary-600">{d.specialization || 'General'}{d.department?.name ? ` · ${d.department.name}` : ''}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -405,9 +439,63 @@ export function CrmDoctorProfilePage() {
                 )}
               </div>
               <div className="card p-6">
-                <h2 className="mb-3 font-semibold text-gray-900">More modules</h2>
-                <p className="text-sm text-gray-500">Schedule, Leave, Payments & Settlements, Documents, Performance analytics and Activity logs are planned as follow-up modules for this doctor.</p>
+                <h2 className="mb-3 font-semibold text-gray-900">Quick Actions</h2>
+                <div className="flex flex-wrap gap-2">
+                  <Link to={`/crm/schedule`} className="btn-secondary text-xs">Manage Schedule</Link>
+                  {d.verificationStatus !== 'VERIFIED' && (
+                    <button className="btn-primary text-xs" onClick={async () => {
+                      await api.patch(`/crm/doctors/${d.id}/verification`, { verificationStatus: 'VERIFIED' });
+                      window.location.reload();
+                    }}>Verify Doctor</button>
+                  )}
+                </div>
               </div>
+            </div>
+          )}
+
+          {tab === 'schedule' && (
+            <div className="card p-6">
+              <h2 className="mb-4 font-semibold text-gray-900">Weekly Availability</h2>
+              {d.weeklySchedules && d.weeklySchedules.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase text-gray-500">
+                    <tr><th className="pb-2">Day</th><th className="pb-2">Hours</th><th className="pb-2">Slot</th></tr>
+                  </thead>
+                  <tbody>
+                    {d.weeklySchedules.map((s) => (
+                      <tr key={s.dayOfWeek} className="border-t border-gray-100">
+                        <td className="py-2">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek]}</td>
+                        <td className="py-2">{s.startTime} – {s.endTime}</td>
+                        <td className="py-2">{s.slotMinutes} min</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-gray-500">No weekly schedule configured. <Link to="/crm/schedule" className="text-primary-600 hover:underline">Set up schedule</Link></p>
+              )}
+            </div>
+          )}
+
+          {tab === 'leave' && (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <tr><th className="px-4 py-3">From</th><th className="px-4 py-3">To</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Status</th></tr>
+                </thead>
+                <tbody>
+                  {!d.leaves || d.leaves.length === 0 ? (
+                    <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-500">No leave records</td></tr>
+                  ) : d.leaves.map((l) => (
+                    <tr key={l.id} className="border-t border-gray-100">
+                      <td className="px-4 py-3">{formatDate(l.startDate)}</td>
+                      <td className="px-4 py-3">{formatDate(l.endDate)}</td>
+                      <td className="px-4 py-3">{l.type}</td>
+                      <td className="px-4 py-3"><span className={`badge ${getStatusColor(l.status)}`}>{l.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 

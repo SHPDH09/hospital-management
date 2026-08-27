@@ -761,35 +761,6 @@ export function CrmAuditLogsPage() {
   );
 }
 
-export function CrmSchedulePage() {
-  const { data: doctorsData } = useQuery({ queryKey: ['crm-doctors'], queryFn: () => api.get('/doctors') });
-  const doctors = (doctorsData?.data as Record<string, unknown>[]) || [];
-  const [doctorId, setDoctorId] = useState('');
-  const { data, isLoading } = useQuery({
-    queryKey: ['crm-slots', doctorId],
-    queryFn: () => api.get(`/crm/slots?doctorId=${doctorId}`),
-    enabled: !!doctorId,
-  });
-  const slots = (data?.data as Record<string, unknown>[]) || [];
-
-  return (
-    <DashboardLayout portal="crm">
-      <PageHeader title="Doctor Schedule" subtitle="Manage doctor availability and appointment slots" />
-      <select className="input max-w-xs mb-4" value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
-        <option value="">Select Doctor</option>
-        {doctors.map((d) => <option key={String(d.id)} value={String(d.id)}>{String(d.fullName)}</option>)}
-      </select>
-      {doctorId && (isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'date', label: 'Date', render: (r) => new Date(String(r.date)).toLocaleDateString() },
-          { key: 'startTime', label: 'Start' },
-          { key: 'endTime', label: 'End' },
-          { key: 'isBooked', label: 'Status', render: (r) => <StatusBadge status={r.isBooked ? 'BOOKED' : 'AVAILABLE'} /> },
-        ]} rows={slots} emptyMessage="No slots configured" />
-      ))}
-    </DashboardLayout>
-  );
-}
 
 export function CrmSettingsPage() {
   const qc = useQueryClient();

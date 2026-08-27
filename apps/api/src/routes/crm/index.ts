@@ -11,6 +11,7 @@ import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
 import { createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
 import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal } from '../../lib/subscription-renewal';
+import doctorScheduleRoutes from './doctor-schedule';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
@@ -790,6 +791,8 @@ router.get('/audit-logs', validateQuery(pagination), async (req: AuthRequest, re
 });
 
 // ─── Doctor Slots / Schedule ───────────────────────────────────────────────────
+
+router.use(doctorScheduleRoutes);
 
 router.get('/slots', validateQuery(z.object({
   doctorId: z.string(),

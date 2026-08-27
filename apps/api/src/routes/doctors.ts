@@ -6,6 +6,7 @@ import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
+import { countDoctorsOnLeaveToday } from '../lib/doctor-schedule';
 
 const router = Router();
 
@@ -90,11 +91,13 @@ router.get('/stats', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PL
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const [
-      totalDoctors, activeDoctors, ratingAgg,
+      totalDoctors, activeDoctors, pendingVerification, onLeave, ratingAgg,
       totalAppointments, completed, cancelled, noShow, todayAppointments, totalPatients,
     ] = await Promise.all([
       prisma.doctor.count({ where: docWhere }),
       prisma.doctor.count({ where: { ...docWhere, isActive: true } }),
+      prisma.doctor.count({ where: { ...docWhere, verificationStatus: 'PENDING' } }),
+      countDoctorsOnLeaveToday(orgId || undefined),
       prisma.doctor.aggregate({ where: docWhere, _avg: { averageRating: true } }),
       prisma.appointment.count({ where: apptWhere }),
       prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }),
@@ -104,15 +107,15 @@ router.get('/stats', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PL
       orgId ? prisma.patientOrganization.count({ where: { organizationId: orgId } }) : prisma.patient.count(),
     ]);
 
+    const availableToday = Math.max(0, activeDoctors - onLeave);
+
     sendSuccess(res, {
       totalDoctors,
       activeDoctors,
       inactiveDoctors: totalDoctors - activeDoctors,
-      // Not yet modelled (verification/leave subsystems) — reported as 0 for now.
-      pendingVerification: 0,
-      onLeave: 0,
-      // No leave/schedule gating yet, so all active doctors are considered available.
-      availableToday: activeDoctors,
+      pendingVerification,
+      onLeave,
+      availableToday,
       totalAppointments,
       completedAppointments: completed,
       cancelledAppointments: cancelled,
@@ -235,12 +238,18 @@ router.get('/:id/profile', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN
     const orgId = await resolveOrganizationId(req);
     const doctor = await prisma.doctor.findFirst({
       where: { id, ...(orgId ? { organizationId: orgId } : {}) },
-      include: {
-        department: { select: { id: true, name: true } },
-        branch: { select: { id: true, name: true } },
-        organization: { select: { id: true, name: true, city: true } },
-        user: { select: { email: true, phone: true, isActive: true, lastLoginAt: true } },
-      },
+        include: {
+          department: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
+          organization: { select: { id: true, name: true, city: true } },
+          user: { select: { email: true, phone: true, isActive: true, lastLoginAt: true } },
+          weeklySchedules: { where: { isActive: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
+          leaves: {
+            where: { status: { in: ['PENDING', 'APPROVED'] } },
+            orderBy: { startDate: 'desc' },
+            take: 10,
+          },
+        },
     });
     if (!doctor) throw new AppError('Doctor not found', 404);
 
