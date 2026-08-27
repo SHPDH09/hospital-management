@@ -14,6 +14,7 @@ export { AdminCommunicationsPage } from './AdminCommunicationPages';
 export { AdminCmsPage } from './AdminCmsPages';
 export { AdminSettingsPage } from './AdminSettingsPages';
 export { AdminEmergencyPage } from './AdminEmergencyPages';
+export { AdminAffiliateMarketingPage } from './AdminAffiliateMarketingPages';
 export { AdminStaffPage } from './AdminPlatformStaffPages';
 export { AdminPermissionsPage } from './AdminPermissionsPages';
 export { AdminSupportPage } from './AdminSupportPages';

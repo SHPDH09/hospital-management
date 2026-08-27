@@ -37,7 +37,7 @@ import {
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminPermissionsPage, AdminSupportPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminLocationsPage, AdminMasterDataPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage, AdminAffiliateMarketingPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -127,6 +127,7 @@ export default function App() {
             <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements/*" element={<Admin><AdminAdvertisementsPage /></Admin>} />
+            <Route path="/admin/affiliate-marketing/*" element={<Admin><AdminAffiliateMarketingPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
             <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
             <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />
