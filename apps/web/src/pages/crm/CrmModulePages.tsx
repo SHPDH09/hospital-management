@@ -472,13 +472,17 @@ export function CrmSubscriptionPage() {
     renewalAmount?: number;
     autoRenew?: boolean;
     paymentConfigured?: boolean;
+    freeRenewal?: boolean;
   } | undefined;
 
   const sub = payload?.subscription;
   const plan = sub?.plan as Record<string, unknown> | undefined;
   const daysRemaining = payload?.daysRemaining ?? null;
+  const renewalAmount = payload?.renewalAmount ?? 0;
+  const freeRenewal = payload?.freeRenewal ?? renewalAmount <= 0;
   const payments = (sub?.payments as RenewalPayment[] | undefined) ?? [];
   const expiringSoon = daysRemaining != null && daysRemaining <= 7;
+  const needsPaymentGateway = !freeRenewal && !payload?.paymentConfigured;
 
   const toggleAutoRenew = async () => {
     const res = await api.patch('/crm/subscription/auto-renew', { autoRenew: !payload?.autoRenew });
@@ -490,9 +494,14 @@ export function CrmSubscriptionPage() {
     setBusy(true);
     setNotice(null);
     try {
-      const res = await api.post<{ paymentSessionId?: string; invoiceNumber?: string; amount?: number }>('/crm/subscription/renew', { billingCycle: cycle });
+      const res = await api.post<{ paymentSessionId?: string; invoiceNumber?: string; amount?: number; status?: string }>('/crm/subscription/renew', { billingCycle: cycle });
       if (!res.success) {
         setNotice({ kind: 'error', text: res.error || 'Could not start renewal' });
+        return;
+      }
+      if (res.data?.status === 'COMPLETED' || (res.data?.amount ?? 0) <= 0) {
+        setNotice({ kind: 'success', text: `Subscription renewed successfully${res.data?.invoiceNumber ? ` · ${res.data.invoiceNumber}` : ''}.` });
+        refetch();
         return;
       }
       const sessionId = res.data?.paymentSessionId;
@@ -515,6 +524,12 @@ export function CrmSubscriptionPage() {
   return (
     <DashboardLayout portal="crm">
       <PageHeader title="Subscription" subtitle="Manage your plan, renewals and payment history" />
+
+      {needsPaymentGateway && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Online payment is not configured for paid renewals. Ask your platform admin to add Cashfree credentials under Admin → Settings → Payment Gateway, or contact support.
+        </div>
+      )}
 
       {notice && (
         <div className={`mb-4 rounded-xl border p-3 text-sm ${notice.kind === 'error' ? 'border-red-200 bg-red-50 text-red-700' : notice.kind === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
@@ -559,10 +574,11 @@ export function CrmSubscriptionPage() {
                     <option value="MONTHLY">Monthly · {formatCurrency(Number(plan?.monthlyPrice || plan?.price || 0))}</option>
                     <option value="YEARLY">Yearly · {formatCurrency(Number(plan?.yearlyPrice || 0))}</option>
                   </select>
-                  <button className="btn-primary text-sm" disabled={busy} onClick={renewNow}>{busy ? 'Starting…' : 'Renew Now'}</button>
-                  {!payload?.paymentConfigured && <span className="text-xs text-gray-400">Cashfree not configured — add credentials to enable online payment.</span>}
+                  <button className="btn-primary text-sm" disabled={busy || needsPaymentGateway} onClick={renewNow}>{busy ? 'Starting…' : freeRenewal ? 'Renew Free Plan' : 'Renew Now'}</button>
+                  {freeRenewal && <span className="text-xs text-green-600">Free plan — renews instantly, no payment required.</span>}
+                  {needsPaymentGateway && <span className="text-xs text-gray-400">Cashfree not configured — add credentials in Admin → Settings → Payment Gateway.</span>}
                 </div>
-                <p className="mt-2 text-xs text-gray-400">Payments are processed by Cashfree. Your subscription is activated only after the payment is verified on our servers.</p>
+                <p className="mt-2 text-xs text-gray-400">{freeRenewal ? 'Your free/trial plan renews immediately on this server.' : 'Payments are processed by Cashfree. Your subscription is activated only after the payment is verified on our servers.'}</p>
               </div>
 
               {Array.isArray(plan?.features) && <ul className="mt-5 grid grid-cols-1 gap-1 text-sm text-gray-600 sm:grid-cols-2">{(plan.features as string[]).map((f) => <li key={f} className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary-500" />{f}</li>)}</ul>}

@@ -532,7 +532,8 @@ router.get('/subscription', async (req: AuthRequest, res, next) => {
       daysRemaining,
       renewalAmount,
       autoRenew: subscription?.autoRenew ?? false,
-      paymentConfigured: isCashfreeConfigured(),
+      paymentConfigured: await isCashfreeConfigured(),
+      freeRenewal: renewalAmount <= 0,
     });
   } catch (err) { next(err); }
 });
@@ -556,7 +557,6 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
   try {
     assertOrgAdmin(req);
     const orgId = await requireOrgId(req);
-    if (!isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Add Cashfree credentials to enable online renewal.', 503);
 
     const subscription = await prisma.subscription.findFirst({
       where: { organizationId: orgId }, orderBy: { createdAt: 'desc' }, include: { plan: true, organization: { select: { name: true, email: true, phone: true } } },
@@ -565,7 +565,27 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
 
     const cycle = req.body.billingCycle || subscription.billingCycle;
     const amount = renewalAmountFor(subscription.plan, cycle);
-    if (amount <= 0) throw new AppError('This plan has no renewal price configured', 400);
+
+    // Free/trial plans renew instantly without a payment gateway.
+    if (amount <= 0) {
+      const payment = await prisma.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id, organizationId: orgId, planId: subscription.planId,
+          amount: 0, currency: subscription.plan.currency || 'INR', billingCycle: cycle, status: 'PENDING',
+          gateway: 'free', invoiceNumber: generateInvoiceNumber(),
+        },
+      });
+      await applySubscriptionRenewal(payment.id, { method: 'free' });
+      return sendSuccess(res, {
+        paymentId: payment.id,
+        amount: 0,
+        billingCycle: cycle,
+        invoiceNumber: payment.invoiceNumber,
+        status: 'COMPLETED',
+      }, 'Subscription renewed');
+    }
+
+    if (!await isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Add Cashfree credentials to enable online renewal.', 503);
 
     const payment = await prisma.subscriptionPayment.create({
       data: {

@@ -97,7 +97,7 @@ router.post('/search', requirePaymentAccess, validateBody(searchSchema), async (
       include: { subscription: { include: { organization: { select: { name: true, email: true, phone: true } }, plan: { select: { name: true } } } } },
     });
 
-    const configured = isCashfreeConfigured();
+    const configured = await isCashfreeConfigured();
     const results = await Promise.all(records.map(async (r) => {
       let liveStatus: string | null = null;
       if (configured && r.gatewayOrderId) {
@@ -142,7 +142,7 @@ router.post('/refund', requirePaymentAccess, validateBody(z.object({
   note: z.string().optional(),
 })), async (req: AuthRequest, res, next) => {
   try {
-    if (!isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Add Cashfree credentials to process refunds.', 503);
+    if (!await isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Add Cashfree credentials to process refunds.', 503);
     const { orderId, amount, note } = req.body;
     const refund = await createCashfreeRefund({ orderId, amount, note });
     await prisma.subscriptionPayment.updateMany({ where: { gatewayOrderId: orderId }, data: { status: 'REFUNDED', failureReason: note || 'Refunded by admin' } });
