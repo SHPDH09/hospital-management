@@ -612,12 +612,12 @@ router.get('/subscription/checkout-quote', async (req: AuthRequest, res, next) =
       yearlySavingsPercent: yearlySavingsPercent(monthly, yearly),
       paymentConfigured: await isCashfreeConfigured(),
       cashfreeMode: cfMode,
-      ...cashfreeWhitelistMeta(cfMode),
+      ...cashfreeWhitelistMeta(cfMode, cfConfig.domainWhitelisted),
     });
   } catch (err) { next(err); }
 });
 
-// Complete checkout — creates Cashfree order with GST-inclusive total.
+// Complete checkout
 router.post('/subscription/checkout', validateBody(z.object({
   planId: z.string().uuid().optional(),
   billingCycle: z.enum(['MONTHLY', 'YEARLY']),
@@ -668,6 +668,7 @@ router.post('/subscription/checkout', validateBody(z.object({
     const orderId = `sub_${payment.id}`;
     const appUrl = getAppUrl();
     const apiUrl = process.env.API_PUBLIC_URL || '';
+    const cfConfig = await getCashfreeConfig();
     const order = await createCashfreeOrder({
       orderId,
       amount: breakdown.total,
@@ -683,7 +684,7 @@ router.post('/subscription/checkout', validateBody(z.object({
 
     await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
 
-    const cfMode = (await getCashfreeConfig()).env === 'production' ? 'production' : 'sandbox';
+    const cfMode = cfConfig.env === 'production' ? 'production' : 'sandbox';
     sendSuccess(res, {
       paymentId: payment.id,
       planId: targetPlan.id,
@@ -692,7 +693,7 @@ router.post('/subscription/checkout', validateBody(z.object({
       paymentSessionId: order.paymentSessionId,
       ...breakdown,
       cashfreeMode: cfMode,
-      ...cashfreeWhitelistMeta(cfMode),
+      ...cashfreeWhitelistMeta(cfMode, cfConfig.domainWhitelisted),
     }, 'Proceed to payment');
   } catch (err) { next(err); }
 });

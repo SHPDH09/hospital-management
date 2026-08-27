@@ -11,10 +11,11 @@ export function getCashfreeWhitelistDomain(): string {
 
 export const CASHFREE_WHITELIST_DASHBOARD_URL = 'https://merchant.cashfree.com/merchants/pg/developers/whitelisting?env=prod';
 
-export function cashfreeWhitelistMeta(env: string) {
+export function cashfreeWhitelistMeta(env: string, domainWhitelisted = false) {
   return {
     whitelistDomain: getCashfreeWhitelistDomain(),
     whitelistDashboardUrl: CASHFREE_WHITELIST_DASHBOARD_URL,
-    requiresDomainWhitelist: env === 'production',
+    requiresDomainWhitelist: env === 'production' && !domainWhitelisted,
+    domainWhitelisted,
   };
 }

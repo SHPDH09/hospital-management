@@ -153,7 +153,7 @@ router.get('/payment/cashfree-whitelist', async (_req, res, next) => {
     const mode = cf.env === 'production' ? 'production' : 'sandbox';
     sendSuccess(res, {
       appUrl: getAppUrl(),
-      ...cashfreeWhitelistMeta(mode),
+      ...cashfreeWhitelistMeta(mode, cf.domainWhitelisted),
       policyPages: ['/terms', '/privacy', '/refund', '/contact'],
     });
   } catch (err) {

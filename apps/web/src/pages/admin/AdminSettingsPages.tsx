@@ -385,6 +385,7 @@ function PaymentPage() {
             <>
               <FieldInput field={{ key: 'appId', label: 'App ID', type: 'secret' }} value={g.appId} onChange={(v) => setG('appId', v)} />
               <FieldInput field={{ key: 'secretKey', label: 'Secret Key', type: 'secret' }} value={g.secretKey} onChange={(v) => setG('secretKey', v)} />
+              <FieldInput field={{ key: 'domainWhitelisted', label: 'Domain whitelisted in Cashfree (auto-return after pay)', type: 'toggle' }} value={g.domainWhitelisted} onChange={(v) => setG('domainWhitelisted', v)} />
             </>
           ) : (
             <>
@@ -407,13 +408,12 @@ function PaymentPage() {
 
         {whitelist?.requiresDomainWhitelist && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
-            <p className="font-semibold">Production payments require Cashfree domain whitelisting</p>
+            <p className="font-semibold">Optional: Cashfree domain whitelisting (auto-return after payment)</p>
             <p>
-              If Pay shows &quot;Broken Link&quot; or domain not approved, whitelist this URL in Cashfree Merchant Dashboard
-              (Developers → Whitelisting → Website URL):
+              Live payments work without whitelisting. Enable &quot;Domain whitelisted&quot; above only after you add{' '}
+              <code className="rounded bg-white px-1.5 py-0.5 text-xs">{whitelist.whitelistDomain}</code> in Cashfree → Developers → Whitelisting.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <code className="rounded bg-white px-3 py-2 text-xs font-mono border border-amber-200">{whitelist.whitelistDomain}</code>
               <button
                 type="button"
                 className="btn-secondary text-xs"
@@ -429,10 +429,6 @@ function PaymentPage() {
                 Open Cashfree Whitelisting →
               </a>
             </div>
-            <p className="text-xs text-amber-800">
-              Cashfree also requires these public pages (already on your site): Terms, Privacy, Refund, Contact.
-              Approval usually takes up to 24 hours.
-            </p>
           </div>
         )}
         {gateway('cashfree')}

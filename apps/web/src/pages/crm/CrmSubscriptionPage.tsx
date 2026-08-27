@@ -40,6 +40,7 @@ interface CheckoutQuote {
   whitelistDomain?: string;
   whitelistDashboardUrl?: string;
   requiresDomainWhitelist?: boolean;
+  domainWhitelisted?: boolean;
 }
 
 function loadCashfreeSdk() {
@@ -83,18 +84,33 @@ export function CrmSubscriptionPage() {
   const plans = ((plansData?.data as PlanRow[]) || []).filter((p) => p.code !== 'starter').sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const payments = (sub?.payments as Record<string, unknown>[]) ?? [];
 
-  // Verify payment on return from Cashfree
+  // Verify payment on return from Cashfree or after manual return
   useEffect(() => {
-    const paymentId = searchParams.get('payment_id');
+    const paymentId = searchParams.get('payment_id') || sessionStorage.getItem('pendingSubscriptionPayment');
     if (!paymentId) return;
-    (async () => {
+    let attempts = 0;
+    const verify = async () => {
       const res = await api.post(`/crm/subscription/verify/${paymentId}`);
       if (res.success) {
+        sessionStorage.removeItem('pendingSubscriptionPayment');
         setNotice({ kind: 'success', text: 'Payment successful! Your subscription is now active.' });
         refetch();
         setStep('plans');
+        return true;
       }
-    })();
+      return false;
+    };
+    verify();
+    const timer = setInterval(async () => {
+      attempts += 1;
+      if (attempts > 20) {
+        clearInterval(timer);
+        return;
+      }
+      const done = await verify();
+      if (done) clearInterval(timer);
+    }, 3000);
+    return () => clearInterval(timer);
   }, [searchParams, refetch]);
 
   const choosePlan = async (plan: PlanRow) => {
@@ -115,7 +131,7 @@ export function CrmSubscriptionPage() {
     setBusy(true);
     setNotice(null);
     try {
-      const res = await api.post<CheckoutQuote & { paymentSessionId?: string; status?: string; planName?: string }>(
+      const res = await api.post<CheckoutQuote & { paymentId?: string; paymentSessionId?: string; status?: string; planName?: string }>(
         '/crm/subscription/checkout',
         { planId: selectedPlan.id, billingCycle: cycle },
       );
@@ -140,6 +156,9 @@ export function CrmSubscriptionPage() {
       if (!sessionId) {
         setNotice({ kind: 'error', text: 'Payment session not created. Please check Cashfree configuration or try again.' });
         return;
+      }
+      if (res.data?.paymentId) {
+        sessionStorage.setItem('pendingSubscriptionPayment', res.data.paymentId);
       }
       const cf = await loadCashfreeSdk();
       if (!cf) {
@@ -323,13 +342,12 @@ export function CrmSubscriptionPage() {
       ) : (
         /* Checkout step */
         <div className="mx-auto grid max-w-4xl grid-cols-1 gap-8 lg:grid-cols-5">
-          {quote?.requiresDomainWhitelist && (
-            <div className="lg:col-span-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              <p className="font-semibold">Before paying (production mode)</p>
+          {quote?.requiresDomainWhitelist && !quote?.domainWhitelisted && (
+            <div className="lg:col-span-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              <p className="font-semibold">Live Cashfree payment</p>
               <p className="mt-1">
-                Platform admin must whitelist <code className="rounded bg-white px-1.5 py-0.5 text-xs">{quote.whitelistDomain}</code> in{' '}
-                <a href={quote.whitelistDashboardUrl} target="_blank" rel="noreferrer" className="text-primary-700 underline">Cashfree → Developers → Whitelisting</a>.
-                Without this, Cashfree shows &quot;Broken Link&quot; error.
+                You will be redirected to the official Cashfree payment page (UPI, Card, Net Banking).
+                After payment, return to this Subscription page — your plan will activate automatically.
               </p>
             </div>
           )}
@@ -398,7 +416,7 @@ export function CrmSubscriptionPage() {
 
               <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-400">
                 <Lock className="h-3.5 w-3.5" />
-                Secured by Cashfree · {quote?.cashfreeMode || 'sandbox'} mode
+                Secured by Cashfree · {quote?.cashfreeMode === 'production' ? 'Live' : 'Sandbox'} payments
               </div>
             </div>
           </div>

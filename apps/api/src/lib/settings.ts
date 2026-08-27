@@ -137,7 +137,7 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
   payment: {
     razorpay: { enabled: false, testMode: true, apiKey: '', secretKey: '', webhookSecret: '', currency: 'INR', methods: ['card', 'upi', 'netbanking'] },
     stripe: { enabled: false, testMode: true, apiKey: '', secretKey: '', webhookSecret: '', currency: 'INR', methods: ['card'] },
-    cashfree: { enabled: false, testMode: true, appId: '', secretKey: '', currency: 'INR', methods: ['card', 'upi', 'netbanking', 'wallet'] },
+    cashfree: { enabled: false, testMode: true, appId: '', secretKey: '', currency: 'INR', methods: ['card', 'upi', 'netbanking', 'wallet'], domainWhitelisted: false },
     otherGateways: [],
   },
   email: {
