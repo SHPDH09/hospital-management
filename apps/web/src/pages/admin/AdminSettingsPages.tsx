@@ -351,10 +351,17 @@ function BrandingPage() {
 function PaymentPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['settings', 'payment'], queryFn: () => api.get('/admin/settings/payment') });
+  const { data: whitelistData } = useQuery({
+    queryKey: ['settings', 'cashfree-whitelist'],
+    queryFn: () => api.get<{ whitelistDomain: string; whitelistDashboardUrl: string; requiresDomainWhitelist: boolean; policyPages: string[] }>('/admin/settings/payment/cashfree-whitelist'),
+  });
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const whitelist = whitelistData?.data;
 
   useEffect(() => { if (data?.data) setForm(data.data as Record<string, unknown>); }, [data]);
 
@@ -397,6 +404,37 @@ function PaymentPage() {
     <SettingsLayout title="Payment Gateway">
       <div className="card p-6 space-y-4">
         <p className="text-sm text-gray-500">Credentials are encrypted at rest and masked in the UI.</p>
+
+        {whitelist?.requiresDomainWhitelist && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
+            <p className="font-semibold">Production payments require Cashfree domain whitelisting</p>
+            <p>
+              If Pay shows &quot;Broken Link&quot; or domain not approved, whitelist this URL in Cashfree Merchant Dashboard
+              (Developers → Whitelisting → Website URL):
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="rounded bg-white px-3 py-2 text-xs font-mono border border-amber-200">{whitelist.whitelistDomain}</code>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => {
+                  navigator.clipboard.writeText(whitelist.whitelistDomain);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? 'Copied!' : 'Copy URL'}
+              </button>
+              <a href={whitelist.whitelistDashboardUrl} target="_blank" rel="noreferrer" className="btn-primary text-xs">
+                Open Cashfree Whitelisting →
+              </a>
+            </div>
+            <p className="text-xs text-amber-800">
+              Cashfree also requires these public pages (already on your site): Terms, Privacy, Refund, Contact.
+              Approval usually takes up to 24 hours.
+            </p>
+          </div>
+        )}
         {gateway('cashfree')}
         {gateway('razorpay')}
         {gateway('stripe')}

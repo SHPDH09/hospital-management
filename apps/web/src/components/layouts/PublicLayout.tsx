@@ -167,10 +167,18 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div>
+              <h4 className="font-semibold text-sm mb-3">Legal</h4>
+              <ul className="space-y-2 text-sm text-gray-500">
+                <li><Link to="/terms" className="hover:text-primary-600">Terms & Conditions</Link></li>
+                <li><Link to="/privacy" className="hover:text-primary-600">Privacy Policy</Link></li>
+                <li><Link to="/refund" className="hover:text-primary-600">Refunds & Cancellations</Link></li>
+                <li><Link to="/contact" className="hover:text-primary-600">Contact Us</Link></li>
+              </ul>
+            </div>
+            <div>
               <h4 className="font-semibold text-sm mb-3">Support</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><a href="#" className="hover:text-primary-600">Help Center</a></li>
-                <li><a href="#" className="hover:text-primary-600">Contact Us</a></li>
+                <li><Link to="/contact" className="hover:text-primary-600">Help & Support</Link></li>
               </ul>
             </div>
           </div>

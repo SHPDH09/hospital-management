@@ -17,7 +17,8 @@ import {
   applySecretUpdates,
   diffSettings,
 } from '../../lib/settings';
-import { invalidateCashfreeConfigCache, testCashfreeConnection } from '../../lib/cashfree';
+import { invalidateCashfreeConfigCache, testCashfreeConnection, getCashfreeConfig } from '../../lib/cashfree';
+import { cashfreeWhitelistMeta, getAppUrl } from '../../lib/app-url';
 
 const router = Router();
 
@@ -139,6 +140,22 @@ router.post('/email/test', async (req: AuthRequest, res, next) => {
       },
       'Test email sent successfully'
     );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Cashfree domain whitelist info ──────────────────────────────────────────
+
+router.get('/payment/cashfree-whitelist', async (_req, res, next) => {
+  try {
+    const cf = await getCashfreeConfig();
+    const mode = cf.env === 'production' ? 'production' : 'sandbox';
+    sendSuccess(res, {
+      appUrl: getAppUrl(),
+      ...cashfreeWhitelistMeta(mode),
+      policyPages: ['/terms', '/privacy', '/refund', '/contact'],
+    });
   } catch (err) {
     next(err);
   }

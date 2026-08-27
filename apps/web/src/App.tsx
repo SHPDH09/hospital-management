@@ -15,6 +15,7 @@ import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
+import { TermsPage, PrivacyPage, RefundPage, ContactPage } from '@/pages/public/LegalPages';
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 
 import { CrmDashboard } from '@/pages/crm/CrmDashboard';
@@ -79,6 +80,10 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/refund" element={<RefundPage />} />
+            <Route path="/contact" element={<ContactPage />} />
 
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />

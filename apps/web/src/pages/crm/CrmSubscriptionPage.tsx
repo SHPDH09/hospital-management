@@ -37,6 +37,9 @@ interface CheckoutQuote {
   yearlySavingsPercent?: number;
   paymentConfigured?: boolean;
   cashfreeMode?: 'sandbox' | 'production';
+  whitelistDomain?: string;
+  whitelistDashboardUrl?: string;
+  requiresDomainWhitelist?: boolean;
 }
 
 function loadCashfreeSdk() {
@@ -320,6 +323,16 @@ export function CrmSubscriptionPage() {
       ) : (
         /* Checkout step */
         <div className="mx-auto grid max-w-4xl grid-cols-1 gap-8 lg:grid-cols-5">
+          {quote?.requiresDomainWhitelist && (
+            <div className="lg:col-span-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Before paying (production mode)</p>
+              <p className="mt-1">
+                Platform admin must whitelist <code className="rounded bg-white px-1.5 py-0.5 text-xs">{quote.whitelistDomain}</code> in{' '}
+                <a href={quote.whitelistDashboardUrl} target="_blank" rel="noreferrer" className="text-primary-700 underline">Cashfree → Developers → Whitelisting</a>.
+                Without this, Cashfree shows &quot;Broken Link&quot; error.
+              </p>
+            </div>
+          )}
           <div className="lg:col-span-3">
             <button type="button" className="mb-4 flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600" onClick={() => setStep('plans')}>
               <ArrowLeft className="h-4 w-4" /> Back to plans

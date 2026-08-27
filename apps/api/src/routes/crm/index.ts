@@ -11,6 +11,7 @@ import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
 import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal, isFreePlan, requiresCustomQuote } from '../../lib/subscription-renewal';
 import { getCashfreeConfig, createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
+import { getAppUrl, cashfreeWhitelistMeta } from '../../lib/app-url';
 import { getSubscriptionAccessForOrg } from '../../lib/subscription-access';
 import { subscriptionGuard } from '../../middleware/subscription-guard';
 import { calculateSubscriptionTotal, getSubscriptionTaxRate, yearlySavingsPercent } from '../../lib/subscription-billing';
@@ -593,6 +594,9 @@ router.get('/subscription/checkout-quote', async (req: AuthRequest, res, next) =
     const monthly = targetPlan.monthlyPrice ?? targetPlan.price ?? 0;
     const yearly = targetPlan.yearlyPrice ?? monthly * 12;
 
+    const cfConfig = await getCashfreeConfig();
+    const cfMode = cfConfig.env === 'production' ? 'production' : 'sandbox';
+
     sendSuccess(res, {
       plan: {
         id: targetPlan.id,
@@ -607,7 +611,8 @@ router.get('/subscription/checkout-quote', async (req: AuthRequest, res, next) =
       ...breakdown,
       yearlySavingsPercent: yearlySavingsPercent(monthly, yearly),
       paymentConfigured: await isCashfreeConfigured(),
-      cashfreeMode: (await getCashfreeConfig()).env === 'production' ? 'production' : 'sandbox',
+      cashfreeMode: cfMode,
+      ...cashfreeWhitelistMeta(cfMode),
     });
   } catch (err) { next(err); }
 });
@@ -661,7 +666,7 @@ router.post('/subscription/checkout', validateBody(z.object({
     });
 
     const orderId = `sub_${payment.id}`;
-    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const appUrl = getAppUrl();
     const apiUrl = process.env.API_PUBLIC_URL || '';
     const order = await createCashfreeOrder({
       orderId,
@@ -678,6 +683,7 @@ router.post('/subscription/checkout', validateBody(z.object({
 
     await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
 
+    const cfMode = (await getCashfreeConfig()).env === 'production' ? 'production' : 'sandbox';
     sendSuccess(res, {
       paymentId: payment.id,
       planId: targetPlan.id,
@@ -685,7 +691,8 @@ router.post('/subscription/checkout', validateBody(z.object({
       orderId: order.orderId,
       paymentSessionId: order.paymentSessionId,
       ...breakdown,
-      cashfreeMode: (await getCashfreeConfig()).env === 'production' ? 'production' : 'sandbox',
+      cashfreeMode: cfMode,
+      ...cashfreeWhitelistMeta(cfMode),
     }, 'Proceed to payment');
   } catch (err) { next(err); }
 });
@@ -752,7 +759,7 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
     });
 
     const orderId = `sub_${payment.id}`;
-    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const appUrl = getAppUrl();
     const apiUrl = process.env.API_PUBLIC_URL || '';
     const order = await createCashfreeOrder({
       orderId,
@@ -828,7 +835,7 @@ router.post('/subscription/select-plan', validateBody(z.object({
     });
 
     const orderId = `sub_${payment.id}`;
-    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const appUrl = getAppUrl();
     const apiUrl = process.env.API_PUBLIC_URL || '';
     const order = await createCashfreeOrder({
       orderId,
