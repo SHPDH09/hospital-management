@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
+import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn, AdminModal } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 
@@ -87,6 +87,8 @@ function SubscriptionActions({ sub, onDone }: { sub: Record<string, unknown>; on
   const [reason, setReason] = useState('');
   const [days, setDays] = useState(30);
   const [planId, setPlanId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ status: '', billingCycle: 'MONTHLY', price: '', discount: '', startDate: '', endDate: '' });
   const { data: plans } = useQuery({ queryKey: ['sub-plans'], queryFn: () => api.get('/admin/subscriptions/plans') });
   const planList = (plans?.data as { id: string; name: string }[]) || [];
@@ -107,9 +109,13 @@ function SubscriptionActions({ sub, onDone }: { sub: Record<string, unknown>; on
   const payments = (payData?.data as Record<string, unknown>[]) || [];
 
   const act = async (path: string, body?: unknown) => { await api.post(path, body); onDone(); setOpen(false); setModal(null); };
-  const close = () => { setModal(null); setOpen(false); };
+  const close = () => { setModal(null); setOpen(false); setSaveError(null); };
+
+  const orgName = String((sub.organization as { name?: string })?.name || 'Organization');
 
   const openEdit = () => {
+    setOpen(false);
+    setSaveError(null);
     setPlanId((sub.plan as { id?: string })?.id || '');
     setEditForm({
       status: String(sub.status || 'ACTIVE'),
@@ -123,18 +129,26 @@ function SubscriptionActions({ sub, onDone }: { sub: Record<string, unknown>; on
   };
 
   const saveEdit = async () => {
-    await api.patch(`/admin/subscriptions/${id}`, {
-      planId,
-      status: editForm.status,
-      billingCycle: editForm.billingCycle,
-      price: editForm.price ? Number(editForm.price) : undefined,
-      discount: editForm.discount ? Number(editForm.discount) : undefined,
-      startDate: editForm.startDate || undefined,
-      endDate: editForm.endDate || undefined,
-      reason: reason || 'Manual update by admin',
-    });
-    onDone();
-    close();
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api.patch(`/admin/subscriptions/${id}`, {
+        planId,
+        status: editForm.status,
+        billingCycle: editForm.billingCycle,
+        price: editForm.price ? Number(editForm.price) : undefined,
+        discount: editForm.discount ? Number(editForm.discount) : undefined,
+        startDate: editForm.startDate || undefined,
+        endDate: editForm.endDate || undefined,
+        reason: reason || 'Manual update by admin',
+      });
+      onDone();
+      close();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to update subscription');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -156,139 +170,165 @@ function SubscriptionActions({ sub, onDone }: { sub: Record<string, unknown>; on
         </div>
       )}
       {modal === 'suspend' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 className="font-semibold mb-3">Suspend Subscription</h3>
-            <p className="text-sm text-gray-500 mb-3">Reason is required. User will see restricted access in CRM.</p>
-            <input className="input w-full mb-4" placeholder="e.g. Payment overdue" value={reason} onChange={(e) => setReason(e.target.value)} />
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-sm" onClick={() => setModal(null)}>Cancel</button>
-              <button className="btn-primary text-sm" disabled={reason.length < 3} onClick={() => act(`/admin/subscriptions/${id}/suspend`, { reason })}>Suspend</button>
-            </div>
-          </div>
-        </div>
+        <AdminModal
+          open
+          onClose={() => setModal(null)}
+          title="Suspend Subscription"
+          subtitle={orgName}
+          footer={
+            <>
+              <button type="button" className="btn-secondary text-sm" onClick={() => setModal(null)}>Cancel</button>
+              <button type="button" className="btn-admin text-sm" disabled={reason.length < 3} onClick={() => act(`/admin/subscriptions/${id}/suspend`, { reason })}>Suspend</button>
+            </>
+          }
+        >
+          <p className="mb-3 text-sm text-slate-500">Reason is required. User will see restricted access in CRM.</p>
+          <input className="input w-full" placeholder="e.g. Payment overdue" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </AdminModal>
       )}
       {modal === 'extend' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 className="font-semibold mb-3">Extend Subscription</h3>
-            <input type="number" className="input w-full mb-4" value={days} onChange={(e) => setDays(Number(e.target.value))} />
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-sm" onClick={() => setModal(null)}>Cancel</button>
-              <button className="btn-primary text-sm" onClick={() => act(`/admin/subscriptions/${id}/extend`, { days, reason: `Extended ${days} days` })}>Extend</button>
-            </div>
-          </div>
-        </div>
+        <AdminModal
+          open
+          onClose={() => setModal(null)}
+          title="Extend Subscription"
+          subtitle={orgName}
+          footer={
+            <>
+              <button type="button" className="btn-secondary text-sm" onClick={() => setModal(null)}>Cancel</button>
+              <button type="button" className="btn-admin text-sm" onClick={() => act(`/admin/subscriptions/${id}/extend`, { days, reason: `Extended ${days} days` })}>Extend {days} days</button>
+            </>
+          }
+        >
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Number of days to extend</label>
+          <input type="number" className="input w-full" min={1} value={days} onChange={(e) => setDays(Number(e.target.value))} />
+        </AdminModal>
       )}
       {modal === 'edit' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold mb-3">Edit Subscription</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">Plan</label>
-                <select className="input w-full" value={planId} onChange={(e) => setPlanId(e.target.value)}>
-                  {planList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Status</label>
-                <select className="input w-full" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
-                  {['ACTIVE', 'TRIAL', 'SUSPENDED', 'EXPIRED', 'CANCELLED'].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Billing Cycle</label>
-                <select className="input w-full" value={editForm.billingCycle} onChange={(e) => setEditForm({ ...editForm, billingCycle: e.target.value })}>
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="YEARLY">Yearly</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Price</label>
-                <input type="number" className="input w-full" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Discount</label>
-                <input type="number" className="input w-full" value={editForm.discount} onChange={(e) => setEditForm({ ...editForm, discount: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Start Date</label>
-                <input type="date" className="input w-full" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Expiry Date</label>
-                <input type="date" className="input w-full" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">Reason for change</label>
-                <input className="input w-full" placeholder="e.g. Manual upgrade" value={reason} onChange={(e) => setReason(e.target.value)} />
-              </div>
+        <AdminModal
+          open
+          onClose={close}
+          title="Edit Subscription"
+          subtitle={orgName}
+          size="xl"
+          footer={
+            <>
+              <button type="button" className="btn-secondary text-sm" onClick={close} disabled={saving}>Cancel</button>
+              <button type="button" className="btn-admin text-sm" onClick={saveEdit} disabled={saving}>{saving ? 'Saving...' : 'Update Subscription'}</button>
+            </>
+          }
+        >
+          {saveError && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 ring-1 ring-red-100">{saveError}</p>}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Plan</label>
+              <select className="input w-full" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                {planList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
-            <div className="flex gap-2 justify-end mt-4">
-              <button className="btn-secondary text-sm" onClick={close}>Cancel</button>
-              <button className="btn-primary text-sm" onClick={saveEdit}>Update Subscription</button>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Status</label>
+              <select className="input w-full" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                {['ACTIVE', 'TRIAL', 'SUSPENDED', 'EXPIRED', 'CANCELLED'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Billing Cycle</label>
+              <select className="input w-full" value={editForm.billingCycle} onChange={(e) => setEditForm({ ...editForm, billingCycle: e.target.value })}>
+                <option value="MONTHLY">Monthly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Price (₹)</label>
+              <input type="number" className="input w-full" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Discount (₹)</label>
+              <input type="number" className="input w-full" value={editForm.discount} onChange={(e) => setEditForm({ ...editForm, discount: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Start Date</label>
+              <input type="date" className="input w-full" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Expiry Date</label>
+              <input type="date" className="input w-full" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Reason for change</label>
+              <input className="input w-full" placeholder="e.g. Manual upgrade by admin" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
           </div>
-        </div>
+        </AdminModal>
       )}
       {modal === 'expiry' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 className="font-semibold mb-3">Change Expiry Date</h3>
-            <input type="date" className="input w-full mb-4" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} />
-            <input className="input w-full mb-4" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-sm" onClick={close}>Cancel</button>
-              <button className="btn-primary text-sm" onClick={() => api.patch(`/admin/subscriptions/${id}`, { endDate: editForm.endDate, reason: reason || 'Expiry changed by admin' }).then(onDone).then(close)}>Save</button>
-            </div>
-          </div>
-        </div>
+        <AdminModal
+          open
+          onClose={close}
+          title="Change Expiry Date"
+          subtitle={orgName}
+          footer={
+            <>
+              <button type="button" className="btn-secondary text-sm" onClick={close}>Cancel</button>
+              <button type="button" className="btn-admin text-sm" onClick={() => api.patch(`/admin/subscriptions/${id}`, { endDate: editForm.endDate, reason: reason || 'Expiry changed by admin' }).then(onDone).then(close)}>Save</button>
+            </>
+          }
+        >
+          <label className="mb-1 block text-xs font-semibold text-slate-500">New expiry date</label>
+          <input type="date" className="input mb-4 w-full" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} />
+          <label className="mb-1 block text-xs font-semibold text-slate-500">Reason</label>
+          <input className="input w-full" placeholder="Reason for change" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </AdminModal>
       )}
       {modal === 'view' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold mb-4">Subscription Details</h3>
-            {detailSub ? (
-              <div className="space-y-2 text-sm">
-                <p><span className="text-gray-500">Organization:</span> {(detailSub.organization as { name?: string })?.name}</p>
-                <p><span className="text-gray-500">Plan:</span> {(detailSub.plan as { name?: string })?.name}</p>
-                <p><span className="text-gray-500">Status:</span> {String(detailSub.status)}</p>
-                <p><span className="text-gray-500">Billing:</span> {String(detailSub.billingCycle)} — {formatCurrency((detailSub.price as number) || 0)}</p>
-                <p><span className="text-gray-500">Period:</span> {formatDate(detailSub.startDate as string)} → {detailSub.endDate ? formatDate(detailSub.endDate as string) : 'No expiry'}</p>
-                <p><span className="text-gray-500">Change Source:</span> {String(detailSub.changeSource)}</p>
-                {detailSub.suspendReason ? <p className="text-red-600">Suspend reason: {String(detailSub.suspendReason)}</p> : null}
-                <h4 className="font-medium mt-4 mb-2">History</h4>
-                <ul className="space-y-1 max-h-40 overflow-y-auto">
-                  {((detailSub.history as Record<string, unknown>[]) || []).map((h) => (
-                    <li key={h.id as string} className="text-xs text-gray-600 border-b pb-1">
-                      {(h.previousPlan as { name?: string })?.name || '?'} → {(h.newPlan as { name?: string })?.name || '?'} · {formatDate(h.createdAt as string)} · {String(h.reason || '')}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : <LoadingState />}
-            <div className="flex justify-end mt-4"><button className="btn-secondary text-sm" onClick={close}>Close</button></div>
-          </div>
-        </div>
-      )}
-      {modal === 'payments' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold mb-4">Payment History — {(sub.organization as { name?: string })?.name}</h3>
-            {payments.length === 0 ? <p className="text-sm text-gray-500">No payment records found.</p> : (
-              <ul className="space-y-2 text-sm">
-                {payments.map((p) => (
-                  <li key={p.id as string} className="flex justify-between border-b pb-2">
-                    <span>{formatCurrency(p.amount as number)} · {String(p.status)}</span>
-                    <span className="text-gray-500">{formatDate(p.createdAt as string)}</span>
+        <AdminModal
+          open
+          onClose={close}
+          title="Subscription Details"
+          subtitle={orgName}
+          size="xl"
+          footer={<button type="button" className="btn-secondary text-sm" onClick={close}>Close</button>}
+        >
+          {detailSub ? (
+            <div className="space-y-3 rounded-xl bg-slate-50/80 p-4 text-sm ring-1 ring-slate-100">
+              <p><span className="font-semibold text-slate-500">Organization:</span> {(detailSub.organization as { name?: string })?.name}</p>
+              <p><span className="font-semibold text-slate-500">Plan:</span> {(detailSub.plan as { name?: string })?.name}</p>
+              <p><span className="font-semibold text-slate-500">Status:</span> <StatusBadge status={String(detailSub.status)} /></p>
+              <p><span className="font-semibold text-slate-500">Billing:</span> {String(detailSub.billingCycle)} — {formatCurrency((detailSub.price as number) || 0)}</p>
+              <p><span className="font-semibold text-slate-500">Period:</span> {formatDate(detailSub.startDate as string)} → {detailSub.endDate ? formatDate(detailSub.endDate as string) : 'No expiry'}</p>
+              <p><span className="font-semibold text-slate-500">Change Source:</span> {String(detailSub.changeSource)}</p>
+              {detailSub.suspendReason ? <p className="text-red-600">Suspend reason: {String(detailSub.suspendReason)}</p> : null}
+              <h4 className="pt-2 font-semibold text-slate-800">History</h4>
+              <ul className="max-h-48 space-y-2 overflow-y-auto">
+                {((detailSub.history as Record<string, unknown>[]) || []).map((h) => (
+                  <li key={h.id as string} className="rounded-lg border border-slate-100 bg-white px-3 py-2 text-xs text-slate-600">
+                    {(h.previousPlan as { name?: string })?.name || '?'} → {(h.newPlan as { name?: string })?.name || '?'} · {formatDate(h.createdAt as string)} · {String(h.reason || '')}
                   </li>
                 ))}
               </ul>
-            )}
-            <div className="flex justify-end mt-4"><button className="btn-secondary text-sm" onClick={close}>Close</button></div>
-          </div>
-        </div>
+            </div>
+          ) : <LoadingState />}
+        </AdminModal>
+      )}
+      {modal === 'payments' && (
+        <AdminModal
+          open
+          onClose={close}
+          title="Payment History"
+          subtitle={orgName}
+          footer={<button type="button" className="btn-secondary text-sm" onClick={close}>Close</button>}
+        >
+          {payments.length === 0 ? <p className="text-sm text-slate-500">No payment records found.</p> : (
+            <ul className="space-y-2 text-sm">
+              {payments.map((p) => (
+                <li key={p.id as string} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                  <span className="font-medium">{formatCurrency(p.amount as number)} · <StatusBadge status={String(p.status)} /></span>
+                  <span className="text-slate-500">{formatDate(p.createdAt as string)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </AdminModal>
       )}
     </div>
   );
@@ -362,33 +402,37 @@ function PlansPage() {
         </div>
       )}
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold mb-4">{editing.id ? 'Edit Plan' : 'Create Plan'}</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {(['code', 'name', 'description'] as const).map((f) => (
-                <div key={f} className={f === 'description' ? 'col-span-2' : ''}>
-                  <label className="text-xs text-gray-500 capitalize">{f}</label>
-                  <input className="input w-full" value={String(form[f] || '')} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
-                </div>
-              ))}
-              {(['monthlyPrice', 'yearlyPrice', 'trialDays', 'userLimit', 'doctorLimit', 'patientLimit', 'branchLimit', 'appointmentLimit'] as const).map((f) => (
-                <div key={f}>
-                  <label className="text-xs text-gray-500">{f}</label>
-                  <input type="number" className="input w-full" value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
-                </div>
-              ))}
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">Features (comma-separated)</label>
-                <input className="input w-full" value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} />
+        <AdminModal
+          open
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit Plan' : 'Create Plan'}
+          size="xl"
+          footer={
+            <>
+              <button type="button" className="btn-secondary text-sm" onClick={() => setEditing(null)}>Cancel</button>
+              <button type="button" className="btn-admin text-sm" onClick={save}>{editing.id ? 'Update' : 'Create'}</button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {(['code', 'name', 'description'] as const).map((f) => (
+              <div key={f} className={f === 'description' ? 'sm:col-span-2' : ''}>
+                <label className="mb-1 block text-xs font-semibold capitalize text-slate-500">{f}</label>
+                <input className="input w-full" value={String(form[f] || '')} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
               </div>
-            </div>
-            <div className="flex gap-2 justify-end mt-4">
-              <button className="btn-secondary text-sm" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="btn-primary text-sm" onClick={save}>{editing.id ? 'Update' : 'Create'}</button>
+            ))}
+            {(['monthlyPrice', 'yearlyPrice', 'trialDays', 'userLimit', 'doctorLimit', 'patientLimit', 'branchLimit', 'appointmentLimit'] as const).map((f) => (
+              <div key={f}>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">{f}</label>
+                <input type="number" className="input w-full" value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
+              </div>
+            ))}
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Features (comma-separated)</label>
+              <input className="input w-full" value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} />
             </div>
           </div>
-        </div>
+        </AdminModal>
       )}
     </SubscriptionLayout>
   );

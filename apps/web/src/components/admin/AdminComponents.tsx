@@ -1,6 +1,55 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { getStatusColor } from '@/lib/utils';
+
+export function AdminModal({ open, onClose, title, subtitle, children, footer, size = 'lg' }: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: 'md' | 'lg' | 'xl';
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  if (!open) return null;
+
+  const maxW = size === 'md' ? 'max-w-md' : size === 'xl' ? 'max-w-xl' : 'max-w-lg';
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={`admin-card flex w-full ${maxW} max-h-[90vh] flex-col shadow-2xl shadow-indigo-900/10`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-slate-100 p-6 pb-4">
+          <div className="mb-3 h-1 w-10 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
+        {footer && (
+          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
