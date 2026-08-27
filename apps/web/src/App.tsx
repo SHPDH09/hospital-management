@@ -25,9 +25,10 @@ import { CrmDoctorsPage, CrmDoctorProfilePage } from '@/pages/crm/CrmDoctorsModu
 import {
   CrmProfilePage, CrmBranchesPage, CrmDepartmentsPage, CrmStaffPage, CrmRolesPage,
   CrmServicesPage, CrmHealthPackagesPage, CrmLeadsPage, CrmReviewsPage, CrmAdvertisementsPage,
-  CrmCommunicationsPage, CrmSubscriptionPage, CrmSupportPage, CrmAnalyticsPage,
+  CrmCommunicationsPage, CrmSupportPage, CrmAnalyticsPage,
   CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSettingsPage,
 } from '@/pages/crm/CrmModulePages';
+import { CrmSubscriptionPage } from '@/pages/crm/CrmSubscriptionPage';
 import { CrmSchedulePage } from '@/pages/crm/CrmScheduleModule';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,

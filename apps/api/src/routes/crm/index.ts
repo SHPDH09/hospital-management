@@ -13,6 +13,7 @@ import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal, isFr
 import { getCashfreeConfig, createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
 import { getSubscriptionAccessForOrg } from '../../lib/subscription-access';
 import { subscriptionGuard } from '../../middleware/subscription-guard';
+import { calculateSubscriptionTotal, getSubscriptionTaxRate, yearlySavingsPercent } from '../../lib/subscription-billing';
 import doctorScheduleRoutes from './doctor-schedule';
 
 const router = Router();
@@ -564,6 +565,128 @@ router.get('/subscription', async (req: AuthRequest, res, next) => {
       requiresCustomQuote: customQuote,
       access,
     });
+  } catch (err) { next(err); }
+});
+
+// Pricing quote with GST breakdown (step 2 — before payment).
+router.get('/subscription/checkout-quote', async (req: AuthRequest, res, next) => {
+  try {
+    const orgId = await requireOrgId(req);
+    const planId = typeof req.query.planId === 'string' ? req.query.planId : undefined;
+    const billingCycle = (req.query.billingCycle === 'YEARLY' ? 'YEARLY' : 'MONTHLY') as 'MONTHLY' | 'YEARLY';
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' }, include: { plan: true },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const targetPlan = planId
+      ? await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } })
+      : subscription.plan;
+    if (!targetPlan) throw new AppError('Plan not found', 404);
+
+    const subtotal = renewalAmountFor(targetPlan, billingCycle, subscription.price);
+    const tax = await getSubscriptionTaxRate();
+    const breakdown = calculateSubscriptionTotal(subtotal, tax.rate, tax.name, tax.enabled);
+    breakdown.billingCycle = billingCycle;
+
+    const monthly = targetPlan.monthlyPrice ?? targetPlan.price ?? 0;
+    const yearly = targetPlan.yearlyPrice ?? monthly * 12;
+
+    sendSuccess(res, {
+      plan: {
+        id: targetPlan.id,
+        code: targetPlan.code,
+        name: targetPlan.name,
+        tier: targetPlan.tier,
+        features: targetPlan.features,
+        trialDays: targetPlan.trialDays,
+      },
+      isCurrentPlan: targetPlan.id === subscription.planId,
+      isFree: isFreePlan(targetPlan) && subtotal <= 0,
+      ...breakdown,
+      yearlySavingsPercent: yearlySavingsPercent(monthly, yearly),
+      paymentConfigured: await isCashfreeConfigured(),
+      cashfreeMode: (await getCashfreeConfig()).env === 'production' ? 'production' : 'sandbox',
+    });
+  } catch (err) { next(err); }
+});
+
+// Complete checkout — creates Cashfree order with GST-inclusive total.
+router.post('/subscription/checkout', validateBody(z.object({
+  planId: z.string().uuid().optional(),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']),
+})), async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' },
+      include: { plan: true, organization: { select: { name: true, email: true, phone: true } } },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const targetPlan = req.body.planId
+      ? await prisma.subscriptionPlan.findFirst({ where: { id: req.body.planId, isActive: true } })
+      : subscription.plan;
+    if (!targetPlan) throw new AppError('Plan not found', 404);
+
+    const cycle = req.body.billingCycle;
+    const subtotal = renewalAmountFor(targetPlan, cycle, subscription.price);
+    const tax = await getSubscriptionTaxRate();
+    const breakdown = calculateSubscriptionTotal(subtotal, tax.rate, tax.name, tax.enabled);
+    breakdown.billingCycle = cycle;
+
+    if (isFreePlan(targetPlan) && subtotal <= 0) {
+      const payment = await prisma.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id, organizationId: orgId, planId: targetPlan.id,
+          amount: 0, currency: 'INR', billingCycle: cycle, status: 'PENDING',
+          gateway: 'free', invoiceNumber: generateInvoiceNumber(),
+        },
+      });
+      await applySubscriptionRenewal(payment.id, { method: 'free' });
+      return sendSuccess(res, { status: 'COMPLETED', planName: targetPlan.name, ...breakdown }, 'Plan activated');
+    }
+
+    if (breakdown.total <= 0) throw new AppError('This plan requires a custom quote. Contact support.', 400);
+    if (!await isCashfreeConfigured()) throw new AppError('Payment gateway is not configured. Contact your platform admin.', 503);
+
+    const payment = await prisma.subscriptionPayment.create({
+      data: {
+        subscriptionId: subscription.id, organizationId: orgId, planId: targetPlan.id,
+        amount: breakdown.total, currency: 'INR', billingCycle: cycle, status: 'PENDING',
+        gateway: 'cashfree', invoiceNumber: generateInvoiceNumber(),
+      },
+    });
+
+    const orderId = `sub_${payment.id}`;
+    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const apiUrl = process.env.API_PUBLIC_URL || '';
+    const order = await createCashfreeOrder({
+      orderId,
+      amount: breakdown.total,
+      currency: 'INR',
+      customer: { id: orgId, email: subscription.organization.email || undefined, phone: subscription.organization.phone || undefined },
+      returnUrl: `${appUrl}/crm/subscription?order_id={order_id}&payment_id=${payment.id}`,
+      notifyUrl: apiUrl ? `${apiUrl}/api/v1/webhooks/cashfree` : undefined,
+    });
+
+    if (!order.paymentSessionId) {
+      throw new AppError('Could not start payment session. Check Cashfree credentials.', 502);
+    }
+
+    await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
+
+    sendSuccess(res, {
+      paymentId: payment.id,
+      planId: targetPlan.id,
+      planName: targetPlan.name,
+      orderId: order.orderId,
+      paymentSessionId: order.paymentSessionId,
+      ...breakdown,
+      cashfreeMode: (await getCashfreeConfig()).env === 'production' ? 'production' : 'sandbox',
+    }, 'Proceed to payment');
   } catch (err) { next(err); }
 });
 
