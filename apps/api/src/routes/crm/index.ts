@@ -11,10 +11,13 @@ import { logCrmAudit } from '../../lib/crm-audit';
 import { requireOrgId, getBranchFilter, assertOrgAdmin } from '../../lib/crm-tenant';
 import { createCashfreeOrder, getCashfreeOrder, isCashfreeConfigured } from '../../lib/cashfree';
 import { renewalAmountFor, generateInvoiceNumber, applySubscriptionRenewal } from '../../lib/subscription-renewal';
+import { getSubscriptionAccessForOrg } from '../../lib/subscription-access';
+import { subscriptionGuard } from '../../middleware/subscription-guard';
 import doctorScheduleRoutes from './doctor-schedule';
 
 const router = Router();
 router.use(authenticate, requireRoles(...CRM_ROLES));
+router.use(subscriptionGuard);
 
 const pagination = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -505,9 +508,28 @@ router.patch('/advertisements/:id', validateBody(z.object({
 
 // ─── Subscription ────────────────────────────────────────────────────────────
 
+router.get('/subscription/access', async (req: AuthRequest, res, next) => {
+  try {
+    const orgId = await requireOrgId(req);
+    const access = await getSubscriptionAccessForOrg(orgId);
+    sendSuccess(res, access);
+  } catch (err) { next(err); }
+});
+
+router.get('/subscription/plans', async (_req: AuthRequest, res, next) => {
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    sendSuccess(res, plans);
+  } catch (err) { next(err); }
+});
+
 router.get('/subscription', async (req: AuthRequest, res, next) => {
   try {
     const orgId = await requireOrgId(req);
+    const access = await getSubscriptionAccessForOrg(orgId);
     const subscription = await prisma.subscription.findFirst({
       where: { organizationId: orgId },
       orderBy: { createdAt: 'desc' },
@@ -534,6 +556,7 @@ router.get('/subscription', async (req: AuthRequest, res, next) => {
       autoRenew: subscription?.autoRenew ?? false,
       paymentConfigured: await isCashfreeConfigured(),
       freeRenewal: renewalAmount <= 0,
+      access,
     });
   } catch (err) { next(err); }
 });
@@ -617,6 +640,83 @@ router.post('/subscription/renew', validateBody(z.object({ billingCycle: z.enum(
       billingCycle: cycle,
       invoiceNumber: payment.invoiceNumber,
     }, 'Renewal order created. Complete payment to activate.');
+  } catch (err) { next(err); }
+});
+
+// Choose / upgrade to a different plan (creates payment for paid plans).
+router.post('/subscription/select-plan', validateBody(z.object({
+  planId: z.string().uuid(),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
+})), async (req: AuthRequest, res, next) => {
+  try {
+    assertOrgAdmin(req);
+    const orgId = await requireOrgId(req);
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: orgId }, orderBy: { createdAt: 'desc' },
+      include: { plan: true, organization: { select: { name: true, email: true, phone: true } } },
+    });
+    if (!subscription) throw new AppError('No subscription found', 404);
+
+    const newPlan = await prisma.subscriptionPlan.findFirst({ where: { id: req.body.planId, isActive: true } });
+    if (!newPlan) throw new AppError('Plan not found', 404);
+    if (newPlan.monthlyPrice == null && newPlan.price == null) {
+      throw new AppError('Contact support for Enterprise pricing', 400);
+    }
+
+    const cycle = req.body.billingCycle || subscription.billingCycle;
+    const amount = renewalAmountFor(newPlan, cycle);
+
+    if (amount <= 0) {
+      const payment = await prisma.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id, organizationId: orgId, planId: newPlan.id,
+          amount: 0, currency: newPlan.currency || 'INR', billingCycle: cycle, status: 'PENDING',
+          gateway: 'free', invoiceNumber: generateInvoiceNumber(),
+        },
+      });
+      await applySubscriptionRenewal(payment.id, { method: 'free' });
+      return sendSuccess(res, {
+        paymentId: payment.id, planId: newPlan.id, planName: newPlan.name,
+        amount: 0, billingCycle: cycle, status: 'COMPLETED',
+      }, `Switched to ${newPlan.name} plan`);
+    }
+
+    if (!await isCashfreeConfigured()) {
+      throw new AppError('Payment gateway is not configured. Add Cashfree credentials to subscribe to paid plans.', 503);
+    }
+
+    const payment = await prisma.subscriptionPayment.create({
+      data: {
+        subscriptionId: subscription.id, organizationId: orgId, planId: newPlan.id,
+        amount, currency: newPlan.currency || 'INR', billingCycle: cycle, status: 'PENDING',
+        gateway: 'cashfree', invoiceNumber: generateInvoiceNumber(),
+      },
+    });
+
+    const orderId = `sub_${payment.id}`;
+    const appUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const apiUrl = process.env.API_PUBLIC_URL || '';
+    const order = await createCashfreeOrder({
+      orderId,
+      amount,
+      currency: newPlan.currency || 'INR',
+      customer: { id: orgId, email: subscription.organization.email || undefined, phone: subscription.organization.phone || undefined },
+      returnUrl: `${appUrl}/crm/subscription?order_id={order_id}`,
+      notifyUrl: apiUrl ? `${apiUrl}/api/v1/webhooks/cashfree` : undefined,
+    });
+
+    await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { gatewayOrderId: order.orderId } });
+
+    sendSuccess(res, {
+      paymentId: payment.id,
+      planId: newPlan.id,
+      planName: newPlan.name,
+      orderId: order.orderId,
+      paymentSessionId: order.paymentSessionId,
+      amount,
+      billingCycle: cycle,
+      invoiceNumber: payment.invoiceNumber,
+    }, `Subscribe to ${newPlan.name}. Complete payment to activate.`);
   } catch (err) { next(err); }
 });
 

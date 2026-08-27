@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, PLATFORM_ROLES, resolveOrganizationId } from '../middleware/auth';
+import { getSubscriptionAccessForOrg } from '../lib/subscription-access';
 
 const router = Router();
 
@@ -103,6 +104,7 @@ router.get('/crm', authenticate, requireRoles(...CRM_ROLES), async (req: AuthReq
       orderBy: { createdAt: 'desc' },
       include: { plan: { select: { name: true } } },
     });
+    const access = await getSubscriptionAccessForOrg(orgId);
 
     sendSuccess(res, {
       stats: {
@@ -126,11 +128,19 @@ router.get('/crm', authenticate, requireRoles(...CRM_ROLES), async (req: AuthReq
         unreadNotifications,
       },
       subscription: subscription ? {
-        status: subscription.status,
-        planName: subscription.plan.name,
+        status: access.status,
+        planName: access.planName,
         endDate: subscription.endDate,
         suspendReason: subscription.suspendReason,
-        isRestricted: subscription.status === 'SUSPENDED' || subscription.status === 'EXPIRED' || subscription.status === 'CANCELLED',
+        daysRemaining: access.daysRemaining,
+        isRestricted: access.isRestricted,
+        isTrial: access.isTrial,
+        isExpired: access.isExpired,
+        accessLevel: access.accessLevel,
+        bannerMessage: access.bannerMessage,
+        bannerType: access.bannerType,
+        allowedModules: access.allowedModules,
+        lockedModules: access.lockedModules,
       } : null,
       recentAppointments,
     });

@@ -43,7 +43,15 @@ export async function applySubscriptionRenewal(
 
     await tx.subscription.update({
       where: { id: sub.id },
-      data: { status: 'ACTIVE', endDate: newEnd, billingCycle: payment.billingCycle, changeSource: 'PAYMENT', suspendReason: null },
+      data: {
+        status: 'ACTIVE',
+        endDate: newEnd,
+        billingCycle: payment.billingCycle,
+        planId: payment.planId || sub.planId,
+        price: payment.amount,
+        changeSource: 'PAYMENT',
+        suspendReason: null,
+      },
     });
 
     const updatedPayment = await tx.subscriptionPayment.update({

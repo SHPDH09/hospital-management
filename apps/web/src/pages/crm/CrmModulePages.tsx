@@ -462,8 +462,10 @@ function loadCashfreeSdk(): Promise<((opts: { mode: string }) => { checkout: (o:
 
 export function CrmSubscriptionPage() {
   const { data, isLoading, refetch } = useQuery({ queryKey: ['crm-subscription'], queryFn: () => api.get('/crm/subscription') });
+  const { data: plansData } = useQuery({ queryKey: ['crm-subscription-plans'], queryFn: () => api.get('/crm/subscription/plans') });
   const [cycle, setCycle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [busy, setBusy] = useState(false);
+  const [selectingPlan, setSelectingPlan] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'info' | 'error' | 'success'; text: string } | null>(null);
 
   const payload = data?.data as {
@@ -473,7 +475,10 @@ export function CrmSubscriptionPage() {
     autoRenew?: boolean;
     paymentConfigured?: boolean;
     freeRenewal?: boolean;
+    access?: { isTrial?: boolean; isExpired?: boolean; isRestricted?: boolean };
   } | undefined;
+
+  const plans = (plansData?.data as Record<string, unknown>[] | undefined) ?? [];
 
   const sub = payload?.subscription;
   const plan = sub?.plan as Record<string, unknown> | undefined;
@@ -483,12 +488,6 @@ export function CrmSubscriptionPage() {
   const payments = (sub?.payments as RenewalPayment[] | undefined) ?? [];
   const expiringSoon = daysRemaining != null && daysRemaining <= 7;
   const needsPaymentGateway = !freeRenewal && !payload?.paymentConfigured;
-
-  const toggleAutoRenew = async () => {
-    const res = await api.patch('/crm/subscription/auto-renew', { autoRenew: !payload?.autoRenew });
-    if (res.success) refetch();
-    else setNotice({ kind: 'error', text: res.error || 'Failed to update auto-renewal' });
-  };
 
   const renewNow = async () => {
     setBusy(true);
@@ -520,6 +519,47 @@ export function CrmSubscriptionPage() {
       setBusy(false);
     }
   };
+
+  const toggleAutoRenew = async () => {
+    const res = await api.patch('/crm/subscription/auto-renew', { autoRenew: !payload?.autoRenew });
+    if (res.success) refetch();
+    else setNotice({ kind: 'error', text: res.error || 'Failed to update auto-renewal' });
+  };
+
+  const selectPlan = async (planId: string) => {
+    setSelectingPlan(planId);
+    setNotice(null);
+    try {
+      const res = await api.post<{ paymentSessionId?: string; status?: string; planName?: string; invoiceNumber?: string }>(
+        '/crm/subscription/select-plan',
+        { planId, billingCycle: cycle },
+      );
+      if (!res.success) {
+        setNotice({ kind: 'error', text: res.error || 'Could not select plan' });
+        return;
+      }
+      if (res.data?.status === 'COMPLETED') {
+        setNotice({ kind: 'success', text: `You are now on the ${res.data.planName} plan.` });
+        refetch();
+        return;
+      }
+      const sessionId = res.data?.paymentSessionId;
+      if (sessionId) {
+        const cf = await loadCashfreeSdk();
+        if (cf) {
+          cf({ mode: 'production' }).checkout({ paymentSessionId: sessionId, redirectTarget: '_self' });
+          return;
+        }
+      }
+      setNotice({ kind: 'info', text: `Payment started for ${res.data?.planName}. Complete checkout to activate.` });
+      refetch();
+    } finally {
+      setSelectingPlan(null);
+    }
+  };
+
+  const planPrice = (p: Record<string, unknown>) =>
+    cycle === 'YEARLY' ? Number(p.yearlyPrice || 0) : Number(p.monthlyPrice || p.price || 0);
 
   return (
     <DashboardLayout portal="crm">
@@ -584,6 +624,67 @@ export function CrmSubscriptionPage() {
               {Array.isArray(plan?.features) && <ul className="mt-5 grid grid-cols-1 gap-1 text-sm text-gray-600 sm:grid-cols-2">{(plan.features as string[]).map((f) => <li key={f} className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary-500" />{f}</li>)}</ul>}
             </div>
 
+            {/* Choose a plan */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900">Choose a Plan</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {payload?.access?.isTrial
+                  ? 'Your 15-day free trial includes all features. Select a plan before it ends to keep access.'
+                  : payload?.access?.isExpired
+                    ? 'Your trial has ended. Subscribe to unlock all services.'
+                    : 'Upgrade or switch your plan anytime.'}
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500">Billing:</span>
+                <select className="input w-auto text-sm" value={cycle} onChange={(e) => setCycle(e.target.value as 'MONTHLY' | 'YEARLY')}>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="YEARLY">Yearly (save more)</option>
+                </select>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {plans.map((p) => {
+                  const isCurrent = String(plan?.id) === String(p.id);
+                  const price = planPrice(p);
+                  const isEnterprise = p.monthlyPrice == null && p.price == null;
+                  return (
+                    <div
+                      key={String(p.id)}
+                      className={`rounded-xl border p-4 transition-shadow ${isCurrent ? 'border-primary-400 bg-primary-50/50 ring-1 ring-primary-200' : 'border-gray-200 hover:shadow-md'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-semibold text-gray-900">{String(p.name)}</h4>
+                        {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary-700">Current</span>}
+                      </div>
+                      <p className="mt-1 text-xl font-bold text-primary-600">
+                        {isEnterprise ? 'Custom' : formatCurrency(price)}
+                        {!isEnterprise && <span className="text-sm font-normal text-gray-500">/{cycle === 'YEARLY' ? 'yr' : 'mo'}</span>}
+                      </p>
+                      {Number(p.trialDays) > 0 && (
+                        <p className="mt-1 text-xs text-green-600">{String(p.trialDays)}-day free trial</p>
+                      )}
+                      {Array.isArray(p.features) && (
+                        <ul className="mt-3 space-y-1 text-xs text-gray-600">
+                          {(p.features as string[]).slice(0, 5).map((f) => (
+                            <li key={f} className="flex items-center gap-1.5">
+                              <span className="h-1 w-1 rounded-full bg-primary-500" />{f}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <button
+                        type="button"
+                        className={`mt-4 w-full text-sm ${isCurrent ? 'btn-secondary' : 'btn-primary'}`}
+                        disabled={isCurrent || selectingPlan === String(p.id) || (isEnterprise)}
+                        onClick={() => selectPlan(String(p.id))}
+                      >
+                        {isCurrent ? 'Current Plan' : selectingPlan === String(p.id) ? 'Processing…' : isEnterprise ? 'Contact Sales' : price <= 0 ? 'Select Free Plan' : 'Subscribe'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Payment / renewal history */}
             <div className="card overflow-hidden">
               <div className="border-b border-gray-100 px-6 py-4"><h3 className="font-semibold text-gray-900">Renewal & Payment History</h3></div>
@@ -624,8 +725,8 @@ export function CrmSubscriptionPage() {
               <p className="mt-2 text-xs text-gray-400">{payload?.autoRenew ? 'Auto-renewal is ON' : 'Auto-renewal is OFF'}</p>
             </div>
             <div className="card p-6 text-sm text-gray-500">
-              <h3 className="font-semibold text-gray-900">Need a plan change?</h3>
-              <p className="mt-1">Upgrades/downgrades are managed by the platform Super Admin. Contact support to change plans.</p>
+              <h3 className="font-semibold text-gray-900">What happens after trial?</h3>
+              <p className="mt-1">After 15 days, premium features lock automatically. Basic services (dashboard, profile, doctors, subscription) stay open until you choose a paid plan.</p>
             </div>
           </div>
         </div>

@@ -9,9 +9,9 @@ async function main() {
 
   // Subscription plans
   const planDefs = [
-    { code: 'free', tier: 'FREE' as const, name: 'Free', monthlyPrice: 0, yearlyPrice: 0, trialDays: 0, isDefault: false, sortOrder: 1,
-      features: ['Basic Listing', 'Up to 2 Doctors'], userLimit: 5, doctorLimit: 2, patientLimit: 50, branchLimit: 1, appointmentLimit: 100 },
-    { code: 'basic', tier: 'BASIC' as const, name: 'Basic', monthlyPrice: 999, yearlyPrice: 9999, trialDays: 14, isDefault: true, sortOrder: 2,
+    { code: 'free', tier: 'FREE' as const, name: 'Free', monthlyPrice: 0, yearlyPrice: 0, trialDays: 15, isDefault: true, sortOrder: 1,
+      features: ['Basic Listing', 'Basic Dashboard', 'Up to 2 Doctors'], userLimit: 5, doctorLimit: 2, patientLimit: 50, branchLimit: 1, appointmentLimit: 100 },
+    { code: 'basic', tier: 'BASIC' as const, name: 'Basic', monthlyPrice: 999, yearlyPrice: 9999, trialDays: 15, isDefault: false, sortOrder: 2,
       features: ['Patient Management', 'Appointments', 'Basic Dashboard', 'Billing'], userLimit: 20, doctorLimit: 10, patientLimit: 500, branchLimit: 2, appointmentLimit: 1000 },
     { code: 'professional', tier: 'PROFESSIONAL' as const, name: 'Professional', monthlyPrice: 2499, yearlyPrice: 24999, trialDays: 14, isDefault: false, sortOrder: 3,
       features: ['Everything in Basic', 'Staff Management', 'Reports', 'Inventory', 'Communication'], userLimit: 100, doctorLimit: 50, patientLimit: 5000, branchLimit: 10, appointmentLimit: 10000 },

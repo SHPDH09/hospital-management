@@ -297,7 +297,7 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
   subscriptions: {
     subscriptionEnabled: true,
     defaultPlan: 'Basic',
-    trialPeriodDays: 14,
+    trialPeriodDays: 15,
     gracePeriodDays: 3,
     autoRenewal: true,
     expiryBehavior: 'suspend',

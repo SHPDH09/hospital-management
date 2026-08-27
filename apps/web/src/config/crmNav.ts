@@ -9,6 +9,8 @@ export interface CrmNavItem {
   to: string;
   icon: typeof LayoutDashboard;
   label: string;
+  /** 'basic' = available when subscription expired; omit = requires full access */
+  access?: 'basic';
 }
 
 export interface CrmNavGroup {
@@ -20,15 +22,15 @@ export const crmNavGroups: CrmNavGroup[] = [
   {
     title: 'Overview',
     items: [
-      { to: '/crm', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/crm', icon: LayoutDashboard, label: 'Dashboard', access: 'basic' },
       { to: '/crm/analytics', icon: BarChart3, label: 'Analytics' },
-      { to: '/crm/notifications', icon: Bell, label: 'Notifications' },
+      { to: '/crm/notifications', icon: Bell, label: 'Notifications', access: 'basic' },
     ],
   },
   {
     title: 'Organization',
     items: [
-      { to: '/crm/profile', icon: Building2, label: 'Hospital Profile' },
+      { to: '/crm/profile', icon: Building2, label: 'Hospital Profile', access: 'basic' },
       { to: '/crm/branches', icon: GitBranch, label: 'Branches' },
       { to: '/crm/departments', icon: Layers, label: 'Departments' },
       { to: '/crm/documents', icon: FileText, label: 'Documents & Media' },
@@ -37,7 +39,7 @@ export const crmNavGroups: CrmNavGroup[] = [
   {
     title: 'People',
     items: [
-      { to: '/crm/doctors', icon: Stethoscope, label: 'Doctors' },
+      { to: '/crm/doctors', icon: Stethoscope, label: 'Doctors', access: 'basic' },
       { to: '/crm/staff', icon: UserCog, label: 'Staff' },
       { to: '/crm/roles', icon: Shield, label: 'Roles & Permissions' },
       { to: '/crm/patients', icon: Users, label: 'Patients' },
@@ -70,8 +72,8 @@ export const crmNavGroups: CrmNavGroup[] = [
   {
     title: 'Platform',
     items: [
-      { to: '/crm/subscription', icon: CreditCard, label: 'Subscription' },
-      { to: '/crm/support', icon: Headphones, label: 'Support & Complaints' },
+      { to: '/crm/subscription', icon: CreditCard, label: 'Subscription', access: 'basic' },
+      { to: '/crm/support', icon: Headphones, label: 'Support & Complaints', access: 'basic' },
       { to: '/crm/settings', icon: Settings, label: 'Settings' },
       { to: '/crm/audit-logs', icon: ScrollText, label: 'Audit Logs' },
     ],

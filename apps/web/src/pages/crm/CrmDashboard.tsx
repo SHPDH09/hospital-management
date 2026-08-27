@@ -52,7 +52,10 @@ export function CrmDashboard() {
 
   const dashboard = data?.data as {
     stats: CrmStats;
-    subscription?: { status: string; planName: string; isRestricted: boolean; suspendReason?: string };
+    subscription?: {
+      status: string; planName: string; isRestricted: boolean; suspendReason?: string;
+      daysRemaining?: number | null; isTrial?: boolean; bannerMessage?: string | null;
+    };
     recentAppointments: { id: string; startTime: string; status: string; patient: { fullName: string }; doctor: { fullName: string } }[];
   } | undefined;
 
@@ -122,14 +125,10 @@ export function CrmDashboard() {
         </div>
       </div>
 
-      {subscription?.isRestricted && (
+      {subscription?.isRestricted && subscription.suspendReason && subscription.status === 'SUSPENDED' && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
-          <p className="font-semibold">Subscription {subscription.status} — {subscription.planName}</p>
-          <p className="mt-1 text-sm">
-            {subscription.status === 'SUSPENDED'
-              ? `Suspended${subscription.suspendReason ? `: ${subscription.suspendReason}` : ''}. Contact support.`
-              : 'Subscription inactive. Please renew to continue.'}
-          </p>
+          <p className="font-semibold">Account Suspended</p>
+          <p className="mt-1 text-sm">Reason: {subscription.suspendReason}. Contact support for help.</p>
         </div>
       )}
 
