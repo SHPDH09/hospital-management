@@ -17,6 +17,7 @@ import {
   MODULE_KEYS,
   STATUS_LABELS,
 } from '../../lib/emergency';
+import { notifyMaintenanceScheduled } from '../../lib/maintenance-scheduler';
 
 const router = Router();
 
@@ -738,6 +739,15 @@ router.post('/scheduled-maintenance', async (req: AuthRequest, res, next) => {
         createdByEmail: req.user?.email,
       },
     });
+
+    await notifyMaintenanceScheduled(item);
+
+    // Pre-set maintenance message for when window activates
+    const state = await getEmergencyState();
+    await saveEmergencyState(syncLegacyFlags({
+      ...state,
+      maintenanceMessage: body.description || body.title,
+    }));
 
     await logEmergencyAction(req, 'Scheduled Maintenance Created', body.reason, {
       affectedScope: body.maintenanceType === 'full' ? 'Entire Platform' : body.affectedModules?.join(', '),

@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { adminNavGroups } from '@/config/adminNav';
 import { crmNavGroups } from '@/config/crmNav';
 import { api } from '@/lib/api';
+import { usePlatformStatus } from '@/hooks/usePlatformStatus';
+import { MaintenanceDashboardBanner } from '@/components/MaintenanceNotice';
 
 const patientNav = [
   { to: '/patient', icon: LayoutDashboard, label: 'Dashboard' },
@@ -43,6 +45,9 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
   const groups = portal === 'admin' ? adminNavGroups : portal === 'crm' ? crmNavGroups : null;
   const isAdmin = portal === 'admin';
   const isCrm = portal === 'crm';
+
+  const { data: platformStatus } = usePlatformStatus();
+  const maintenance = platformStatus?.data?.maintenance;
 
   const { data: accessData } = useQuery({
     queryKey: ['crm-subscription-access'],
@@ -222,6 +227,7 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
           </Link>
         </header>
         <main className="p-4 lg:p-8">
+          <MaintenanceDashboardBanner maintenance={maintenance} />
           {isCrm && access?.bannerMessage && (
             <div className={cn(
               'mb-6 flex flex-wrap items-start gap-3 rounded-xl border p-4 text-sm',

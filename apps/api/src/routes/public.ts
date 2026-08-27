@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma, readDb } from '../lib/prisma';
 import { sendSuccess } from '../lib/response';
 import { getEmergencyState, computeSystemStatus, getActiveControls } from '../lib/emergency';
+import { processScheduledMaintenances } from '../lib/maintenance-scheduler';
 import { mergeWithDefaults, settingsKey } from '../lib/settings';
 import { SettingCategory } from '../lib/settings';
 import { paramId } from '../lib/params';
@@ -15,6 +16,8 @@ async function getSettingCategory(category: SettingCategory) {
 
 router.get('/platform-status', async (_req, res, next) => {
   try {
+    const maintenance = await processScheduledMaintenances();
+
     const [website, mobile, emergency, platform, branding] = await Promise.all([
       getSettingCategory('website'),
       getSettingCategory('mobile'),
@@ -48,6 +51,7 @@ router.get('/platform-status', async (_req, res, next) => {
       maintenanceMode,
       maintenanceMessage: synced.maintenanceMessage || website.maintenanceMessage || 'We are currently performing scheduled maintenance.',
       maintenanceType: synced.maintenanceType,
+      maintenance,
       readOnlyMode: synced.readOnlyMode,
       emergencyModeActive: synced.emergencyModeActive,
       activeControls: getActiveControls(synced),

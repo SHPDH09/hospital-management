@@ -340,6 +340,7 @@ export const DEFAULT_SETTINGS: Record<SettingCategory, Record<string, unknown>> 
     maintenanceType: 'full',
     maintenanceModules: [] as string[],
     maintenanceMessage: 'We are currently performing scheduled maintenance.',
+    scheduledMaintenanceId: null as string | null,
     modules: {
       patientRegistration: true,
       hospitalRegistration: true,
