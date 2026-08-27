@@ -7,8 +7,22 @@ import { paramId } from '../../lib/params';
 import { AuthRequest } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
 import { logAudit } from '../../lib/audit';
+import { runSubscriptionReminders } from '../../lib/subscription-reminders';
+import { analyzeSubscriptionMarket, getIdealTierDefinitions } from '../../lib/subscription-market-analysis';
 
 const router = Router();
+
+// Run the renewal lifecycle: send 7/3/1-day reminders, expire past-due
+// subscriptions and suspend those beyond the grace period. Intended to be
+// scheduled (cron/worker); exposed here for manual/admin triggering.
+router.post('/run-reminders', async (req: AuthRequest, res, next) => {
+  try {
+    const graceDays = Number(req.body?.graceDays) || 3;
+    const result = await runSubscriptionReminders(graceDays);
+    await logAudit(req, 'RUN_RENEWAL_REMINDERS', 'Subscription', undefined, result);
+    sendSuccess(res, result, 'Renewal reminders processed');
+  } catch (err) { next(err); }
+});
 
 const planSchema = z.object({
   code: z.string().min(2),
@@ -91,6 +105,63 @@ router.get('/plans', async (_req, res, next) => {
   try {
     const plans = await prisma.subscriptionPlan.findMany({ orderBy: [{ sortOrder: 'asc' }, { monthlyPrice: 'asc' }] });
     sendSuccess(res, plans);
+  } catch (err) { next(err); }
+});
+
+// ─── Market analysis & pricing suggestions ───────────────────────────────────
+
+router.get('/market-analysis', async (_req, res, next) => {
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({ orderBy: { sortOrder: 'asc' } });
+    const analysis = analyzeSubscriptionMarket(plans);
+    sendSuccess(res, analysis);
+  } catch (err) { next(err); }
+});
+
+router.post('/market-analysis/apply', validateBody(z.object({
+  planCode: z.string().min(2),
+  monthlyPrice: z.number().min(0).optional(),
+  yearlyPrice: z.number().min(0).optional(),
+  features: z.array(z.string()).optional(),
+  createIfMissing: z.boolean().optional(),
+})), async (req: AuthRequest, res, next) => {
+  try {
+    const { planCode, monthlyPrice, yearlyPrice, features, createIfMissing } = req.body;
+    let plan = await prisma.subscriptionPlan.findFirst({ where: { code: planCode } });
+
+    if (!plan && createIfMissing) {
+      const ideal = getIdealTierDefinitions().find((t) => t.code === planCode);
+      if (!ideal) throw new AppError('Unknown plan code', 400);
+      plan = await prisma.subscriptionPlan.create({
+        data: {
+          code: planCode,
+          name: ideal.name,
+          tier: planCode === 'enterprise' ? 'ENTERPRISE' : planCode === 'free' ? 'FREE' : planCode === 'basic' ? 'BASIC' : 'PROFESSIONAL',
+          monthlyPrice: monthlyPrice ?? ideal.monthly,
+          yearlyPrice: yearlyPrice ?? ideal.yearly,
+          price: monthlyPrice ?? ideal.monthly,
+          features: features ?? ideal.features,
+          trialDays: planCode === 'free' ? 15 : 14,
+          isActive: true,
+          sortOrder: getIdealTierDefinitions().findIndex((t) => t.code === planCode) + 1,
+        },
+      });
+      await logAudit(req, 'CREATE', 'SubscriptionPlan', plan.id, { source: 'market-analysis' });
+      return sendSuccess(res, plan, `Created ${plan.name} plan from market suggestion`);
+    }
+
+    if (!plan) throw new AppError('Plan not found', 404);
+
+    const updated = await prisma.subscriptionPlan.update({
+      where: { id: plan.id },
+      data: {
+        ...(monthlyPrice !== undefined && { monthlyPrice, price: monthlyPrice }),
+        ...(yearlyPrice !== undefined && { yearlyPrice }),
+        ...(features && { features }),
+      },
+    });
+    await logAudit(req, 'UPDATE', 'SubscriptionPlan', plan.id, { source: 'market-analysis', monthlyPrice, yearlyPrice });
+    sendSuccess(res, updated, `Updated ${updated.name} pricing from market suggestion`);
   } catch (err) { next(err); }
 });
 

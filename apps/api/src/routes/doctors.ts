@@ -6,6 +6,7 @@ import { sendSuccess, sendPaginated, AppError } from '../lib/response';
 import { paramId } from '../lib/params';
 import { authenticate, requireRoles, AuthRequest, CRM_ROLES, resolveOrganizationId } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validate';
+import { countDoctorsOnLeaveToday } from '../lib/doctor-schedule';
 
 const router = Router();
 
@@ -72,6 +73,57 @@ router.get('/search', validateQuery(searchQuerySchema), async (req, res, next) =
     ]);
 
     sendPaginated(res, doctors, { page, limit, total });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Doctor dashboard statistics for the caller's organization.
+router.get('/stats', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PLATFORM_STAFF'), async (req: AuthRequest, res, next) => {
+  try {
+    const orgId = await resolveOrganizationId(req);
+    const docWhere = orgId ? { organizationId: orgId } : {};
+    const apptWhere = orgId ? { organizationId: orgId } : {};
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [
+      totalDoctors, activeDoctors, pendingVerification, onLeave, ratingAgg,
+      totalAppointments, completed, cancelled, noShow, todayAppointments, totalPatients,
+    ] = await Promise.all([
+      prisma.doctor.count({ where: docWhere }),
+      prisma.doctor.count({ where: { ...docWhere, isActive: true } }),
+      prisma.doctor.count({ where: { ...docWhere, verificationStatus: 'PENDING' } }),
+      countDoctorsOnLeaveToday(orgId || undefined),
+      prisma.doctor.aggregate({ where: docWhere, _avg: { averageRating: true } }),
+      prisma.appointment.count({ where: apptWhere }),
+      prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }),
+      prisma.appointment.count({ where: { ...apptWhere, status: 'CANCELLED' } }),
+      prisma.appointment.count({ where: { ...apptWhere, status: 'NO_SHOW' } }),
+      prisma.appointment.count({ where: { ...apptWhere, appointmentDate: { gte: today, lt: tomorrow } } }),
+      orgId ? prisma.patientOrganization.count({ where: { organizationId: orgId } }) : prisma.patient.count(),
+    ]);
+
+    const availableToday = Math.max(0, activeDoctors - onLeave);
+
+    sendSuccess(res, {
+      totalDoctors,
+      activeDoctors,
+      inactiveDoctors: totalDoctors - activeDoctors,
+      pendingVerification,
+      onLeave,
+      availableToday,
+      totalAppointments,
+      completedAppointments: completed,
+      cancelledAppointments: cancelled,
+      noShowAppointments: noShow,
+      averageRating: Number((ratingAgg._avg.averageRating || 0).toFixed(2)),
+      totalPatients,
+      todayAppointments,
+    });
   } catch (err) {
     next(err);
   }
@@ -173,6 +225,72 @@ router.post('/', authenticate, requireRoles('HOSPITAL_ADMIN', 'BRANCH_ADMIN'), v
     });
 
     sendSuccess(res, doctor, 'Doctor created', 201);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Full doctor profile (org-scoped) for the CRM: doctor details, aggregate
+// stats, recent appointments, connected patients and reviews.
+router.get('/:id/profile', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PLATFORM_STAFF'), async (req: AuthRequest, res, next) => {
+  try {
+    const id = paramId(req.params.id);
+    const orgId = await resolveOrganizationId(req);
+    const doctor = await prisma.doctor.findFirst({
+      where: { id, ...(orgId ? { organizationId: orgId } : {}) },
+        include: {
+          department: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
+          organization: { select: { id: true, name: true, city: true } },
+          user: { select: { email: true, phone: true, isActive: true, lastLoginAt: true } },
+          weeklySchedules: { where: { isActive: true }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] },
+          leaves: {
+            where: { status: { in: ['PENDING', 'APPROVED'] } },
+            orderBy: { startDate: 'desc' },
+            take: 10,
+          },
+        },
+    });
+    if (!doctor) throw new AppError('Doctor not found', 404);
+
+    const [total, completed, cancelled, noShow, reviewsCount, recentAppointments, reviews, apptForPatients] = await Promise.all([
+      prisma.appointment.count({ where: { doctorId: id } }),
+      prisma.appointment.count({ where: { doctorId: id, status: 'COMPLETED' } }),
+      prisma.appointment.count({ where: { doctorId: id, status: 'CANCELLED' } }),
+      prisma.appointment.count({ where: { doctorId: id, status: 'NO_SHOW' } }),
+      prisma.review.count({ where: { doctorId: id } }),
+      prisma.appointment.findMany({
+        where: { doctorId: id }, take: 15, orderBy: { appointmentDate: 'desc' },
+        include: { patient: { select: { id: true, fullName: true } } },
+      }),
+      prisma.review.findMany({
+        where: { doctorId: id }, take: 10, orderBy: { createdAt: 'desc' },
+        include: { patient: { select: { fullName: true } } },
+      }),
+      prisma.appointment.findMany({
+        where: { doctorId: id }, orderBy: { appointmentDate: 'desc' },
+        include: { patient: { select: { id: true, fullName: true } } },
+      }),
+    ]);
+
+    const patientMap = new Map<string, { id: string; fullName: string; visits: number; lastVisit: Date }>();
+    for (const a of apptForPatients) {
+      if (!a.patient) continue;
+      const existing = patientMap.get(a.patient.id);
+      if (existing) existing.visits += 1;
+      else patientMap.set(a.patient.id, { id: a.patient.id, fullName: a.patient.fullName, visits: 1, lastVisit: a.appointmentDate });
+    }
+
+    sendSuccess(res, {
+      doctor,
+      stats: {
+        totalAppointments: total, completedAppointments: completed, cancelledAppointments: cancelled,
+        noShowAppointments: noShow, reviews: reviewsCount, patients: patientMap.size, averageRating: doctor.averageRating,
+      },
+      recentAppointments,
+      reviews,
+      patients: Array.from(patientMap.values()),
+    });
   } catch (err) {
     next(err);
   }

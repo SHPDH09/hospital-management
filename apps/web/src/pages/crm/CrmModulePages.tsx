@@ -443,32 +443,6 @@ export function CrmCommunicationsPage() {
   );
 }
 
-export function CrmSubscriptionPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['crm-subscription'], queryFn: () => api.get('/crm/subscription') });
-  const sub = data?.data as Record<string, unknown> | undefined;
-  const plan = sub?.plan as Record<string, unknown> | undefined;
-
-  return (
-    <DashboardLayout portal="crm">
-      <PageHeader title="Subscription" subtitle="View your platform subscription" />
-      {isLoading ? <LoadingState /> : !sub ? (
-        <div className="card p-12 text-center text-gray-500">No active subscription</div>
-      ) : (
-        <div className="card p-6 max-w-lg">
-          <h3 className="text-xl font-bold">{String(plan?.name)}</h3>
-          <p className="text-2xl font-bold text-primary-600 mt-2">{formatCurrency(Number(plan?.monthlyPrice || plan?.price || 0))}/month</p>
-          <p className="mt-2"><StatusBadge status={String(sub.status)} /></p>
-          <div className="mt-4 space-y-2 text-sm text-gray-600">
-            <p>Start: {new Date(String(sub.startDate)).toLocaleDateString()}</p>
-            {sub.endDate ? <p>Expires: {new Date(String(sub.endDate)).toLocaleDateString()}</p> : null}
-          </div>
-          {Array.isArray(plan?.features) && <ul className="mt-4 text-sm text-gray-600 list-disc pl-5">{(plan.features as string[]).map((f) => <li key={f}>{f}</li>)}</ul>}
-          <p className="text-xs text-gray-400 mt-4">Plan changes require contacting platform support. Plan management is controlled by Super Admin.</p>
-        </div>
-      )}
-    </DashboardLayout>
-  );
-}
 
 export function CrmSupportPage() {
   const qc = useQueryClient();
@@ -613,35 +587,6 @@ export function CrmAuditLogsPage() {
   );
 }
 
-export function CrmSchedulePage() {
-  const { data: doctorsData } = useQuery({ queryKey: ['crm-doctors'], queryFn: () => api.get('/doctors') });
-  const doctors = (doctorsData?.data as Record<string, unknown>[]) || [];
-  const [doctorId, setDoctorId] = useState('');
-  const { data, isLoading } = useQuery({
-    queryKey: ['crm-slots', doctorId],
-    queryFn: () => api.get(`/crm/slots?doctorId=${doctorId}`),
-    enabled: !!doctorId,
-  });
-  const slots = (data?.data as Record<string, unknown>[]) || [];
-
-  return (
-    <DashboardLayout portal="crm">
-      <PageHeader title="Doctor Schedule" subtitle="Manage doctor availability and appointment slots" />
-      <select className="input max-w-xs mb-4" value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
-        <option value="">Select Doctor</option>
-        {doctors.map((d) => <option key={String(d.id)} value={String(d.id)}>{String(d.fullName)}</option>)}
-      </select>
-      {doctorId && (isLoading ? <LoadingState /> : (
-        <AdminTable columns={[
-          { key: 'date', label: 'Date', render: (r) => new Date(String(r.date)).toLocaleDateString() },
-          { key: 'startTime', label: 'Start' },
-          { key: 'endTime', label: 'End' },
-          { key: 'isBooked', label: 'Status', render: (r) => <StatusBadge status={r.isBooked ? 'BOOKED' : 'AVAILABLE'} /> },
-        ]} rows={slots} emptyMessage="No slots configured" />
-      ))}
-    </DashboardLayout>
-  );
-}
 
 export function CrmSettingsPage() {
   const qc = useQueryClient();

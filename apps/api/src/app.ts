@@ -16,6 +16,8 @@ import dashboardRoutes from './routes/dashboard';
 import adminRoutes from './routes/admin/index';
 import crmRoutes from './routes/crm';
 import publicRoutes from './routes/public';
+import webhookRoutes from './routes/webhooks';
+import affiliateOauthRoutes from './routes/affiliate-oauth';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';
 
@@ -41,7 +43,11 @@ app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
 if (!isVercel) {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  // Capture the raw body so payment webhooks can verify their signature.
+  verify: (req, _res, buf) => { (req as { rawBody?: Buffer }).rawBody = buf; },
+}));
 
 if (!isVercel) {
   app.use(
@@ -80,6 +86,8 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/crm', crmRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/affiliate-oauth', affiliateOauthRoutes);
+app.use('/api/v1/webhooks', webhookRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

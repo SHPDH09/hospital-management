@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Building2, Store, Stethoscope, Users, Calendar, CreditCard,
-  Receipt, Megaphone, Target, Star, UserCog, Shield, FileText, Headphones,
-  MapPin, Database, Mail, Ticket, BarChart3, Settings, Globe, AlertTriangle,
+  Receipt,   Megaphone, Target, Star, UserCog, Shield, FileText, Headphones,
+  MapPin, Database, Mail, Ticket, BarChart3, Settings, Globe, AlertTriangle, Share2,
 } from 'lucide-react';
 
 export interface AdminNavItem {
@@ -46,6 +46,7 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [
       { to: '/admin/subscriptions', icon: CreditCard, label: 'Subscriptions' },
       { to: '/admin/advertisements', icon: Megaphone, label: 'Advertisements' },
+      { to: '/admin/affiliate-marketing', icon: Share2, label: 'Affiliate Marketing' },
       { to: '/admin/coupons', icon: Ticket, label: 'Coupons' },
     ],
   },

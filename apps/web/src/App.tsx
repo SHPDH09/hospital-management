@@ -15,25 +15,29 @@ import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { OrganizationDetailPage } from '@/pages/public/OrganizationDetailPage';
 import { DoctorDetailPage } from '@/pages/public/DoctorDetailPage';
 import { BookAppointmentPage } from '@/pages/public/BookAppointmentPage';
+import { TermsPage, PrivacyPage, RefundPage, ContactPage } from '@/pages/public/LegalPages';
 import { PatientDashboard, PatientAppointmentsPage } from '@/pages/patient/PatientPages';
 
 import { CrmDashboard } from '@/pages/crm/CrmDashboard';
 import {
-  CrmPatientsPage, CrmDoctorsPage, CrmAppointmentsPage, CrmBillingPage,
+  CrmPatientsPage, CrmAppointmentsPage, CrmBillingPage,
 } from '@/pages/crm/CrmPages';
+import { CrmDoctorsPage, CrmDoctorProfilePage } from '@/pages/crm/CrmDoctorsModule';
 import {
   CrmProfilePage, CrmBranchesPage, CrmDepartmentsPage, CrmStaffPage, CrmRolesPage,
   CrmServicesPage, CrmHealthPackagesPage, CrmLeadsPage, CrmReviewsPage, CrmAdvertisementsPage,
-  CrmCommunicationsPage, CrmSubscriptionPage, CrmSupportPage, CrmAnalyticsPage,
-  CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSchedulePage, CrmSettingsPage,
+  CrmCommunicationsPage, CrmSupportPage, CrmAnalyticsPage,
+  CrmDocumentsPage, CrmNotificationsPage, CrmAuditLogsPage, CrmSettingsPage,
 } from '@/pages/crm/CrmModulePages';
+import { CrmSubscriptionPage } from '@/pages/crm/CrmSubscriptionPage';
+import { CrmSchedulePage } from '@/pages/crm/CrmScheduleModule';
 import {
   AdminDashboard, AdminHospitalsPage, AdminClinicsPage, AdminDoctorsPage, AdminPatientsPage,
   AdminAppointmentsPage, AdminPaymentsPage, AdminSubscriptionsPage, AdminAdvertisementsPage,
   AdminCouponsPage, AdminLeadsPage, AdminReviewsPage, AdminAnalyticsPage,
   AdminStaffPage, AdminPermissionsPage, AdminSupportPage, AdminSecurityPage, AdminAuditLogsPage,
   AdminLocationsPage, AdminMasterDataPage,
-  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage,
+  AdminCommunicationsPage, AdminCmsPage, AdminSettingsPage, AdminEmergencyPage, AdminAffiliateMarketingPage,
 } from '@/pages/admin/AdminPages';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
@@ -76,6 +80,10 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/register/hospital" element={<RegisterHospitalPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/refund" element={<RefundPage />} />
+            <Route path="/contact" element={<ContactPage />} />
 
             <Route path="/patient" element={<ProtectedRoute roles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/appointments" element={<ProtectedRoute roles={['PATIENT']}><PatientAppointmentsPage /></ProtectedRoute>} />
@@ -89,6 +97,7 @@ export default function App() {
             <Route path="/crm/departments" element={<CrmAdmin><CrmDepartmentsPage /></CrmAdmin>} />
             <Route path="/crm/documents" element={<CrmAdmin><CrmDocumentsPage /></CrmAdmin>} />
             <Route path="/crm/doctors" element={<CrmAdmin><CrmDoctorsPage /></CrmAdmin>} />
+            <Route path="/crm/doctors/:id" element={<CrmAdmin><CrmDoctorProfilePage /></CrmAdmin>} />
             <Route path="/crm/staff" element={<CrmAdmin><CrmStaffPage /></CrmAdmin>} />
             <Route path="/crm/roles" element={<CrmAdmin><CrmRolesPage /></CrmAdmin>} />
             <Route path="/crm/patients" element={<ProtectedRoute roles={['HOSPITAL_ADMIN', 'BRANCH_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE', 'ACCOUNTANT']}><CrmPatientsPage /></ProtectedRoute>} />
@@ -118,6 +127,7 @@ export default function App() {
             <Route path="/admin/payments" element={<Admin><AdminPaymentsPage /></Admin>} />
             <Route path="/admin/subscriptions/*" element={<Admin><AdminSubscriptionsPage /></Admin>} />
             <Route path="/admin/advertisements/*" element={<Admin><AdminAdvertisementsPage /></Admin>} />
+            <Route path="/admin/affiliate-marketing/*" element={<Admin><AdminAffiliateMarketingPage /></Admin>} />
             <Route path="/admin/coupons" element={<Admin><AdminCouponsPage /></Admin>} />
             <Route path="/admin/leads" element={<Admin><AdminLeadsPage /></Admin>} />
             <Route path="/admin/reviews" element={<Admin><AdminReviewsPage /></Admin>} />

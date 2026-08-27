@@ -15,6 +15,9 @@
   .btn-primary {
     @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
+  .btn-admin {
+    @apply btn bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 shadow-sm shadow-indigo-600/20;
+  }
   .btn-secondary {
     @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500;
   }
@@ -26,6 +29,21 @@
   }
   .card {
     @apply rounded-xl border border-gray-200 bg-white shadow-sm;
+  }
+  .admin-card {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/50 backdrop-blur-sm;
+  }
+  .admin-card-elevated {
+    @apply admin-card transition-all duration-200 hover:shadow-md hover:shadow-indigo-100/50 hover:-translate-y-0.5;
+  }
+  .admin-section {
+    @apply admin-card p-6;
+  }
+  .admin-input {
+    @apply input focus:border-indigo-500 focus:ring-indigo-500;
+  }
+  .admin-portal .btn-primary {
+    @apply bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 shadow-sm shadow-indigo-600/20;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;

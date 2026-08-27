@@ -1,33 +1,20 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Heart, Menu, X, AlertTriangle } from 'lucide-react';
+import { Heart, Menu, X, Wrench, Clock } from 'lucide-react';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPortalPath } from '@/contexts/AuthContext';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-
-type PlatformStatus = {
-  maintenanceMode?: boolean;
-  maintenanceMessage?: string;
-  emergencyAnnouncement?: string | null;
-  emergencyAnnouncements?: { title: string; message: string; severity: string }[];
-  platformName?: string;
-  systemStatus?: string;
-};
+import { usePlatformStatus } from '@/hooks/usePlatformStatus';
+import { MaintenanceHomeModal } from '@/components/MaintenanceNotice';
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
 
-  const { data: statusRes } = useQuery({
-    queryKey: ['platform-status'],
-    queryFn: () => api.get<PlatformStatus>('/public/platform-status'),
-    staleTime: 60000,
-  });
-  const status = statusRes?.data;
+  const { data: status } = usePlatformStatus();
   const platformName = status?.platformName || 'HealthCare';
+  const maintenance = status?.maintenance;
 
   const navLinks = [
     { to: '/find/hospitals', label: 'Hospitals' },
@@ -38,6 +25,17 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <MaintenanceHomeModal maintenance={maintenance} />
+
+      {maintenance?.status === 'upcoming' && !status?.maintenanceMode && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm text-center py-2.5 px-4">
+          <span className="font-semibold">Scheduled Maintenance:</span>{' '}
+          {maintenance.title} — {maintenance.hoursUntilStart != null && maintenance.hoursUntilStart < 24
+            ? `starts in ~${maintenance.hoursUntilStart} hours`
+            : `from ${new Date(maintenance.startAt!).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`}
+        </div>
+      )}
+
       {(status?.emergencyAnnouncements?.length ? status.emergencyAnnouncements : status?.emergencyAnnouncement ? [{ title: 'Notice', message: status.emergencyAnnouncement, severity: 'WARNING' }] : []).map((a, i) => (
         <div key={i} className={cn('text-white text-sm text-center py-2 px-4',
           a.severity === 'CRITICAL' ? 'bg-red-600' : a.severity === 'INFO' ? 'bg-blue-600' : 'bg-amber-500')}>
@@ -118,12 +116,23 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1">
         {status?.maintenanceMode ? (
-          <div className="mx-auto max-w-lg px-4 py-24 text-center">
-            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Scheduled Maintenance</h1>
-            <p className="text-gray-600">
-              {status.maintenanceMessage || 'We are currently performing scheduled maintenance.'}
-            </p>
+          <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4 py-24">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(251,191,36,0.15),transparent_50%)]" />
+            <div className="relative max-w-lg text-center text-white">
+              <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-2xl bg-white/10 backdrop-blur">
+                <Wrench className="h-10 w-10 text-amber-300" />
+              </div>
+              <h1 className="text-3xl font-bold">We&apos;ll Be Back Shortly</h1>
+              <p className="mt-4 text-slate-300 leading-relaxed">
+                {status.maintenanceMessage || 'We are currently performing scheduled maintenance to improve your experience.'}
+              </p>
+              {maintenance?.endAt && (
+                <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm text-amber-200">
+                  <Clock className="h-4 w-4" />
+                  Expected back by {new Date(maintenance.endAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                </p>
+              )}
+            </div>
           </div>
         ) : (
           children
@@ -167,10 +176,18 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div>
+              <h4 className="font-semibold text-sm mb-3">Legal</h4>
+              <ul className="space-y-2 text-sm text-gray-500">
+                <li><Link to="/terms" className="hover:text-primary-600">Terms & Conditions</Link></li>
+                <li><Link to="/privacy" className="hover:text-primary-600">Privacy Policy</Link></li>
+                <li><Link to="/refund" className="hover:text-primary-600">Refunds & Cancellations</Link></li>
+                <li><Link to="/contact" className="hover:text-primary-600">Contact Us</Link></li>
+              </ul>
+            </div>
+            <div>
               <h4 className="font-semibold text-sm mb-3">Support</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><a href="#" className="hover:text-primary-600">Help Center</a></li>
-                <li><a href="#" className="hover:text-primary-600">Contact Us</a></li>
+                <li><Link to="/contact" className="hover:text-primary-600">Help & Support</Link></li>
               </ul>
             </div>
           </div>

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * Builds DATABASE_URL / DATABASE_URL_READ from DB_* env vars when placeholders are set.
+ * If DATABASE_URL is already set (e.g. Vercel, Neon), exits successfully without changes.
  * Usage: node scripts/ensure-database-url.mjs && prisma migrate dev
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -9,6 +10,18 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(__dirname, '../.env');
+
+const PLACEHOLDER_PATTERN = /YOUR_|CHANGE_ME|placeholder/i;
+
+function isUsableUrl(url) {
+  return Boolean(url && !PLACEHOLDER_PATTERN.test(url));
+}
+
+// Vercel / CI: DATABASE_URL is injected directly — nothing to prepare.
+if (isUsableUrl(process.env.DATABASE_URL)) {
+  console.log('DATABASE_URL already configured.');
+  process.exit(0);
+}
 
 const DB_USER = process.env.DB_USER || 'postgres';
 const DB_PASSWORD = process.env.DB_PASSWORD;
@@ -24,7 +37,7 @@ function buildUrl(host) {
 
 if (!DB_PASSWORD) {
   if (!existsSync(envPath)) {
-    console.error('Missing DB_PASSWORD and no .env file found.');
+    console.error('Missing DATABASE_URL or DB_PASSWORD. Set DATABASE_URL in Vercel env vars, or create apps/api/.env for local dev.');
     process.exit(1);
   }
   const env = readFileSync(envPath, 'utf8');

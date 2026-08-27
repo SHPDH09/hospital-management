@@ -160,6 +160,7 @@ export function AdminCouponsPage() {
 }
 
 export function AdminLeadsPage() {
+  const [viewing, setViewing] = useState<Record<string, unknown> | null>(null);
   const { data, isLoading, refetch } = useList('/admin/leads');
   return (
     <DashboardLayout portal="admin">
@@ -172,18 +173,37 @@ export function AdminLeadsPage() {
           { key: 'source', label: 'Source' },
           { key: 'org', label: 'Hospital', render: (r) => String((r.organization as { name?: string })?.name) },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status as string} /> },
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <select className="text-xs border rounded px-1" value={r.status as string} onChange={(e) => api.patch(`/admin/leads/${r.id}`, { status: e.target.value }).then(() => refetch())}>
-              {['NEW', 'CONTACTED', 'INTERESTED', 'APPOINTMENT_BOOKED', 'CONVERTED', 'LOST'].map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <ActionBtn onClick={() => setViewing(r)}>View Details</ActionBtn>
+              <select className="text-xs border rounded px-1" value={r.status as string} onChange={(e) => api.patch(`/admin/leads/${r.id}`, { status: e.target.value }).then(() => refetch())}>
+                {['NEW', 'CONTACTED', 'INTERESTED', 'APPOINTMENT_BOOKED', 'CONVERTED', 'LOST'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
           )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+      )}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewing(null)}>
+          <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold mb-3">Lead Details</h3>
+            <dl className="text-sm space-y-2">
+              <div><dt className="text-gray-500">Name</dt><dd>{String(viewing.name || '—')}</dd></div>
+              <div><dt className="text-gray-500">Email</dt><dd>{String(viewing.email || '—')}</dd></div>
+              <div><dt className="text-gray-500">Phone</dt><dd>{String(viewing.phone || '—')}</dd></div>
+              <div><dt className="text-gray-500">Source</dt><dd>{String(viewing.source || '—')}</dd></div>
+              <div><dt className="text-gray-500">Status</dt><dd><StatusBadge status={String(viewing.status)} /></dd></div>
+            </dl>
+            <button type="button" className="btn-secondary text-sm mt-4" onClick={() => setViewing(null)}>Close</button>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );
 }
 
 export function AdminReviewsPage() {
+  const [viewing, setViewing] = useState<Record<string, unknown> | null>(null);
   const { data, isLoading, refetch } = useList('/admin/reviews');
   return (
     <DashboardLayout portal="admin">
@@ -196,12 +216,30 @@ export function AdminReviewsPage() {
           { key: 'rating', label: 'Rating', render: (r) => '⭐'.repeat(r.rating as number) },
           { key: 'comment', label: 'Comment', render: (r) => <span className="max-w-xs truncate block">{String(r.comment || '-')}</span> },
           { key: 'published', label: 'Status', render: (r) => <StatusBadge status={r.isPublished ? 'ACTIVE' : 'SUSPENDED'} /> },
-          { key: 'actions', label: 'Actions', render: (r) => (
-            <ActionBtn onClick={() => api.patch(`/admin/reviews/${r.id}`, { isPublished: !r.isPublished }).then(() => refetch())}>
-              {r.isPublished ? 'Hide' : 'Publish'}
-            </ActionBtn>
+          { key: 'actions', label: 'Actions', nowrap: false, render: (r) => (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <ActionBtn onClick={() => setViewing(r)}>View Details</ActionBtn>
+              <ActionBtn onClick={() => api.patch(`/admin/reviews/${r.id}`, { isPublished: !r.isPublished }).then(() => refetch())}>
+                {r.isPublished ? 'Hide' : 'Publish'}
+              </ActionBtn>
+            </div>
           )},
         ]} rows={(data?.data as Record<string, unknown>[]) || []} />
+      )}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewing(null)}>
+          <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold mb-3">Review Details</h3>
+            <dl className="text-sm space-y-2">
+              <div><dt className="text-gray-500">Patient</dt><dd>{String((viewing.patient as { fullName?: string })?.fullName || '—')}</dd></div>
+              <div><dt className="text-gray-500">Hospital</dt><dd>{String((viewing.organization as { name?: string })?.name || '—')}</dd></div>
+              <div><dt className="text-gray-500">Doctor</dt><dd>{String((viewing.doctor as { fullName?: string })?.fullName || '—')}</dd></div>
+              <div><dt className="text-gray-500">Rating</dt><dd>{'⭐'.repeat(Number(viewing.rating || 0))}</dd></div>
+              <div><dt className="text-gray-500">Comment</dt><dd>{String(viewing.comment || '—')}</dd></div>
+            </dl>
+            <button type="button" className="btn-secondary text-sm mt-4" onClick={() => setViewing(null)}>Close</button>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

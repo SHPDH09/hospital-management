@@ -17,6 +17,8 @@ import {
   applySecretUpdates,
   diffSettings,
 } from '../../lib/settings';
+import { invalidateCashfreeConfigCache, testCashfreeConnection, getCashfreeConfig } from '../../lib/cashfree';
+import { cashfreeWhitelistMeta, getAppUrl } from '../../lib/app-url';
 
 const router = Router();
 
@@ -55,6 +57,8 @@ async function saveCategorySettings(
       changedAt: new Date().toISOString(),
     } as Prisma.InputJsonValue);
   }
+
+  if (category === 'payment') invalidateCashfreeConfigCache();
 
   return { row, settings: maskSecrets(category, updated) };
 }
@@ -136,6 +140,38 @@ router.post('/email/test', async (req: AuthRequest, res, next) => {
       },
       'Test email sent successfully'
     );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Cashfree domain whitelist info ──────────────────────────────────────────
+
+router.get('/payment/cashfree-whitelist', async (_req, res, next) => {
+  try {
+    const cf = await getCashfreeConfig();
+    const mode = cf.env === 'production' ? 'production' : 'sandbox';
+    sendSuccess(res, {
+      appUrl: getAppUrl(),
+      ...cashfreeWhitelistMeta(mode, cf.domainWhitelisted),
+      policyPages: ['/terms', '/privacy', '/refund', '/contact'],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Test Cashfree ───────────────────────────────────────────────────────────
+
+router.post('/payment/test-cashfree', async (req: AuthRequest, res, next) => {
+  try {
+    invalidateCashfreeConfigCache();
+    const result = await testCashfreeConnection();
+    await logAudit(req, 'TEST_CASHFREE', 'PlatformSetting', 'payment', {
+      ok: result.ok,
+      env: result.env,
+    } as Prisma.InputJsonValue);
+    sendSuccess(res, result, result.ok ? 'Cashfree connection OK' : 'Cashfree connection failed');
   } catch (err) {
     next(err);
   }
