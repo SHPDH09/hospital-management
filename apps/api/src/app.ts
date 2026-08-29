@@ -20,9 +20,19 @@ import webhookRoutes from './routes/webhooks';
 import affiliateOauthRoutes from './routes/affiliate-oauth';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { checkDatabaseConnection } from './lib/prisma';
+import { ensureSchemaPatches } from './lib/ensure-schema';
 
 const app = express();
 const isVercel = process.env.VERCEL === '1';
+
+app.use(async (_req, _res, next) => {
+  try {
+    await ensureSchemaPatches();
+  } catch {
+    // logged inside ensureSchemaPatches
+  }
+  next();
+});
 
 app.set('trust proxy', 1);
 

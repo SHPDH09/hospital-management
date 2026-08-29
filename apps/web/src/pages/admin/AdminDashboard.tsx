@@ -7,8 +7,9 @@ import {
   ArrowRight, Store, Receipt, Megaphone, Target, Bell, Activity, Zap,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { AdminTable, StatusBadge, LoadingState, ActionBtn, RowActions } from '@/components/admin/AdminComponents';
+import { AdminTable, StatusBadge, LoadingState, ActionBtn, RowActions, ApiErrorState } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
+import { adminGet } from '@/lib/admin-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, formatCurrency } from '@/lib/utils';
 
@@ -54,9 +55,18 @@ function StatCard({ label, value, icon, accent }: { label: string; value: ReactN
 
 export function AdminDashboard() {
   const { user } = useAuth();
-  const { data, isLoading } = useQuery({ queryKey: ['admin-stats'], queryFn: () => api.get<Stats>('/admin/stats') });
-  const { data: growth } = useQuery({ queryKey: ['admin-growth'], queryFn: () => api.get('/admin/analytics/growth') });
-  const { data: orgs } = useQuery({ queryKey: ['admin-orgs-pending'], queryFn: () => api.get('/admin/organizations?status=PENDING&limit=10') });
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['admin-stats'],
+    queryFn: () => adminGet<Stats>('/admin/stats'),
+  });
+  const { data: growth } = useQuery({
+    queryKey: ['admin-growth'],
+    queryFn: () => adminGet('/admin/analytics/growth'),
+  });
+  const { data: orgs } = useQuery({
+    queryKey: ['admin-orgs-pending'],
+    queryFn: () => adminGet('/admin/organizations?status=PENDING&limit=10'),
+  });
 
   const s = data?.data;
   const growthData = (growth?.data || []) as { month: string; organizations: number; patients: number; appointments: number }[];
@@ -146,7 +156,9 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {isLoading ? <LoadingState /> : s && (
+      {isLoading ? <LoadingState /> : isError ? (
+        <ApiErrorState message={error instanceof Error ? error.message : 'Failed to load dashboard data'} onRetry={() => refetch()} />
+      ) : s && (
         <>
           {/* Top KPI row */}
           <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

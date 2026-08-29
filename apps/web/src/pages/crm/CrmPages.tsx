@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, UserPlus } from 'lucide-react';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { PageHeader, LoadingState, EditModal, type EditField } from '@/components/admin/AdminComponents';
+import { PageHeader, LoadingState, EditModal, type EditField, ApiErrorState } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
 import { formatCurrency, getStatusColor, cn } from '@/lib/utils';
 
@@ -71,9 +71,13 @@ export function CrmPatientsPage() {
     'limit=50',
   ].filter(Boolean).join('&');
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['crm-patients', sourceFilter, search],
-    queryFn: () => api.get(`/patients?${queryString}`),
+    queryFn: async () => {
+      const res = await api.get(`/patients?${queryString}`);
+      if (!res.success) throw new Error(res.error || 'Failed to load patients');
+      return res;
+    },
   });
 
   const patients = (data?.data as Patient[] | undefined) || [];
@@ -119,7 +123,9 @@ export function CrmPatientsPage() {
         />
       </div>
 
-      {isLoading ? <LoadingState /> : patients.length === 0 ? (
+      {isLoading ? <LoadingState /> : isError ? (
+        <ApiErrorState message={error instanceof Error ? error.message : 'Failed to load patients'} onRetry={() => refetch()} />
+      ) : patients.length === 0 ? (
         <div className="card p-12 text-center">
           <UserPlus className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 font-medium text-gray-900">No patients found</p>

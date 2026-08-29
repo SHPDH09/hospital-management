@@ -77,7 +77,12 @@ class ApiClient {
         return parseResponse<T>(response);
       }
       this.clearTokens();
-      window.location.href = '/login/patient';
+      const loginPath = window.location.pathname.startsWith('/admin')
+        ? '/login/admin'
+        : window.location.pathname.startsWith('/crm')
+          ? '/login/hospital'
+          : '/login/patient';
+      window.location.href = loginPath;
     }
 
     return parseResponse<T>(response);

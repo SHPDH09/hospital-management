@@ -7,6 +7,7 @@ import {
   EditModal, EditField, DetailModal, RowActions,
 } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
+import { adminGet } from '@/lib/admin-api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const PC_BASE = '/api/v1/admin/payment-console';
@@ -18,7 +19,10 @@ async function pcRequest<T = unknown>(path: string, body?: unknown, withAccess =
 }
 
 function useAdminList(endpoint: string, params = '') {
-  return useQuery({ queryKey: [endpoint, params], queryFn: () => api.get(`${endpoint}${params}`) });
+  return useQuery({
+    queryKey: [endpoint, params],
+    queryFn: () => adminGet(`${endpoint}${params}`),
+  });
 }
 
 type Row = Record<string, unknown>;

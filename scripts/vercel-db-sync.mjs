@@ -21,8 +21,16 @@ const result = spawnSync('npm', ['run', 'db:fix-drift', '--workspace=apps/api'],
 });
 
 if (result.status !== 0) {
-  console.warn('[vercel-db-sync] Schema sync failed — continuing build. Run npm run db:fix-drift manually if needed.');
-  process.exit(0);
+  console.warn('[vercel-db-sync] Drift fix failed — trying prisma db push...');
+  const push = spawnSync('npm', ['run', 'db:push', '--workspace=apps/api', '--', '--accept-data-loss'], {
+    stdio: 'inherit',
+    env: process.env,
+    shell: true,
+  });
+  if (push.status !== 0) {
+    console.error('[vercel-db-sync] Schema sync failed. Run npm run db:fix-drift manually.');
+    process.exit(1);
+  }
 }
 
 console.log('[vercel-db-sync] Schema sync complete.');

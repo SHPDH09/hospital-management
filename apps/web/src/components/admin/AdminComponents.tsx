@@ -138,6 +138,20 @@ export function LoadingState() {
   );
 }
 
+export function ApiErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="admin-card border border-red-200 bg-red-50 p-6 text-center">
+      <p className="font-semibold text-red-800">Could not load data</p>
+      <p className="mt-2 text-sm text-red-700">{message}</p>
+      {onRetry && (
+        <button type="button" className="btn-secondary text-sm mt-4" onClick={onRetry}>
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function ActionBtn({ onClick, children, variant = 'primary' }: { onClick: () => void; children: ReactNode; variant?: 'primary' | 'danger' | 'success' }) {
   const styles = {
     primary: 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 ring-indigo-200/60',

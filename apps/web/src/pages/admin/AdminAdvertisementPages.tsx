@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn } from '@/components/admin/AdminComponents';
+import { PageHeader, AdminTable, StatusBadge, LoadingState, ActionBtn, ApiErrorState } from '@/components/admin/AdminComponents';
 import { api } from '@/lib/api';
+import { adminGet } from '@/lib/admin-api';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 
 const subNav = [
@@ -57,9 +58,19 @@ function AdLayout({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['ads-dashboard'], queryFn: () => api.get('/admin/advertisements/dashboard') });
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['ads-dashboard'],
+    queryFn: () => adminGet('/admin/advertisements/dashboard'),
+  });
   const d = data?.data as Record<string, unknown> | undefined;
   if (isLoading) return <AdLayout><LoadingState /></AdLayout>;
+  if (isError) {
+    return (
+      <AdLayout>
+        <ApiErrorState message={error instanceof Error ? error.message : 'Failed to load advertisement dashboard'} onRetry={() => refetch()} />
+      </AdLayout>
+    );
+  }
 
   return (
     <AdLayout>

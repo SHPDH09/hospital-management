@@ -88,7 +88,7 @@ router.get('/dashboard', async (_req, res, next) => {
         where: { updatedAt: { gte: today } },
         _sum: { impressions: true, clicks: true },
       }),
-      prisma.lead.count({ where: { source: 'Advertisement' } }),
+      prisma.lead.count({ where: { advertisementId: { not: null } } }),
       prisma.advertisement.aggregate({ _sum: { appointments: true } }),
       prisma.advertisement.aggregate({ _sum: { paidAmount: true, budget: true } }),
     ]);
