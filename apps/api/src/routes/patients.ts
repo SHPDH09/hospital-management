@@ -34,9 +34,19 @@ router.get('/', authenticate, requireRoles(...CRM_ROLES, 'SUPER_ADMIN', 'PLATFOR
       throw new AppError('Organization context required', 400);
     }
 
+    const sourceFilter = req.query.source as string | undefined;
+    const validSources = ['CRM', 'PUBLIC'] as const;
+
     const where = orgId
       ? {
-          organizations: { some: { organizationId: orgId } },
+          organizations: {
+            some: {
+              organizationId: orgId,
+              ...(sourceFilter && validSources.includes(sourceFilter as typeof validSources[number])
+                ? { source: sourceFilter as typeof validSources[number] }
+                : {}),
+            },
+          },
           ...(query && {
             OR: [
               { fullName: { contains: query, mode: 'insensitive' as const } },
@@ -145,6 +155,7 @@ router.post('/', authenticate, requireRoles(...CRM_ROLES), validateBody(createPa
           patientId: patientRecord!.id,
           organizationId: orgId,
           notes: data.notes,
+          source: 'CRM',
         },
         update: { notes: data.notes },
       });

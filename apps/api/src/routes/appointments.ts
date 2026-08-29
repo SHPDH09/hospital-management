@@ -39,7 +39,7 @@ router.post('/book', authenticate, requireRoles('PATIENT'), validateBody(bookApp
         where: {
           patientId_organizationId: { patientId: patient.id, organizationId: data.organizationId },
         },
-        create: { patientId: patient.id, organizationId: data.organizationId },
+        create: { patientId: patient.id, organizationId: data.organizationId, source: 'PUBLIC' },
         update: {},
       });
 

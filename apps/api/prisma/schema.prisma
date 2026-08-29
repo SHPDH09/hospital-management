@@ -143,6 +143,11 @@ enum Gender {
   OTHER
 }
 
+enum PatientSource {
+  CRM
+  PUBLIC
+}
+
 enum DoctorVerificationStatus {
   PENDING
   VERIFIED
@@ -334,12 +339,13 @@ model Patient {
 }
 
 model PatientOrganization {
-  id             String   @id @default(uuid())
+  id             String         @id @default(uuid())
   patientId      String
   organizationId String
   patientNumber  String?
   notes          String?
-  createdAt      DateTime @default(now())
+  source         PatientSource  @default(PUBLIC)
+  createdAt      DateTime       @default(now())
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

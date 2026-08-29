@@ -284,7 +284,7 @@ async function main() {
   });
 
   await prisma.patientOrganization.create({
-    data: { patientId: patient.id, organizationId: organization.id },
+    data: { patientId: patient.id, organizationId: organization.id, source: 'PUBLIC' },
   });
 
   // Sample Advertisement

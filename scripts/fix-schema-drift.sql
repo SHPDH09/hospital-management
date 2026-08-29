@@ -234,4 +234,14 @@ BEGIN
   END IF;
 END $$;
 
+-- ---------------------------------------------------------------------------
+-- patient_organizations: acquisition source (CRM vs public)
+-- ---------------------------------------------------------------------------
+DO $$ BEGIN
+  CREATE TYPE "PatientSource" AS ENUM ('CRM', 'PUBLIC');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE "patient_organizations" ADD COLUMN IF NOT EXISTS "source" "PatientSource" NOT NULL DEFAULT 'PUBLIC';
+
 COMMIT;
