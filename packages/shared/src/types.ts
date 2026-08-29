@@ -63,6 +63,13 @@ export interface ApiResponse<T = unknown> {
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+  session?: {
+    accessExpiresAt: string;
+    refreshExpiresAt: string;
+    accessLifetimeMinutes: number;
+    sessionLifetimeDays: number;
+    message: string;
+  };
 }
 
 export interface JwtPayload {

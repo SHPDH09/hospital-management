@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { JwtPayload } from '@healthcare/shared';
 import { prisma } from '../../lib/prisma';
-import { hashPassword, signAccessToken, signRefreshToken, slugify } from '../../lib/auth';
+import { hashPassword, signAccessToken, signRefreshToken, slugify, buildSessionMeta } from '../../lib/auth';
 import { sendSuccess, sendPaginated, AppError } from '../../lib/response';
 import { paramId } from '../../lib/params';
 import { authenticate, requireRoles, AuthRequest, PLATFORM_ROLES } from '../../middleware/auth';
@@ -51,7 +51,7 @@ async function issueImpersonationTokens(payload: JwtPayload) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
   await prisma.refreshToken.create({ data: { token: refreshToken, userId: payload.userId, expiresAt } });
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, session: buildSessionMeta(expiresAt) };
 }
 
 router.use('/subscriptions', subscriptionRoutes);
@@ -81,7 +81,7 @@ router.get('/stats', async (_req, res, next) => {
       totalHospitals, totalClinics, totalDoctors, totalPatients, totalStaff,
       todayAppointments, monthlyAppointments, pendingPayments, activeSubscriptions,
       expiredSubscriptions, pendingApprovals, totalComplaints, newRegistrations,
-      revenueAgg, subscriptionRevenue, adRevenue,
+      billRevenue, subscriptionCollected, adCollected, subscriptionRevenue,
     ] = await Promise.all([
       prisma.organization.count({ where: { type: 'HOSPITAL' } }),
       prisma.organization.count({ where: { type: 'CLINIC' } }),
@@ -97,18 +97,24 @@ router.get('/stats', async (_req, res, next) => {
       prisma.complaint.count({ where: { status: { in: ['NEW', 'ASSIGNED', 'IN_PROGRESS'] } } }),
       prisma.organization.count({ where: { createdAt: { gte: monthStart } } }),
       prisma.payment.aggregate({ where: { status: 'COMPLETED' }, _sum: { amount: true } }),
+      prisma.subscriptionPayment.aggregate({ where: { status: 'COMPLETED' }, _sum: { amount: true } }),
+      prisma.advertisement.aggregate({ _sum: { paidAmount: true } }),
       prisma.subscription.findMany({ where: { status: 'ACTIVE' }, include: { plan: true } }),
-      prisma.advertisement.aggregate({ _sum: { budget: true } }),
     ]);
 
-    const subscriptionRevenueTotal = subscriptionRevenue.reduce((s, sub) => s + (sub.plan.price || 0), 0);
+    const billRevenueTotal = billRevenue._sum.amount || 0;
+    const subscriptionCollectedTotal = subscriptionCollected._sum.amount || 0;
+    const advertisementCollectedTotal = adCollected._sum.paidAmount || 0;
+    const subscriptionMrr = subscriptionRevenue.reduce((s, sub) => s + (sub.plan.price || sub.price || 0), 0);
 
     sendSuccess(res, {
       totalHospitals, totalClinics, totalDoctors, totalPatients, totalStaff,
       todayAppointments, monthlyAppointments,
-      totalRevenue: revenueAgg._sum.amount || 0,
-      subscriptionRevenue: subscriptionRevenueTotal,
-      advertisementRevenue: adRevenue._sum.budget || 0,
+      totalRevenue: billRevenueTotal + subscriptionCollectedTotal + advertisementCollectedTotal,
+      billRevenue: billRevenueTotal,
+      subscriptionCollectedRevenue: subscriptionCollectedTotal,
+      subscriptionRevenue: subscriptionMrr,
+      advertisementRevenue: advertisementCollectedTotal,
       pendingPayments, activeSubscriptions, expiredSubscriptions,
       newRegistrations, pendingApprovals, complaints: totalComplaints,
     });

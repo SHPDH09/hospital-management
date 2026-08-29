@@ -12,6 +12,7 @@ import { crmNavGroups } from '@/config/crmNav';
 import { api } from '@/lib/api';
 import { usePlatformStatus } from '@/hooks/usePlatformStatus';
 import { MaintenanceDashboardBanner } from '@/components/MaintenanceNotice';
+import { SessionStatusBar } from '@/components/SessionStatusBar';
 
 const patientNav = [
   { to: '/patient', icon: LayoutDashboard, label: 'Dashboard' },
@@ -228,6 +229,7 @@ export function DashboardLayout({ children, portal }: DashboardLayoutProps) {
         </header>
         <main className="p-4 lg:p-8">
           <MaintenanceDashboardBanner maintenance={maintenance} />
+          <SessionStatusBar portal={portal} />
           {isCrm && access?.bannerMessage && (
             <div className={cn(
               'mb-6 flex flex-wrap items-start gap-3 rounded-xl border p-4 text-sm',

@@ -99,8 +99,8 @@ export function AdminDashboard() {
 
   const revenueStats = s ? [
     { label: 'Total Revenue', value: formatCurrency(s.totalRevenue), icon: <DollarSign className="h-4 w-4" />, accent: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Subscription Revenue', value: formatCurrency(s.subscriptionRevenue), icon: <CreditCard className="h-4 w-4" />, accent: 'bg-teal-50 text-teal-600' },
-    { label: 'Ad Revenue', value: formatCurrency(s.advertisementRevenue), icon: <TrendingUp className="h-4 w-4" />, accent: 'bg-pink-50 text-pink-600' },
+    { label: 'Subscription MRR', value: formatCurrency(s.subscriptionRevenue), icon: <CreditCard className="h-4 w-4" />, accent: 'bg-teal-50 text-teal-600' },
+    { label: 'Ad Revenue Collected', value: formatCurrency(s.advertisementRevenue), icon: <TrendingUp className="h-4 w-4" />, accent: 'bg-pink-50 text-pink-600' },
     { label: 'Pending Payments', value: s.pendingPayments, icon: <AlertCircle className="h-4 w-4" />, accent: 'bg-amber-50 text-amber-600' },
     { label: 'Active Subscriptions', value: s.activeSubscriptions, icon: <CreditCard className="h-4 w-4" />, accent: 'bg-green-50 text-green-600' },
     { label: 'Expired Subscriptions', value: s.expiredSubscriptions, icon: <CreditCard className="h-4 w-4" />, accent: 'bg-red-50 text-red-600' },
@@ -162,7 +162,7 @@ export function AdminDashboard() {
         <>
           {/* Top KPI row */}
           <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Total Revenue" value={formatCurrency(s.totalRevenue)} sub="All-time platform revenue"
+            <KpiCard label="Total Revenue" value={formatCurrency(s.totalRevenue)} sub="Bills + subscriptions + ads collected"
               icon={<DollarSign className="h-6 w-6" />} gradient="bg-gradient-to-br from-emerald-500 to-teal-600" />
             <KpiCard label="Network Size" value={s.totalHospitals + s.totalClinics} sub={`${s.totalDoctors} doctors · ${s.totalPatients} patients`}
               icon={<Building2 className="h-6 w-6" />} gradient="bg-gradient-to-br from-indigo-500 to-violet-600" />

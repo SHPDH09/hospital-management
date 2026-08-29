@@ -1,4 +1,5 @@
 import { ApiResponse } from '@healthcare/shared';
+import { saveSessionInfo } from './session';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -95,9 +96,10 @@ class ApiClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: this.refreshToken }),
       });
-      const data = await parseResponse<{ accessToken: string; refreshToken: string }>(res);
+      const data = await parseResponse<{ accessToken: string; refreshToken: string; session?: import('./session').SessionInfo }>(res);
       if (data.success && data.data) {
         this.setTokens(data.data.accessToken, data.data.refreshToken);
+        if (data.data.session) saveSessionInfo(data.data.session);
         return true;
       }
     } catch {

@@ -23,6 +23,57 @@ export function signRefreshToken(payload: { userId: string }): string {
   return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN } as SignOptions);
 }
 
+function parseDurationToMinutes(value: string): number {
+  const match = /^(\d+)([smhd])$/i.exec(value.trim());
+  if (!match) return 15;
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit === 's') return Math.max(1, Math.round(amount / 60));
+  if (unit === 'm') return amount;
+  if (unit === 'h') return amount * 60;
+  return amount * 24 * 60;
+}
+
+function parseDurationToDays(value: string): number {
+  const match = /^(\d+)([smhd])$/i.exec(value.trim());
+  if (!match) return 7;
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit === 'd') return amount;
+  if (unit === 'h') return amount / 24;
+  if (unit === 'm') return amount / (24 * 60);
+  return amount / (24 * 60 * 60);
+}
+
+export function getTokenDurations() {
+  return {
+    accessLifetimeMinutes: parseDurationToMinutes(JWT_EXPIRES_IN),
+    sessionLifetimeDays: parseDurationToDays(JWT_REFRESH_EXPIRES_IN),
+  };
+}
+
+export function buildSessionMeta(refreshExpiresAt: Date) {
+  const { accessLifetimeMinutes, sessionLifetimeDays } = getTokenDurations();
+  const accessExpiresAt = new Date(Date.now() + accessLifetimeMinutes * 60 * 1000);
+  return {
+    accessExpiresAt: accessExpiresAt.toISOString(),
+    refreshExpiresAt: refreshExpiresAt.toISOString(),
+    accessLifetimeMinutes,
+    sessionLifetimeDays,
+    message: `Your session stays active for ${sessionLifetimeDays} day${sessionLifetimeDays === 1 ? '' : 's'}. Access refreshes automatically every ${accessLifetimeMinutes} minute${accessLifetimeMinutes === 1 ? '' : 's'} while you are active.`,
+  };
+}
+
+export function decodeAccessTokenExpiry(token: string): Date | null {
+  try {
+    const payload = jwt.decode(token) as { exp?: number } | null;
+    if (!payload?.exp) return null;
+    return new Date(payload.exp * 1000);
+  } catch {
+    return null;
+  }
+}
+
 export function verifyAccessToken(token: string): JwtPayload {
   return jwt.verify(token, JWT_SECRET) as JwtPayload;
 }

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { hashPassword, comparePassword, signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/auth';
+import { hashPassword, comparePassword, signAccessToken, signRefreshToken, verifyRefreshToken, buildSessionMeta } from '../lib/auth';
 import { sendSuccess, sendError, AppError } from '../lib/response';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -146,6 +146,32 @@ router.post('/logout', authenticate, async (req: AuthRequest, res, next) => {
       await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
     }
     sendSuccess(res, null, 'Logged out');
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/session', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    const session = await prisma.refreshToken.findFirst({
+      where: { userId: req.user!.userId, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    if (!session) {
+      return sendError(res, 'Session expired. Please log in again.', 401);
+    }
+
+    const header = req.headers.authorization || '';
+    const accessToken = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const accessExpiresAt = accessToken
+      ? (await import('../lib/auth')).decodeAccessTokenExpiry(accessToken)
+      : null;
+
+    sendSuccess(res, {
+      ...buildSessionMeta(session.expiresAt),
+      accessExpiresAt: accessExpiresAt?.toISOString() || buildSessionMeta(session.expiresAt).accessExpiresAt,
+      loggedInAt: session.createdAt.toISOString(),
+    });
   } catch (err) {
     next(err);
   }
@@ -365,7 +391,7 @@ async function issueTokens(userId: string, email: string, role: string) {
 
   await prisma.refreshToken.create({ data: { token: refreshToken, userId, expiresAt } });
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, session: buildSessionMeta(expiresAt) };
 }
 
 function sanitizeUser(user: {

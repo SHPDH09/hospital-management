@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserRole } from '@healthcare/shared';
 import { api } from '@/lib/api';
+import { saveSessionInfo, clearSessionInfo, type SessionInfo } from '@/lib/session';
 
 interface User {
   id: string;
@@ -17,6 +18,7 @@ interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   profileCompleted?: boolean;
+  session?: SessionInfo;
 }
 
 interface AuthContextType {
@@ -54,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applyAuthResponse = (data: AuthTokens): boolean => {
     api.setTokens(data.accessToken, data.refreshToken);
+    if (data.session) saveSessionInfo(data.session);
     const user = withProfileCompleted(data.user, data.profileCompleted);
     persistUser(user);
     return user.profileCompleted ?? false;
@@ -99,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     api.clearTokens();
+    clearSessionInfo();
     setUser(null);
   };
 
